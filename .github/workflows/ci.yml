@@ -20,6 +20,8 @@ jobs:
         uses: actions/setup-go@v6
         with:
           go-version: "1.25.x"
+          cache: true
+          cache-dependency-path: backend/go.sum
 
       - name: Run Backend Tests
         working-directory: backend
@@ -36,6 +38,11 @@ jobs:
         with:
           toolchain: stable
           components: rustfmt
+
+      - name: Cache Rust Artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core-agent
 
       - name: Check Formatting
         working-directory: core-agent
