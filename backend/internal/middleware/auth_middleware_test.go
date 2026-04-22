@@ -30,11 +30,77 @@ func (s authServiceStub) Me(context.Context, int64) (dto.UserProfile, error) {
 	return dto.UserProfile{}, nil
 }
 
+func (s authServiceStub) ChangePassword(
+	context.Context,
+	int64,
+	dto.ChangePasswordRequest,
+) (dto.LoginResponse, error) {
+	return dto.LoginResponse{}, nil
+}
+
 func (s authServiceStub) ParseToken(string) (service.TokenClaims, error) {
 	if s.err != nil {
 		return service.TokenClaims{}, s.err
 	}
 	return s.claims, nil
+}
+
+func TestJWTAuthRejectsProtectedRouteWhenPasswordChangeRequired(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.GET("/api/v1/files/list", JWTAuth(authServiceStub{
+		claims: service.TokenClaims{
+			UserID:             100,
+			Username:           "admin",
+			Roles:              []string{"super_admin"},
+			Permissions:        []string{"files.read"},
+			MustChangePassword: true,
+		},
+	}), func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/files/list", nil)
+	req.Header.Set("Authorization", "Bearer fake-token")
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", recorder.Code)
+	}
+
+	var body map[string]interface{}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if int(body["code"].(float64)) != apperror.ErrPasswordChangeNeed.Code {
+		t.Fatalf("expected password-change-required code, got %v", body["code"])
+	}
+}
+
+func TestJWTAuthAllowsChangePasswordRouteWhenPasswordChangeRequired(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.POST("/api/v1/auth/change-password", JWTAuth(authServiceStub{
+		claims: service.TokenClaims{
+			UserID:             100,
+			Username:           "admin",
+			Roles:              []string{"super_admin"},
+			Permissions:        []string{"dashboard.read"},
+			MustChangePassword: true,
+		},
+	}), func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/change-password", nil)
+	req.Header.Set("Authorization", "Bearer fake-token")
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", recorder.Code)
+	}
 }
 
 func TestJWTAuthRejectsMissingAuthorizationHeader(t *testing.T) {

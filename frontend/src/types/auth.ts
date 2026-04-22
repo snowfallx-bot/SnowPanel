@@ -5,6 +5,7 @@ export interface UserProfile {
   status: number;
   roles: string[];
   permissions: string[];
+  must_change_password: boolean;
 }
 
 export interface LoginPayload {
@@ -17,4 +18,9 @@ export interface LoginResult {
   token_type: string;
   expires_in: number;
   user: UserProfile;
+}
+
+export interface ChangePasswordPayload {
+  current_password: string;
+  new_password: string;
 }

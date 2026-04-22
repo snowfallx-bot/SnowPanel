@@ -10,10 +10,11 @@ import (
 )
 
 const (
-	CurrentUserIDKey   = "current_user_id"
-	CurrentUsernameKey = "current_username"
-	CurrentRolesKey    = "current_roles"
-	CurrentPermsKey    = "current_permissions"
+	CurrentUserIDKey             = "current_user_id"
+	CurrentUsernameKey           = "current_username"
+	CurrentRolesKey              = "current_roles"
+	CurrentPermsKey              = "current_permissions"
+	CurrentMustChangePasswordKey = "current_must_change_password"
 )
 
 func JWTAuth(authService service.AuthService) gin.HandlerFunc {
@@ -53,8 +54,21 @@ func JWTAuth(authService service.AuthService) gin.HandlerFunc {
 		c.Set(CurrentUsernameKey, claims.Username)
 		c.Set(CurrentRolesKey, claims.Roles)
 		c.Set(CurrentPermsKey, claims.Permissions)
+		c.Set(CurrentMustChangePasswordKey, claims.MustChangePassword)
+		if claims.MustChangePassword && !isPasswordChangeAllowedPath(c.Request.URL.Path) {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+				"code":    apperror.ErrPasswordChangeNeed.Code,
+				"message": apperror.ErrPasswordChangeNeed.Message,
+				"data":    gin.H{},
+			})
+			return
+		}
 		c.Next()
 	}
+}
+
+func isPasswordChangeAllowedPath(path string) bool {
+	return path == "/api/v1/auth/me" || path == "/api/v1/auth/change-password"
 }
 
 func GetCurrentUserID(c *gin.Context) (int64, bool) {
@@ -82,4 +96,13 @@ func GetCurrentPermissions(c *gin.Context) ([]string, bool) {
 	}
 	permissions, ok := value.([]string)
 	return permissions, ok
+}
+
+func GetCurrentMustChangePassword(c *gin.Context) (bool, bool) {
+	value, exists := c.Get(CurrentMustChangePasswordKey)
+	if !exists {
+		return false, false
+	}
+	flag, ok := value.(bool)
+	return flag, ok
 }

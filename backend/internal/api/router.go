@@ -56,6 +56,7 @@ func NewRouter(deps RouterDeps) *gin.Engine {
 		protected.Use(middleware.JWTAuth(deps.AuthService))
 		{
 			protected.GET("/auth/me", authHandler.Me)
+			protected.POST("/auth/change-password", authHandler.ChangePassword)
 			protected.GET("/dashboard/summary", dashboardHandler.Summary)
 			files := protected.Group("/files")
 			{

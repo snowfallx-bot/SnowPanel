@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { getMe } from "@/api/auth";
+import { ApiError } from "@/lib/http";
 import { useAuthStore } from "@/store/auth-store";
 
 const routePermissionRules: Array<{ prefix: string; permission: string }> = [
@@ -52,7 +53,7 @@ export function ProtectedRoute() {
         if (!alive) {
           return;
         }
-        const status = (error as { response?: { status?: number } } | undefined)?.response?.status;
+        const status = error instanceof ApiError ? error.status : undefined;
         if (status === 401 || status === 403) {
           clearAuth();
         }

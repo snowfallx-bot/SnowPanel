@@ -20,11 +20,15 @@ type fakeUserRepo struct {
 	createErr       error
 	getByNameErr    error
 	getByIDErr      error
+	updateLoginErr  error
+	updatePassErr   error
 	createdUser     *model.User
 	usersByName     map[string]*model.User
 	usersByID       map[int64]*model.User
 	userRoles       map[int64][]string
 	rolePermissions map[string][]string
+	updatedLogins   map[int64]time.Time
+	updatedHashes   map[int64]string
 }
 
 func (r *fakeUserRepo) Count(context.Context) (int64, error) {
@@ -72,6 +76,46 @@ func (r *fakeUserRepo) GetByID(_ context.Context, id int64) (*model.User, error)
 	}
 	cloned := *user
 	return &cloned, nil
+}
+
+func (r *fakeUserRepo) UpdateLastLoginAt(_ context.Context, id int64, at time.Time) error {
+	if r.updateLoginErr != nil {
+		return r.updateLoginErr
+	}
+	if r.updatedLogins == nil {
+		r.updatedLogins = map[int64]time.Time{}
+	}
+	r.updatedLogins[id] = at
+
+	if user, ok := r.usersByID[id]; ok {
+		cloned := *user
+		cloned.LastLoginAt = &at
+		r.usersByID[id] = &cloned
+		if r.usersByName != nil {
+			r.usersByName[cloned.Username] = &cloned
+		}
+	}
+	return nil
+}
+
+func (r *fakeUserRepo) UpdatePasswordHash(_ context.Context, id int64, hash string) error {
+	if r.updatePassErr != nil {
+		return r.updatePassErr
+	}
+	if r.updatedHashes == nil {
+		r.updatedHashes = map[int64]string{}
+	}
+	r.updatedHashes[id] = hash
+
+	if user, ok := r.usersByID[id]; ok {
+		cloned := *user
+		cloned.PasswordHash = hash
+		r.usersByID[id] = &cloned
+		if r.usersByName != nil {
+			r.usersByName[cloned.Username] = &cloned
+		}
+	}
+	return nil
 }
 
 func (r *fakeUserRepo) EnsureRBACDefaults(context.Context) error {
@@ -291,6 +335,9 @@ func TestLoginSuccessAndParseToken(t *testing.T) {
 	if result.User.Username != "admin" {
 		t.Fatalf("unexpected user profile username: %s", result.User.Username)
 	}
+	if !result.User.MustChangePassword {
+		t.Fatalf("expected must_change_password=true for first bootstrap admin login")
+	}
 
 	claims, err := service.ParseToken(result.AccessToken)
 	if err != nil {
@@ -307,6 +354,12 @@ func TestLoginSuccessAndParseToken(t *testing.T) {
 	}
 	if !slices.Contains(claims.Permissions, "docker.manage") {
 		t.Fatalf("expected docker.manage permission in token claims")
+	}
+	if !claims.MustChangePassword {
+		t.Fatalf("expected must_change_password=true in token claims")
+	}
+	if _, exists := repo.updatedLogins[7]; exists {
+		t.Fatalf("did not expect last_login_at update when password change is required")
 	}
 }
 
@@ -342,5 +395,129 @@ func TestLoginRejectsInvalidCredential(t *testing.T) {
 	}
 	if appErr.Code != apperror.ErrInvalidCredential.Code {
 		t.Fatalf("unexpected error code: %d", appErr.Code)
+	}
+}
+
+func TestLoginUpdatesLastLoginForNonBootstrapUser(t *testing.T) {
+	password := "StrongPassword#1"
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		t.Fatalf("failed to generate bcrypt hash: %v", err)
+	}
+
+	repo := &fakeUserRepo{
+		usersByName: map[string]*model.User{
+			"operator": {
+				ID:           9,
+				Username:     "operator",
+				Email:        "operator@example.com",
+				PasswordHash: string(hash),
+				Status:       1,
+			},
+		},
+		usersByID: map[int64]*model.User{
+			9: {
+				ID:           9,
+				Username:     "operator",
+				Email:        "operator@example.com",
+				PasswordHash: string(hash),
+				Status:       1,
+			},
+		},
+		userRoles: map[int64][]string{
+			9: []string{"operator"},
+		},
+	}
+	if err := repo.EnsureRBACDefaults(context.Background()); err != nil {
+		t.Fatalf("failed to seed fake rbac defaults: %v", err)
+	}
+
+	service := NewAuthService(repo, testAuthConfig())
+	result, err := service.Login(context.Background(), dto.LoginRequest{
+		Username: "operator",
+		Password: password,
+	})
+	if err != nil {
+		t.Fatalf("expected login success, got %v", err)
+	}
+	if result.User.MustChangePassword {
+		t.Fatalf("did not expect must_change_password for operator")
+	}
+	if _, exists := repo.updatedLogins[9]; !exists {
+		t.Fatalf("expected last_login_at to be updated for operator")
+	}
+
+	claims, err := service.ParseToken(result.AccessToken)
+	if err != nil {
+		t.Fatalf("expected token parse success, got %v", err)
+	}
+	if claims.MustChangePassword {
+		t.Fatalf("did not expect must_change_password claim for operator")
+	}
+}
+
+func TestChangePasswordSuccessClearsMustChangeFlag(t *testing.T) {
+	oldPassword := "StrongPassword#1"
+	newPassword := "EvenStronger#2"
+	hash, err := bcrypt.GenerateFromPassword([]byte(oldPassword), bcrypt.DefaultCost)
+	if err != nil {
+		t.Fatalf("failed to generate bcrypt hash: %v", err)
+	}
+
+	repo := &fakeUserRepo{
+		usersByName: map[string]*model.User{
+			"admin": {
+				ID:           7,
+				Username:     "admin",
+				Email:        "admin@example.com",
+				PasswordHash: string(hash),
+				Status:       1,
+			},
+		},
+		usersByID: map[int64]*model.User{
+			7: {
+				ID:           7,
+				Username:     "admin",
+				Email:        "admin@example.com",
+				PasswordHash: string(hash),
+				Status:       1,
+			},
+		},
+		userRoles: map[int64][]string{
+			7: []string{"super_admin"},
+		},
+	}
+	if err := repo.EnsureRBACDefaults(context.Background()); err != nil {
+		t.Fatalf("failed to seed fake rbac defaults: %v", err)
+	}
+
+	service := NewAuthService(repo, testAuthConfig())
+	resp, err := service.ChangePassword(context.Background(), 7, dto.ChangePasswordRequest{
+		CurrentPassword: oldPassword,
+		NewPassword:     newPassword,
+	})
+	if err != nil {
+		t.Fatalf("expected change password success, got %v", err)
+	}
+	if resp.User.MustChangePassword {
+		t.Fatalf("expected must_change_password=false after password change")
+	}
+	updatedHash := repo.updatedHashes[7]
+	if updatedHash == "" {
+		t.Fatalf("expected password hash update to be persisted")
+	}
+	if bcrypt.CompareHashAndPassword([]byte(updatedHash), []byte(newPassword)) != nil {
+		t.Fatalf("expected updated hash to match new password")
+	}
+	if _, exists := repo.updatedLogins[7]; !exists {
+		t.Fatalf("expected last_login_at update after password change")
+	}
+
+	claims, err := service.ParseToken(resp.AccessToken)
+	if err != nil {
+		t.Fatalf("expected token parse success, got %v", err)
+	}
+	if claims.MustChangePassword {
+		t.Fatalf("expected must_change_password=false in new token")
 	}
 }

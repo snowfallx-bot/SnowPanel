@@ -76,3 +76,52 @@ func (h *AuthHandler) Me(c *gin.Context) {
 
 	response.OK(c, profile)
 }
+
+func (h *AuthHandler) ChangePassword(c *gin.Context) {
+	userID, ok := middleware.GetCurrentUserID(c)
+	if !ok {
+		response.Fail(c, http.StatusUnauthorized, apperror.ErrUnauthorized.Code, apperror.ErrUnauthorized.Message)
+		return
+	}
+
+	username, _ := middleware.GetCurrentUsername(c)
+
+	var req dto.ChangePasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Fail(c, http.StatusBadRequest, apperror.ErrBadRequest.Code, "invalid change password payload")
+		return
+	}
+
+	resp, err := h.authService.ChangePassword(c.Request.Context(), userID, req)
+	if err != nil {
+		recordAudit(c, h.auditService, dto.RecordAuditInput{
+			UserID:         &userID,
+			Username:       username,
+			Module:         "auth",
+			Action:         "change_password",
+			TargetType:     "user",
+			TargetID:       username,
+			RequestSummary: `{"endpoint":"/api/v1/auth/change-password"}`,
+			Success:        false,
+			ResultCode:     "password_change_failed",
+			ResultMessage:  err.Error(),
+		})
+		response.FromError(c, err)
+		return
+	}
+
+	recordAudit(c, h.auditService, dto.RecordAuditInput{
+		UserID:         &userID,
+		Username:       username,
+		Module:         "auth",
+		Action:         "change_password",
+		TargetType:     "user",
+		TargetID:       username,
+		RequestSummary: `{"endpoint":"/api/v1/auth/change-password"}`,
+		Success:        true,
+		ResultCode:     "ok",
+		ResultMessage:  "password changed",
+	})
+
+	response.OK(c, resp)
+}

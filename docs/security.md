@@ -20,6 +20,9 @@ Language: **English** | [简体中文](security.zh-CN.md)
 - In production, backend startup fails fast when `JWT_SECRET` is weak/empty.
 - In production with `BOOTSTRAP_ADMIN=true`, weak/missing `DEFAULT_ADMIN_PASSWORD` is rejected.
 - In development, if `DEFAULT_ADMIN_PASSWORD` is empty, backend generates a one-time bootstrap password.
+- Bootstrap admin first login is marked as `must_change_password`.
+- When `must_change_password=true`, backend only allows `/api/v1/auth/me` and `/api/v1/auth/change-password`.
+- Password change returns a refreshed token with `must_change_password=false`.
 
 ## File Safety
 
@@ -48,7 +51,6 @@ Language: **English** | [简体中文](security.zh-CN.md)
 
 ## Hardening Backlog
 
-- Add first-login forced password rotation for bootstrap admin.
 - Add refresh tokens and session revocation.
 - Encrypt sensitive settings/secrets at rest.
 - Expand rate limiting and lockout policy on login attempts.

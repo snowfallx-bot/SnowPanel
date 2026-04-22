@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/model"
 	"gorm.io/gorm"
@@ -14,6 +15,8 @@ type UserRepository interface {
 	Create(ctx context.Context, user *model.User) error
 	GetByUsername(ctx context.Context, username string) (*model.User, error)
 	GetByID(ctx context.Context, id int64) (*model.User, error)
+	UpdateLastLoginAt(ctx context.Context, id int64, lastLoginAt time.Time) error
+	UpdatePasswordHash(ctx context.Context, id int64, passwordHash string) error
 	EnsureRBACDefaults(ctx context.Context) error
 	EnsureUserRoleBySlug(ctx context.Context, userID int64, roleSlug string) error
 	GetRolesAndPermissions(ctx context.Context, userID int64) ([]string, []string, error)
@@ -59,6 +62,22 @@ func (r *userRepository) GetByID(ctx context.Context, id int64) (*model.User, er
 		return nil, err
 	}
 	return &user, nil
+}
+
+func (r *userRepository) UpdateLastLoginAt(ctx context.Context, id int64, lastLoginAt time.Time) error {
+	return r.db.WithContext(ctx).
+		Model(&model.User{}).
+		Where("id = ?", id).
+		Update("last_login_at", lastLoginAt).
+		Error
+}
+
+func (r *userRepository) UpdatePasswordHash(ctx context.Context, id int64, passwordHash string) error {
+	return r.db.WithContext(ctx).
+		Model(&model.User{}).
+		Where("id = ?", id).
+		Update("password_hash", passwordHash).
+		Error
 }
 
 func (r *userRepository) EnsureRBACDefaults(ctx context.Context) error {

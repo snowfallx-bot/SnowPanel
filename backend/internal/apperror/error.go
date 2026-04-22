@@ -54,5 +54,6 @@ var (
 	ErrBootstrapAdminFail = New(2006, http.StatusInternalServerError, "failed to bootstrap default admin")
 	ErrPermissionDenied   = New(2007, http.StatusForbidden, "permission denied")
 	ErrTaskNotFound       = New(2008, http.StatusNotFound, "task not found")
+	ErrPasswordChangeNeed = New(2009, http.StatusForbidden, "password change required")
 	ErrAgentUnavailable   = New(3001, http.StatusServiceUnavailable, "core agent unavailable")
 )

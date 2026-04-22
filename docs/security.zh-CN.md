@@ -20,6 +20,9 @@
 - 在生产环境中，若 `JWT_SECRET` 为空或过弱，backend 会在启动阶段 fail fast。
 - 在生产环境且 `BOOTSTRAP_ADMIN=true` 时，弱或缺失的 `DEFAULT_ADMIN_PASSWORD` 会被拒绝。
 - 在开发环境中，若 `DEFAULT_ADMIN_PASSWORD` 留空，backend 会生成一次性初始化密码。
+- bootstrap 管理员首次登录会标记为 `must_change_password`。
+- 当 `must_change_password=true` 时，后端仅允许访问 `/api/v1/auth/me` 与 `/api/v1/auth/change-password`。
+- 改密成功后会签发新的 token，并将 `must_change_password` 置为 `false`。
 
 ## 文件安全
 
@@ -47,7 +50,6 @@
 
 ## 加固待办
 
-- 为初始化管理员增加“首次登录强制改密”机制。
 - 增加 refresh token 与会话吊销机制。
 - 对敏感配置/密钥做静态加密存储。
 - 扩展登录尝试的限流与锁定策略。
