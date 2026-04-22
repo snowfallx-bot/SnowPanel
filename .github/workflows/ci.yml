@@ -69,3 +69,12 @@ jobs:
       - name: Build Frontend
         working-directory: frontend
         run: npm run build
+
+  container-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Build Docker Images
+        run: docker compose build core-agent backend frontend
