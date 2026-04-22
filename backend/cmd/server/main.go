@@ -38,7 +38,6 @@ func main() {
 	auditRepo := repository.NewAuditRepository(db)
 	taskRepo := repository.NewTaskRepository(db)
 	auditService := service.NewAuditService(auditRepo)
-	taskService := service.NewTaskService(taskRepo)
 	authService := service.NewAuthService(userRepo, cfg.Auth)
 	if err := authService.EnsureDefaultAdmin(context.Background()); err != nil {
 		zapLogger.Fatal("failed to ensure default admin", logger.Err(err))
@@ -50,6 +49,7 @@ func main() {
 	serviceManager := service.NewServiceManagerService(agentClient)
 	dockerService := service.NewDockerService(agentClient)
 	cronService := service.NewCronService(agentClient)
+	taskService := service.NewTaskService(taskRepo, dockerService, serviceManager)
 
 	server := &http.Server{
 		Addr: cfg.Server.Address(),

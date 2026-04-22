@@ -1,5 +1,5 @@
 import { http, unwrap } from "@/lib/http";
-import { CreateDemoTaskResult, ListTasksResult, TaskDetailResult } from "@/types/task";
+import { CreateTaskResult, ListTasksResult, TaskDetailResult, TaskStatusResult } from "@/types/task";
 
 export function listTasks(params: { page: number; size: number }) {
   return unwrap<ListTasksResult>(http.get("/api/v1/tasks", { params }));
@@ -9,6 +9,18 @@ export function getTaskDetail(id: number) {
   return unwrap<TaskDetailResult>(http.get(`/api/v1/tasks/${id}`));
 }
 
-export function createDemoTask() {
-  return unwrap<CreateDemoTaskResult>(http.post("/api/v1/tasks/demo"));
+export function createDockerRestartTask(payload: { container_id: string }) {
+  return unwrap<CreateTaskResult>(http.post("/api/v1/tasks/docker/restart", payload));
+}
+
+export function createServiceRestartTask(payload: { service_name: string }) {
+  return unwrap<CreateTaskResult>(http.post("/api/v1/tasks/services/restart", payload));
+}
+
+export function cancelTask(id: number) {
+  return unwrap<TaskStatusResult>(http.post(`/api/v1/tasks/${id}/cancel`));
+}
+
+export function retryTask(id: number) {
+  return unwrap<CreateTaskResult>(http.post(`/api/v1/tasks/${id}/retry`));
 }

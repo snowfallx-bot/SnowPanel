@@ -81,5 +81,13 @@ Security constraints:
 - `GET /tasks` (`tasks.read`)
   - query: `page`, `size`
 - `GET /tasks/:id` (`tasks.read`)
-- `POST /tasks/demo` (`tasks.manage`)
-  - creates demo mock-backup task with background progress updates and task logs
+- `POST /tasks/docker/restart` (`tasks.manage`)
+  - body: `{ "container_id": "..." }`
+  - queues a real docker restart operation as background task
+- `POST /tasks/services/restart` (`tasks.manage`)
+  - body: `{ "service_name": "..." }`
+  - queues a real system service restart operation as background task
+- `POST /tasks/:id/cancel` (`tasks.manage`)
+  - cancels a pending/running task
+- `POST /tasks/:id/retry` (`tasks.manage`)
+  - retries a failed/canceled task using its original payload

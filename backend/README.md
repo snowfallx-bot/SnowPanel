@@ -42,7 +42,10 @@ Go backend baseline with:
 - `GET /api/v1/audit/logs` (JWT + `audit.read`)
 - `GET /api/v1/tasks` (JWT + `tasks.read`)
 - `GET /api/v1/tasks/:id` (JWT + `tasks.read`)
-- `POST /api/v1/tasks/demo` (JWT + `tasks.manage`)
+- `POST /api/v1/tasks/docker/restart` (JWT + `tasks.manage`)
+- `POST /api/v1/tasks/services/restart` (JWT + `tasks.manage`)
+- `POST /api/v1/tasks/:id/cancel` (JWT + `tasks.manage`)
+- `POST /api/v1/tasks/:id/retry` (JWT + `tasks.manage`)
 
 ## Default Admin Bootstrap
 

@@ -102,7 +102,10 @@ func NewRouter(deps RouterDeps) *gin.Engine {
 			{
 				tasks.GET("", middleware.RequirePermission("tasks.read"), taskHandler.ListTasks)
 				tasks.GET("/:id", middleware.RequirePermission("tasks.read"), taskHandler.GetTaskDetail)
-				tasks.POST("/demo", middleware.RequirePermission("tasks.manage"), taskHandler.CreateDemoTask)
+				tasks.POST("/docker/restart", middleware.RequirePermission("tasks.manage"), taskHandler.CreateDockerRestartTask)
+				tasks.POST("/services/restart", middleware.RequirePermission("tasks.manage"), taskHandler.CreateServiceRestartTask)
+				tasks.POST("/:id/cancel", middleware.RequirePermission("tasks.manage"), taskHandler.CancelTask)
+				tasks.POST("/:id/retry", middleware.RequirePermission("tasks.manage"), taskHandler.RetryTask)
 			}
 		}
 	}

@@ -29,8 +29,13 @@ export interface TaskDetailResult {
   logs: TaskLog[];
 }
 
-export interface CreateDemoTaskResult {
+export interface CreateTaskResult {
   id: number;
   type: string;
+  status: string;
+}
+
+export interface TaskStatusResult {
+  id: number;
   status: string;
 }

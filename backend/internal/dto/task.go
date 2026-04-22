@@ -1,9 +1,17 @@
 package dto
 
-type CreateDemoTaskResult struct {
+type CreateTaskResult struct {
 	ID     int64  `json:"id"`
 	Type   string `json:"type"`
 	Status string `json:"status"`
+}
+
+type CreateDockerRestartTaskRequest struct {
+	ContainerID string `json:"container_id" binding:"required,min=2,max=128"`
+}
+
+type CreateServiceRestartTaskRequest struct {
+	ServiceName string `json:"service_name" binding:"required,min=2,max=128"`
 }
 
 type ListTasksQuery struct {

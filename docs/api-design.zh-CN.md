@@ -81,5 +81,13 @@
 - `GET /tasks`（`tasks.read`）
   - 查询参数：`page`、`size`
 - `GET /tasks/:id`（`tasks.read`）
-- `POST /tasks/demo`（`tasks.manage`）
-  - 创建示例 mock-backup 任务，并在后台更新进度和任务日志
+- `POST /tasks/docker/restart`（`tasks.manage`）
+  - 请求体：`{ "container_id": "..." }`
+  - 将真实 Docker 重启动作加入后台任务队列
+- `POST /tasks/services/restart`（`tasks.manage`）
+  - 请求体：`{ "service_name": "..." }`
+  - 将真实 system service 重启动作加入后台任务队列
+- `POST /tasks/:id/cancel`（`tasks.manage`）
+  - 取消 `pending/running` 任务
+- `POST /tasks/:id/retry`（`tasks.manage`）
+  - 基于原始 payload 重试 `failed/canceled` 任务

@@ -1,11 +1,24 @@
-import { useMemo, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createDemoTask, getTaskDetail, listTasks } from "@/api/tasks";
+import {
+  cancelTask,
+  createDockerRestartTask,
+  createServiceRestartTask,
+  getTaskDetail,
+  listTasks,
+  retryTask
+} from "@/api/tasks";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { useAuthStore } from "@/store/auth-store";
 
 function isActiveTask(status: string) {
   return status === "pending" || status === "running";
+}
+
+function isRetryableTask(status: string) {
+  return status === "failed" || status === "canceled";
 }
 
 function statusClasses(status: string) {
@@ -18,15 +31,22 @@ function statusClasses(status: string) {
   if (status === "running") {
     return "bg-amber-100 text-amber-700";
   }
+  if (status === "canceled") {
+    return "bg-slate-200 text-slate-700";
+  }
   return "bg-slate-100 text-slate-700";
 }
 
 export function TasksPage() {
   const queryClient = useQueryClient();
+  const user = useAuthStore((state) => state.user);
+  const canManageTasks = (user?.permissions || []).includes("tasks.manage");
   const [page, setPage] = useState(1);
   const [size] = useState(20);
   const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
   const [feedback, setFeedback] = useState("");
+  const [dockerContainerID, setDockerContainerID] = useState("");
+  const [serviceName, setServiceName] = useState("");
 
   const tasksQuery = useQuery({
     queryKey: ["tasks", page, size],
@@ -50,16 +70,56 @@ export function TasksPage() {
     }
   });
 
-  const createMutation = useMutation({
-    mutationFn: createDemoTask,
+  const createDockerRestartMutation = useMutation({
+    mutationFn: createDockerRestartTask,
     onSuccess(result) {
-      setFeedback(`Created demo task #${result.id}`);
+      setFeedback(`Queued docker restart task #${result.id}`);
+      setSelectedTaskId(result.id);
+      setDockerContainerID("");
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["tasks", "detail", result.id] });
+    },
+    onError(error) {
+      setFeedback(error instanceof Error ? error.message : "Create docker restart task failed");
+    }
+  });
+
+  const createServiceRestartMutation = useMutation({
+    mutationFn: createServiceRestartTask,
+    onSuccess(result) {
+      setFeedback(`Queued service restart task #${result.id}`);
+      setSelectedTaskId(result.id);
+      setServiceName("");
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["tasks", "detail", result.id] });
+    },
+    onError(error) {
+      setFeedback(error instanceof Error ? error.message : "Create service restart task failed");
+    }
+  });
+
+  const cancelMutation = useMutation({
+    mutationFn: cancelTask,
+    onSuccess(result) {
+      setFeedback(`Task #${result.id} canceled`);
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["tasks", "detail", result.id] });
+    },
+    onError(error) {
+      setFeedback(error instanceof Error ? error.message : "Cancel task failed");
+    }
+  });
+
+  const retryMutation = useMutation({
+    mutationFn: retryTask,
+    onSuccess(result) {
+      setFeedback(`Retried task as #${result.id}`);
       setSelectedTaskId(result.id);
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
       queryClient.invalidateQueries({ queryKey: ["tasks", "detail", result.id] });
     },
     onError(error) {
-      setFeedback(error instanceof Error ? error.message : "Create demo task failed");
+      setFeedback(error instanceof Error ? error.message : "Retry task failed");
     }
   });
 
@@ -76,35 +136,74 @@ export function TasksPage() {
   const total = tasksQuery.data?.total ?? 0;
   const maxPage = Math.max(1, Math.ceil(total / size));
 
+  async function handleCreateDockerRestartTask(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const containerID = dockerContainerID.trim();
+    if (!containerID) {
+      return;
+    }
+    await createDockerRestartMutation.mutateAsync({ container_id: containerID });
+  }
+
+  async function handleCreateServiceRestartTask(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const value = serviceName.trim();
+    if (!value) {
+      return;
+    }
+    await createServiceRestartMutation.mutateAsync({ service_name: value });
+  }
+
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h2 className="text-2xl font-semibold text-slate-900">Tasks</h2>
-          <p className="text-sm text-slate-500">Track asynchronous jobs and inspect execution logs.</p>
-        </div>
-        <div className="flex gap-2">
-          <Button
-            disabled={createMutation.isPending}
-            onClick={() => createMutation.mutate()}
-            size="sm"
-          >
-            {createMutation.isPending ? "Creating..." : "Create Demo Task"}
-          </Button>
-          <Button
-            onClick={() => {
-              queryClient.invalidateQueries({ queryKey: ["tasks"] });
-              if (selectedTaskId !== null) {
-                queryClient.invalidateQueries({ queryKey: ["tasks", "detail", selectedTaskId] });
-              }
-            }}
-            size="sm"
-            variant="ghost"
-          >
-            Refresh
-          </Button>
-        </div>
+      <div>
+        <h2 className="text-2xl font-semibold text-slate-900">Tasks</h2>
+        <p className="text-sm text-slate-500">Queue real operations and track asynchronous execution.</p>
       </div>
+
+      {canManageTasks ? (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Queue Docker Restart Task</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <form className="flex gap-2" onSubmit={handleCreateDockerRestartTask}>
+                <Input
+                  placeholder="container id or name"
+                  value={dockerContainerID}
+                  onChange={(event) => setDockerContainerID(event.target.value)}
+                />
+                <Button disabled={createDockerRestartMutation.isPending} type="submit">
+                  {createDockerRestartMutation.isPending ? "Queueing..." : "Queue"}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Queue Service Restart Task</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <form className="flex gap-2" onSubmit={handleCreateServiceRestartTask}>
+                <Input
+                  placeholder="service name (e.g. nginx.service)"
+                  value={serviceName}
+                  onChange={(event) => setServiceName(event.target.value)}
+                />
+                <Button disabled={createServiceRestartMutation.isPending} type="submit">
+                  {createServiceRestartMutation.isPending ? "Queueing..." : "Queue"}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
+      ) : (
+        <p className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
+          You only have read permission for tasks. Create/cancel/retry actions require `tasks.manage`.
+        </p>
+      )}
 
       <Card>
         <CardHeader>
@@ -130,10 +229,7 @@ export function TasksPage() {
                   </thead>
                   <tbody>
                     {(tasksQuery.data?.items || []).map((item) => (
-                      <tr
-                        className="border-t border-slate-200"
-                        key={item.id}
-                      >
+                      <tr className="border-t border-slate-200" key={item.id}>
                         <td className="px-4 py-3">#{item.id}</td>
                         <td className="px-4 py-3">{item.type}</td>
                         <td className="px-4 py-3">
@@ -145,13 +241,35 @@ export function TasksPage() {
                         <td className="px-4 py-3">{item.triggered_by ?? "-"}</td>
                         <td className="px-4 py-3">{new Date(item.updated_at).toLocaleString()}</td>
                         <td className="px-4 py-3">
-                          <Button
-                            onClick={() => setSelectedTaskId(item.id)}
-                            size="sm"
-                            variant={selectedTaskId === item.id ? "default" : "ghost"}
-                          >
-                            {selectedTaskId === item.id ? "Viewing" : "View"}
-                          </Button>
+                          <div className="flex gap-2">
+                            <Button
+                              onClick={() => setSelectedTaskId(item.id)}
+                              size="sm"
+                              variant={selectedTaskId === item.id ? "default" : "ghost"}
+                            >
+                              {selectedTaskId === item.id ? "Viewing" : "View"}
+                            </Button>
+                            {canManageTasks && isActiveTask(item.status) && (
+                              <Button
+                                onClick={() => cancelMutation.mutate(item.id)}
+                                size="sm"
+                                variant="ghost"
+                                disabled={cancelMutation.isPending}
+                              >
+                                Cancel
+                              </Button>
+                            )}
+                            {canManageTasks && isRetryableTask(item.status) && (
+                              <Button
+                                onClick={() => retryMutation.mutate(item.id)}
+                                size="sm"
+                                variant="ghost"
+                                disabled={retryMutation.isPending}
+                              >
+                                Retry
+                              </Button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}
