@@ -89,6 +89,29 @@ type DeleteFileResult struct {
 	Path string
 }
 
+type ServiceInfo struct {
+	Name        string
+	DisplayName string
+	Status      string
+}
+
+type ListServicesRequest struct {
+	Keyword string
+}
+
+type ListServicesResult struct {
+	Services []ServiceInfo
+}
+
+type ServiceActionRequest struct {
+	Name string
+}
+
+type ServiceActionResult struct {
+	Name   string
+	Status string
+}
+
 type AgentClient interface {
 	GetSystemOverview(ctx context.Context) (SystemOverview, error)
 	GetRealtimeResource(ctx context.Context) (RealtimeResource, error)
@@ -97,6 +120,10 @@ type AgentClient interface {
 	WriteTextFile(ctx context.Context, req WriteTextFileRequest) (WriteTextFileResult, error)
 	CreateDirectory(ctx context.Context, req CreateDirectoryRequest) (CreateDirectoryResult, error)
 	DeleteFile(ctx context.Context, req DeleteFileRequest) (DeleteFileResult, error)
+	ListServices(ctx context.Context, req ListServicesRequest) (ListServicesResult, error)
+	StartService(ctx context.Context, req ServiceActionRequest) (ServiceActionResult, error)
+	StopService(ctx context.Context, req ServiceActionRequest) (ServiceActionResult, error)
+	RestartService(ctx context.Context, req ServiceActionRequest) (ServiceActionResult, error)
 }
 
 type Client struct {
@@ -157,4 +184,28 @@ func (c *Client) DeleteFile(ctx context.Context, req DeleteFileRequest) (DeleteF
 	_ = ctx
 	_ = req
 	return DeleteFileResult{}, ErrNotImplemented
+}
+
+func (c *Client) ListServices(ctx context.Context, req ListServicesRequest) (ListServicesResult, error) {
+	_ = ctx
+	_ = req
+	return ListServicesResult{}, ErrNotImplemented
+}
+
+func (c *Client) StartService(ctx context.Context, req ServiceActionRequest) (ServiceActionResult, error) {
+	_ = ctx
+	_ = req
+	return ServiceActionResult{}, ErrNotImplemented
+}
+
+func (c *Client) StopService(ctx context.Context, req ServiceActionRequest) (ServiceActionResult, error) {
+	_ = ctx
+	_ = req
+	return ServiceActionResult{}, ErrNotImplemented
+}
+
+func (c *Client) RestartService(ctx context.Context, req ServiceActionRequest) (ServiceActionResult, error) {
+	_ = ctx
+	_ = req
+	return ServiceActionResult{}, ErrNotImplemented
 }

@@ -8,15 +8,20 @@ use tracing::info;
 
 use crate::api::proto::file_service_server::{FileService, FileServiceServer};
 use crate::api::proto::health_service_server::{HealthService, HealthServiceServer};
+use crate::api::proto::service_manager_service_server::{
+    ServiceManagerService, ServiceManagerServiceServer,
+};
 use crate::api::proto::system_service_server::{SystemService, SystemServiceServer};
 use crate::api::proto::{
     CreateDirectoryRequest, CreateDirectoryResponse, DeleteFileRequest, DeleteFileResponse, Error,
     GetRealtimeResourceRequest, GetRealtimeResourceResponse, GetSystemOverviewRequest,
     GetSystemOverviewResponse, HealthCheckRequest, HealthCheckResponse, ListFilesRequest,
-    ListFilesResponse, ReadTextFileRequest, ReadTextFileResponse, WriteTextFileRequest,
-    WriteTextFileResponse,
+    ListFilesResponse, ListServicesRequest, ListServicesResponse, ReadTextFileRequest,
+    ReadTextFileResponse, ServiceActionRequest, ServiceActionResponse, ServiceInfo,
+    WriteTextFileRequest, WriteTextFileResponse,
 };
 use crate::file::service::FileService as FileOperatorService;
+use crate::process::systemd_service::{ServiceAction, ServiceError, SystemdServiceManager};
 use crate::security::path_validator::PathValidator;
 use crate::service::system_info::SystemInfoService;
 
@@ -24,10 +29,16 @@ use crate::service::system_info::SystemInfoService;
 pub struct GrpcServer {
     system_info_service: Arc<SystemInfoService>,
     file_service: Arc<FileOperatorService>,
+    service_manager: Arc<SystemdServiceManager>,
 }
 
 impl GrpcServer {
-    pub fn new(allowed_roots: Vec<String>, max_read_bytes: usize, max_write_bytes: usize) -> Self {
+    pub fn new(
+        allowed_roots: Vec<String>,
+        max_read_bytes: usize,
+        max_write_bytes: usize,
+        service_whitelist: Vec<String>,
+    ) -> Self {
         let roots = allowed_roots.into_iter().map(PathBuf::from).collect::<Vec<_>>();
         let path_validator = PathValidator::new(roots);
 
@@ -38,6 +49,7 @@ impl GrpcServer {
                 max_read_bytes,
                 max_write_bytes,
             )),
+            service_manager: Arc::new(SystemdServiceManager::new(service_whitelist)),
         }
     }
 
@@ -55,6 +67,9 @@ impl GrpcServer {
             }))
             .add_service(FileServiceServer::new(FileServiceImpl {
                 file_service: self.file_service.clone(),
+            }))
+            .add_service(ServiceManagerServiceServer::new(ServiceManagerServiceImpl {
+                service_manager: self.service_manager.clone(),
             }))
             .serve(socket_addr)
             .await
@@ -185,5 +200,89 @@ fn ok_error() -> Error {
         code: 0,
         message: "ok".to_string(),
         detail: String::new(),
+    }
+}
+
+#[derive(Clone)]
+struct ServiceManagerServiceImpl {
+    service_manager: Arc<SystemdServiceManager>,
+}
+
+#[tonic::async_trait]
+impl ServiceManagerService for ServiceManagerServiceImpl {
+    async fn list_services(
+        &self,
+        request: Request<ListServicesRequest>,
+    ) -> Result<Response<ListServicesResponse>, Status> {
+        let payload = request.into_inner();
+        let result = self.service_manager.list_services(&payload.keyword);
+        match result {
+            Ok(items) => Ok(Response::new(ListServicesResponse {
+                error: Some(ok_error()),
+                services: items
+                    .into_iter()
+                    .map(|item| ServiceInfo {
+                        name: item.name,
+                        display_name: item.display_name,
+                        status: item.status,
+                    })
+                    .collect::<Vec<_>>(),
+            })),
+            Err(err) => Ok(Response::new(ListServicesResponse {
+                error: Some(to_error(err)),
+                services: Vec::new(),
+            })),
+        }
+    }
+
+    async fn start_service(
+        &self,
+        request: Request<ServiceActionRequest>,
+    ) -> Result<Response<ServiceActionResponse>, Status> {
+        self.handle_action(ServiceAction::Start, request.into_inner())
+    }
+
+    async fn stop_service(
+        &self,
+        request: Request<ServiceActionRequest>,
+    ) -> Result<Response<ServiceActionResponse>, Status> {
+        self.handle_action(ServiceAction::Stop, request.into_inner())
+    }
+
+    async fn restart_service(
+        &self,
+        request: Request<ServiceActionRequest>,
+    ) -> Result<Response<ServiceActionResponse>, Status> {
+        self.handle_action(ServiceAction::Restart, request.into_inner())
+    }
+}
+
+impl ServiceManagerServiceImpl {
+    fn handle_action(
+        &self,
+        action: ServiceAction,
+        req: ServiceActionRequest,
+    ) -> Result<Response<ServiceActionResponse>, Status> {
+        let result = self.service_manager.run_action(action, &req.name);
+        match result {
+            Ok(item) => Ok(Response::new(ServiceActionResponse {
+                error: Some(ok_error()),
+                name: item.name,
+                status: item.status,
+            })),
+            Err(err) => Ok(Response::new(ServiceActionResponse {
+                error: Some(to_error(err)),
+                name: req.name,
+                status: String::new(),
+            })),
+        }
+    }
+}
+
+fn to_error(err: ServiceError) -> Error {
+    Error {
+        code: err.code,
+        message: err.message,
+        detail: err.detail,
     }
 }

@@ -3,6 +3,7 @@ import { AppLayout } from "@/layouts/AppLayout";
 import { DashboardPage } from "@/pages/DashboardPage";
 import { FilesPage } from "@/pages/FilesPage";
 import { LoginPage } from "@/pages/LoginPage";
+import { ServicesPage } from "@/pages/ServicesPage";
 import { ProtectedRoute } from "@/routes/ProtectedRoute";
 
 export const router = createBrowserRouter([
@@ -29,6 +30,10 @@ export const router = createBrowserRouter([
           {
             path: "/files",
             element: <FilesPage />
+          },
+          {
+            path: "/services",
+            element: <ServicesPage />
           }
         ]
       }

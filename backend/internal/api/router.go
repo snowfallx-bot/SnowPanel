@@ -19,6 +19,7 @@ type RouterDeps struct {
 	AuthService      service.AuthService
 	DashboardService service.DashboardService
 	FileService      service.FileService
+	ServiceManager   service.ServiceManagerService
 }
 
 func NewRouter(deps RouterDeps) *gin.Engine {
@@ -34,6 +35,7 @@ func NewRouter(deps RouterDeps) *gin.Engine {
 	authHandler := handler.NewAuthHandler(deps.AuthService)
 	dashboardHandler := handler.NewDashboardHandler(deps.DashboardService)
 	fileHandler := handler.NewFileHandler(deps.FileService)
+	serviceHandler := handler.NewServiceHandler(deps.ServiceManager)
 
 	router.GET("/health", healthHandler.Health)
 
@@ -54,6 +56,14 @@ func NewRouter(deps RouterDeps) *gin.Engine {
 				files.POST("/write", middleware.RequirePermission("files.write"), fileHandler.WriteTextFile)
 				files.POST("/mkdir", middleware.RequirePermission("files.write"), fileHandler.CreateDirectory)
 				files.DELETE("/delete", middleware.RequirePermission("files.write"), fileHandler.DeleteFile)
+			}
+
+			services := protected.Group("/services")
+			{
+				services.GET("", middleware.RequirePermission("services.read"), serviceHandler.ListServices)
+				services.POST("/:name/start", middleware.RequirePermission("services.manage"), serviceHandler.StartService)
+				services.POST("/:name/stop", middleware.RequirePermission("services.manage"), serviceHandler.StopService)
+				services.POST("/:name/restart", middleware.RequirePermission("services.manage"), serviceHandler.RestartService)
 			}
 		}
 	}

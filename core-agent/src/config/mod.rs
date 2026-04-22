@@ -6,6 +6,7 @@ pub struct Config {
     pub allowed_roots: Vec<String>,
     pub max_read_bytes: usize,
     pub max_write_bytes: usize,
+    pub service_whitelist: Vec<String>,
 }
 
 impl Config {
@@ -29,6 +30,12 @@ impl Config {
             .ok()
             .and_then(|raw| raw.parse::<usize>().ok())
             .unwrap_or(1024 * 1024);
+        let service_whitelist = env::var("CORE_AGENT_SERVICE_WHITELIST")
+            .unwrap_or_else(|_| String::new())
+            .split(',')
+            .map(|item| item.trim().to_string())
+            .filter(|item| !item.is_empty())
+            .collect::<Vec<_>>();
 
         Self {
             host,
@@ -36,6 +43,7 @@ impl Config {
             allowed_roots,
             max_read_bytes,
             max_write_bytes,
+            service_whitelist,
         }
     }
 

@@ -39,6 +39,7 @@ func main() {
 	agentClient := grpcclient.New(cfg.AgentTarget, cfg.AgentTimeout)
 	dashboardService := service.NewDashboardService(agentClient)
 	fileService := service.NewFileService(agentClient)
+	serviceManager := service.NewServiceManagerService(agentClient)
 
 	server := &http.Server{
 		Addr: cfg.Server.Address(),
@@ -49,6 +50,7 @@ func main() {
 			AuthService:      authService,
 			DashboardService: dashboardService,
 			FileService:      fileService,
+			ServiceManager:   serviceManager,
 		}),
 		ReadTimeout:  cfg.Server.ReadTimeout,
 		WriteTimeout: cfg.Server.WriteTimeout,

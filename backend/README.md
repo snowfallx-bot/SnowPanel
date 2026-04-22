@@ -24,6 +24,10 @@ Go backend baseline with:
 - `POST /api/v1/files/write` (JWT + `files.write`)
 - `POST /api/v1/files/mkdir` (JWT + `files.write`)
 - `DELETE /api/v1/files/delete` (JWT + `files.write`)
+- `GET /api/v1/services` (JWT + `services.read`)
+- `POST /api/v1/services/:name/start` (JWT + `services.manage`)
+- `POST /api/v1/services/:name/stop` (JWT + `services.manage`)
+- `POST /api/v1/services/:name/restart` (JWT + `services.manage`)
 
 ## Default Admin Bootstrap
 
