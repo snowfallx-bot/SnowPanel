@@ -48,6 +48,14 @@
 - 前端的上传/下载能力当前通过复用读写接口实现，面向 UTF-8 文本文件。
 - 二进制或非 UTF-8 文件会给出明确提示，并禁用内联编辑。
 - 预览大小可选（`256KB` 到 `8MB`）；尚未提供独立的 offset/chunk 分页读取 API。
+- 当前 core-agent 文件相关错误码语义：
+  - `4001`：unsafe path（路径越界）
+  - `4002`：path not found（路径不存在）
+  - `4003`：text file required（二进制或非 UTF-8）
+  - `4004`：file too large（文件过大）
+  - `4005`：I/O error（文件系统读写异常）
+  - `4006`：unsupported encoding（编码不支持）
+  - `4007`：dangerous path（危险路径）
 
 ## 服务管理
 

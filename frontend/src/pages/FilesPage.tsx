@@ -14,6 +14,7 @@ import { FileTable } from "@/components/files/FileTable";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { ApiError } from "@/lib/http";
 import { FileEntry } from "@/types/file";
 
 const readLimitOptions = [
@@ -53,6 +54,38 @@ function decodeUtf8OrThrow(bytes: ArrayBuffer) {
   return decoder.decode(bytes);
 }
 
+function describeFileApiError(error: unknown, fallback: string) {
+  if (error instanceof ApiError) {
+    switch (error.code) {
+      case 3001:
+        return "core-agent is unavailable. Please check backend and agent connectivity.";
+      case 4000:
+        return "Invalid request. Please verify file path and input.";
+      case 4001:
+        return "Path is outside the allowed safe roots.";
+      case 4002:
+        return "Target path was not found.";
+      case 4003:
+        return "This file is binary or non UTF-8 text.";
+      case 4004:
+        return "File is too large for the current operation or preview limit.";
+      case 4005:
+        return "I/O error while accessing the file. Check path permissions and file locks.";
+      case 4006:
+        return "Unsupported encoding. Use UTF-8.";
+      case 4007:
+        return "Dangerous path is blocked by security policy.";
+      default:
+        return error.message || fallback;
+    }
+  }
+
+  if (error instanceof Error) {
+    return error.message || fallback;
+  }
+  return fallback;
+}
+
 export function FilesPage() {
   const queryClient = useQueryClient();
   const [path, setPath] = useState("/tmp");
@@ -79,14 +112,13 @@ export function FilesPage() {
       setFeedback("");
     },
     onError(error, variables) {
-      const message = error instanceof Error ? error.message : "Failed to read file";
+      const message = describeFileApiError(error, "Failed to read file");
       setSelectedPath(variables.path);
       setSelectedContent("");
       setSelectedTruncated(false);
-
-      if (message.toLowerCase().includes("text file required")) {
+      if (error instanceof ApiError && error.code === 4003) {
         setSelectedBinary(true);
-        setFeedback("This file is binary/non UTF-8 and cannot be previewed as text.");
+        setFeedback(message);
         return;
       }
 
@@ -98,7 +130,7 @@ export function FilesPage() {
   const writeMutation = useMutation({
     mutationFn: writeTextFile,
     onError(error) {
-      setFeedback(error instanceof Error ? error.message : "Failed to write file");
+      setFeedback(describeFileApiError(error, "Failed to write file"));
     }
   });
 
@@ -112,7 +144,7 @@ export function FilesPage() {
       }
     },
     onError(error) {
-      setFeedback(error instanceof Error ? error.message : "Failed to rename path");
+      setFeedback(describeFileApiError(error, "Failed to rename path"));
     }
   });
 
@@ -124,7 +156,7 @@ export function FilesPage() {
       queryClient.invalidateQueries({ queryKey: ["files", path] });
     },
     onError(error) {
-      setFeedback(error instanceof Error ? error.message : "Failed to create directory");
+      setFeedback(describeFileApiError(error, "Failed to create directory"));
     }
   });
 
@@ -141,13 +173,13 @@ export function FilesPage() {
       }
     },
     onError(error) {
-      setFeedback(error instanceof Error ? error.message : "Failed to delete path");
+      setFeedback(describeFileApiError(error, "Failed to delete path"));
     }
   });
 
   const message = useMemo(() => {
     if (listQuery.isError) {
-      return listQuery.error instanceof Error ? listQuery.error.message : "Failed to list files";
+      return describeFileApiError(listQuery.error, "Failed to list files");
     }
     return feedback;
   }, [feedback, listQuery.error, listQuery.isError]);
@@ -274,7 +306,7 @@ export function FilesPage() {
         setFeedback("Upload currently supports UTF-8 text files only.");
         return;
       }
-      setFeedback(error instanceof Error ? error.message : "Upload failed");
+      setFeedback(describeFileApiError(error, "Upload failed"));
     }
   }
 

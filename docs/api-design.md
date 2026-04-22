@@ -48,6 +48,14 @@ Current behavior notes:
 - The frontend supports text upload/download by reusing read/write APIs.
 - Binary or non-UTF-8 files are shown with a clear hint and inline editing is disabled.
 - Preview size is selectable (`256KB` to `8MB`); offset/chunk pagination is not yet exposed as a dedicated API.
+- File-related error codes currently used by the core-agent:
+  - `4001`: unsafe path
+  - `4002`: path not found
+  - `4003`: text file required (binary/non-UTF-8)
+  - `4004`: file too large
+  - `4005`: I/O error
+  - `4006`: unsupported encoding
+  - `4007`: dangerous path
 
 ## Service Management
 
