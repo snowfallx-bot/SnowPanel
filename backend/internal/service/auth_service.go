@@ -46,6 +46,11 @@ type authService struct {
 	cfg      config.AuthConfig
 }
 
+const (
+	roleSuperAdmin = "super_admin"
+	roleOperator   = "operator"
+)
+
 func NewAuthService(userRepo repository.UserRepository, cfg config.AuthConfig) AuthService {
 	return &authService{
 		userRepo: userRepo,
@@ -54,6 +59,15 @@ func NewAuthService(userRepo repository.UserRepository, cfg config.AuthConfig) A
 }
 
 func (s *authService) EnsureDefaultAdmin(ctx context.Context) error {
+	if err := s.userRepo.EnsureRBACDefaults(ctx); err != nil {
+		return apperror.Wrap(
+			apperror.ErrBootstrapAdminFail.Code,
+			apperror.ErrBootstrapAdminFail.HTTPStatus,
+			apperror.ErrBootstrapAdminFail.Message,
+			err,
+		)
+	}
+
 	if !s.cfg.BootstrapAdmin {
 		return nil
 	}
@@ -67,43 +81,67 @@ func (s *authService) EnsureDefaultAdmin(ctx context.Context) error {
 			err,
 		)
 	}
-	if count > 0 {
-		return nil
+	var bootstrapUser *model.User
+	if count == 0 {
+		bootstrapPassword, err := s.resolveBootstrapPassword()
+		if err != nil {
+			return apperror.Wrap(
+				apperror.ErrBootstrapAdminFail.Code,
+				apperror.ErrBootstrapAdminFail.HTTPStatus,
+				apperror.ErrBootstrapAdminFail.Message,
+				err,
+			)
+		}
+
+		hash, err := bcrypt.GenerateFromPassword([]byte(bootstrapPassword), bcrypt.DefaultCost)
+		if err != nil {
+			return apperror.Wrap(
+				apperror.ErrBootstrapAdminFail.Code,
+				apperror.ErrBootstrapAdminFail.HTTPStatus,
+				apperror.ErrBootstrapAdminFail.Message,
+				err,
+			)
+		}
+
+		user := &model.User{
+			Username:     s.cfg.DefaultAdminUsername,
+			Email:        s.cfg.DefaultAdminEmail,
+			PasswordHash: string(hash),
+			Status:       1,
+		}
+		if err := s.userRepo.Create(ctx, user); err != nil {
+			return apperror.Wrap(
+				apperror.ErrBootstrapAdminFail.Code,
+				apperror.ErrBootstrapAdminFail.HTTPStatus,
+				apperror.ErrBootstrapAdminFail.Message,
+				err,
+			)
+		}
+		bootstrapUser = user
 	}
 
-	bootstrapPassword, err := s.resolveBootstrapPassword()
-	if err != nil {
-		return apperror.Wrap(
-			apperror.ErrBootstrapAdminFail.Code,
-			apperror.ErrBootstrapAdminFail.HTTPStatus,
-			apperror.ErrBootstrapAdminFail.Message,
-			err,
-		)
+	if bootstrapUser == nil {
+		existing, err := s.userRepo.GetByUsername(ctx, s.cfg.DefaultAdminUsername)
+		if err != nil {
+			return apperror.Wrap(
+				apperror.ErrBootstrapAdminFail.Code,
+				apperror.ErrBootstrapAdminFail.HTTPStatus,
+				apperror.ErrBootstrapAdminFail.Message,
+				err,
+			)
+		}
+		bootstrapUser = existing
 	}
 
-	hash, err := bcrypt.GenerateFromPassword([]byte(bootstrapPassword), bcrypt.DefaultCost)
-	if err != nil {
-		return apperror.Wrap(
-			apperror.ErrBootstrapAdminFail.Code,
-			apperror.ErrBootstrapAdminFail.HTTPStatus,
-			apperror.ErrBootstrapAdminFail.Message,
-			err,
-		)
-	}
-
-	user := &model.User{
-		Username:     s.cfg.DefaultAdminUsername,
-		Email:        s.cfg.DefaultAdminEmail,
-		PasswordHash: string(hash),
-		Status:       1,
-	}
-	if err := s.userRepo.Create(ctx, user); err != nil {
-		return apperror.Wrap(
-			apperror.ErrBootstrapAdminFail.Code,
-			apperror.ErrBootstrapAdminFail.HTTPStatus,
-			apperror.ErrBootstrapAdminFail.Message,
-			err,
-		)
+	if bootstrapUser != nil {
+		if err := s.userRepo.EnsureUserRoleBySlug(ctx, bootstrapUser.ID, roleSuperAdmin); err != nil {
+			return apperror.Wrap(
+				apperror.ErrBootstrapAdminFail.Code,
+				apperror.ErrBootstrapAdminFail.HTTPStatus,
+				apperror.ErrBootstrapAdminFail.Message,
+				err,
+			)
+		}
 	}
 	return nil
 }
@@ -128,7 +166,17 @@ func (s *authService) Login(ctx context.Context, req dto.LoginRequest) (dto.Logi
 		return dto.LoginResponse{}, apperror.ErrInvalidCredential
 	}
 
-	token, expiresIn, err := s.generateToken(*user)
+	roles, permissions, err := s.resolveUserRBAC(ctx, *user)
+	if err != nil {
+		return dto.LoginResponse{}, apperror.Wrap(
+			apperror.ErrInternal.Code,
+			apperror.ErrInternal.HTTPStatus,
+			apperror.ErrInternal.Message,
+			err,
+		)
+	}
+
+	token, expiresIn, err := s.generateToken(*user, roles, permissions)
 	if err != nil {
 		return dto.LoginResponse{}, apperror.Wrap(
 			apperror.ErrTokenGenerate.Code,
@@ -143,7 +191,7 @@ func (s *authService) Login(ctx context.Context, req dto.LoginRequest) (dto.Logi
 		AccessToken: token,
 		TokenType:   "Bearer",
 		ExpiresIn:   expiresIn,
-		User:        toProfile(*user),
+		User:        toProfile(*user, roles, permissions),
 	}, nil
 }
 
@@ -160,7 +208,17 @@ func (s *authService) Me(ctx context.Context, userID int64) (dto.UserProfile, er
 	if user == nil {
 		return dto.UserProfile{}, apperror.ErrUserNotFound
 	}
-	return toProfile(*user), nil
+
+	roles, permissions, err := s.resolveUserRBAC(ctx, *user)
+	if err != nil {
+		return dto.UserProfile{}, apperror.Wrap(
+			apperror.ErrInternal.Code,
+			apperror.ErrInternal.HTTPStatus,
+			apperror.ErrInternal.Message,
+			err,
+		)
+	}
+	return toProfile(*user, roles, permissions), nil
 }
 
 func (s *authService) ParseToken(rawToken string) (TokenClaims, error) {
@@ -179,13 +237,13 @@ func (s *authService) ParseToken(rawToken string) (TokenClaims, error) {
 	}, nil
 }
 
-func (s *authService) generateToken(user model.User) (string, int64, error) {
+func (s *authService) generateToken(user model.User, roles []string, permissions []string) (string, int64, error) {
 	expireAt := time.Now().Add(s.cfg.JWTExpire)
 	claims := &jwtClaims{
 		UserID:      user.ID,
 		Username:    user.Username,
-		Roles:       defaultRolesForUser(user.Username),
-		Permissions: defaultPermissionsForUser(user.Username),
+		Roles:       roles,
+		Permissions: permissions,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expireAt),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -202,49 +260,39 @@ func (s *authService) generateToken(user model.User) (string, int64, error) {
 	return signed, int64(s.cfg.JWTExpire.Seconds()), nil
 }
 
-func toProfile(user model.User) dto.UserProfile {
+func toProfile(user model.User, roles []string, permissions []string) dto.UserProfile {
 	return dto.UserProfile{
 		ID:          user.ID,
 		Username:    user.Username,
 		Email:       user.Email,
 		Status:      user.Status,
-		Roles:       defaultRolesForUser(user.Username),
-		Permissions: defaultPermissionsForUser(user.Username),
-	}
-}
-
-func defaultRolesForUser(username string) []string {
-	if username == "admin" {
-		return []string{"super_admin"}
-	}
-	return []string{"operator"}
-}
-
-func defaultPermissionsForUser(username string) []string {
-	if username == "admin" {
-		return []string{
-			"dashboard.read",
-			"files.read",
-			"files.write",
-			"services.read",
-			"services.manage",
-			"docker.read",
-			"docker.manage",
-			"cron.read",
-			"cron.manage",
-			"audit.read",
-			"tasks.read",
-			"tasks.manage",
-		}
-	}
-	return []string{
-		"dashboard.read",
-		"files.read",
+		Roles:       roles,
+		Permissions: permissions,
 	}
 }
 
 func (s *authService) emitAuditLogin(_ context.Context, _ string, _ bool) {
 	// Reserved for audit integration in later stage.
+}
+
+func (s *authService) resolveUserRBAC(ctx context.Context, user model.User) ([]string, []string, error) {
+	roles, permissions, err := s.userRepo.GetRolesAndPermissions(ctx, user.ID)
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(roles) > 0 {
+		return roles, permissions, nil
+	}
+
+	if err := s.userRepo.EnsureUserRoleBySlug(ctx, user.ID, roleOperator); err != nil {
+		return nil, nil, err
+	}
+
+	roles, permissions, err = s.userRepo.GetRolesAndPermissions(ctx, user.ID)
+	if err != nil {
+		return nil, nil, err
+	}
+	return roles, permissions, nil
 }
 
 func (s *authService) resolveBootstrapPassword() (string, error) {

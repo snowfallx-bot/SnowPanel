@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 	"time"
 
@@ -14,14 +15,16 @@ import (
 )
 
 type fakeUserRepo struct {
-	count        int64
-	countErr     error
-	createErr    error
-	getByNameErr error
-	getByIDErr   error
-	createdUser  *model.User
-	usersByName  map[string]*model.User
-	usersByID    map[int64]*model.User
+	count           int64
+	countErr        error
+	createErr       error
+	getByNameErr    error
+	getByIDErr      error
+	createdUser     *model.User
+	usersByName     map[string]*model.User
+	usersByID       map[int64]*model.User
+	userRoles       map[int64][]string
+	rolePermissions map[string][]string
 }
 
 func (r *fakeUserRepo) Count(context.Context) (int64, error) {
@@ -69,6 +72,60 @@ func (r *fakeUserRepo) GetByID(_ context.Context, id int64) (*model.User, error)
 	}
 	cloned := *user
 	return &cloned, nil
+}
+
+func (r *fakeUserRepo) EnsureRBACDefaults(context.Context) error {
+	if r.rolePermissions == nil {
+		r.rolePermissions = map[string][]string{}
+	}
+	r.rolePermissions["super_admin"] = []string{
+		"dashboard.read",
+		"files.read",
+		"files.write",
+		"services.read",
+		"services.manage",
+		"docker.read",
+		"docker.manage",
+		"cron.read",
+		"cron.manage",
+		"audit.read",
+		"tasks.read",
+		"tasks.manage",
+	}
+	r.rolePermissions["operator"] = []string{
+		"dashboard.read",
+		"files.read",
+	}
+	return nil
+}
+
+func (r *fakeUserRepo) EnsureUserRoleBySlug(_ context.Context, userID int64, roleSlug string) error {
+	if r.userRoles == nil {
+		r.userRoles = map[int64][]string{}
+	}
+	roles := r.userRoles[userID]
+	if !slices.Contains(roles, roleSlug) {
+		r.userRoles[userID] = append(roles, roleSlug)
+	}
+	return nil
+}
+
+func (r *fakeUserRepo) GetRolesAndPermissions(_ context.Context, userID int64) ([]string, []string, error) {
+	roles := append([]string(nil), r.userRoles[userID]...)
+	slices.Sort(roles)
+	permissionSet := map[string]struct{}{}
+	for _, role := range roles {
+		for _, permission := range r.rolePermissions[role] {
+			permissionSet[permission] = struct{}{}
+		}
+	}
+
+	permissions := make([]string, 0, len(permissionSet))
+	for permission := range permissionSet {
+		permissions = append(permissions, permission)
+	}
+	slices.Sort(permissions)
+	return roles, permissions, nil
 }
 
 func testAuthConfig() config.AuthConfig {
@@ -212,6 +269,12 @@ func TestLoginSuccessAndParseToken(t *testing.T) {
 				Status:       1,
 			},
 		},
+		userRoles: map[int64][]string{
+			7: []string{"super_admin"},
+		},
+	}
+	if err := repo.EnsureRBACDefaults(context.Background()); err != nil {
+		t.Fatalf("failed to seed fake rbac defaults: %v", err)
 	}
 	service := NewAuthService(repo, testAuthConfig())
 
@@ -238,6 +301,12 @@ func TestLoginSuccessAndParseToken(t *testing.T) {
 	}
 	if claims.Username != "admin" {
 		t.Fatalf("unexpected claim username: %s", claims.Username)
+	}
+	if !slices.Contains(claims.Roles, "super_admin") {
+		t.Fatalf("expected super_admin role in token claims")
+	}
+	if !slices.Contains(claims.Permissions, "docker.manage") {
+		t.Fatalf("expected docker.manage permission in token claims")
 	}
 }
 

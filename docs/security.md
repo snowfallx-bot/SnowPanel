@@ -12,6 +12,8 @@ Language: **English** | [简体中文](security.zh-CN.md)
 
 - JWT-based authentication for protected APIs.
 - Route-level permission checks (`RequirePermission` middleware).
+- Authorization claims are derived from DB-backed `roles`, `permissions`, and mapping tables.
+- No hardcoded username bypass in permission checks.
 - Admin bootstrap only when user table is empty.
 - In production, backend startup fails fast when `JWT_SECRET` is weak/empty.
 - In production with `BOOTSTRAP_ADMIN=true`, weak/missing `DEFAULT_ADMIN_PASSWORD` is rejected.

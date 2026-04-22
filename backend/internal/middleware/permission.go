@@ -10,12 +10,6 @@ import (
 
 func RequirePermission(permission string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		username, _ := GetCurrentUsername(c)
-		if username == "admin" {
-			c.Next()
-			return
-		}
-
 		permissions, ok := GetCurrentPermissions(c)
 		if !ok || !slices.Contains(permissions, permission) {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{

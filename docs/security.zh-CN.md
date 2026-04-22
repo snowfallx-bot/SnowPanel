@@ -12,6 +12,8 @@
 
 - 受保护 API 使用基于 JWT 的认证。
 - 路由级权限校验（`RequirePermission` 中间件）。
+- 授权 claims 来自数据库中的 `roles`、`permissions` 及其关联表。
+- 权限校验不再存在基于用户名的硬编码绕过。
 - 仅在用户表为空时才执行管理员初始化。
 - 在生产环境中，若 `JWT_SECRET` 为空或过弱，backend 会在启动阶段 fail fast。
 - 在生产环境且 `BOOTSTRAP_ADMIN=true` 时，弱或缺失的 `DEFAULT_ADMIN_PASSWORD` 会被拒绝。

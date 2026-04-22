@@ -126,14 +126,14 @@ func TestRequirePermissionRejectsUnauthorizedPermission(t *testing.T) {
 	}
 }
 
-func TestRequirePermissionAllowsAdminBypass(t *testing.T) {
+func TestRequirePermissionAllowsWhenPermissionPresent(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	router.GET(
 		"/need-perm",
 		func(c *gin.Context) {
-			c.Set(CurrentUsernameKey, "admin")
-			c.Set(CurrentPermsKey, []string{})
+			c.Set(CurrentUsernameKey, "operator")
+			c.Set(CurrentPermsKey, []string{"docker.manage"})
 			c.Next()
 		},
 		RequirePermission("docker.manage"),
