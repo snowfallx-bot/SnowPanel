@@ -2,6 +2,8 @@ import axios from "axios";
 import { useAuthStore } from "@/store/auth-store";
 import { ApiEnvelope } from "@/types/api";
 
+const AUTH_REDIRECT_MESSAGE_KEY = "snowpanel-auth-redirect-message";
+
 const http = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8080",
   timeout: 10000
@@ -20,6 +22,13 @@ http.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       useAuthStore.getState().clearAuth();
+      if (typeof window !== "undefined" && window.location.pathname !== "/login") {
+        window.sessionStorage.setItem(
+          AUTH_REDIRECT_MESSAGE_KEY,
+          "Session expired or invalid. Please log in again."
+        );
+        window.location.assign("/login");
+      }
     }
     return Promise.reject(error);
   }
@@ -33,4 +42,5 @@ export async function unwrap<T>(promise: Promise<{ data: ApiEnvelope<T> }>): Pro
   return data.data;
 }
 
+export { AUTH_REDIRECT_MESSAGE_KEY };
 export { http };

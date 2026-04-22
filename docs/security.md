@@ -15,6 +15,8 @@ Language: **English** | [简体中文](security.zh-CN.md)
 - Authorization claims are derived from DB-backed `roles`, `permissions`, and mapping tables.
 - No hardcoded username bypass in permission checks.
 - Admin bootstrap only when user table is empty.
+- Frontend validates session via `getMe()` on protected-route entry.
+- Frontend navigation is permission-aware and automatically redirects on `401`.
 - In production, backend startup fails fast when `JWT_SECRET` is weak/empty.
 - In production with `BOOTSTRAP_ADMIN=true`, weak/missing `DEFAULT_ADMIN_PASSWORD` is rejected.
 - In development, if `DEFAULT_ADMIN_PASSWORD` is empty, backend generates a one-time bootstrap password.

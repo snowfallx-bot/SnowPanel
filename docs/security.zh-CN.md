@@ -15,6 +15,8 @@
 - 授权 claims 来自数据库中的 `roles`、`permissions` 及其关联表。
 - 权限校验不再存在基于用户名的硬编码绕过。
 - 仅在用户表为空时才执行管理员初始化。
+- 前端在受保护路由入口通过 `getMe()` 校验会话有效性。
+- 前端导航按权限动态展示，并在 `401` 时自动回到登录页。
 - 在生产环境中，若 `JWT_SECRET` 为空或过弱，backend 会在启动阶段 fail fast。
 - 在生产环境且 `BOOTSTRAP_ADMIN=true` 时，弱或缺失的 `DEFAULT_ADMIN_PASSWORD` 会被拒绝。
 - 在开发环境中，若 `DEFAULT_ADMIN_PASSWORD` 留空，backend 会生成一次性初始化密码。

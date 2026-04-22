@@ -1,9 +1,10 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { login } from "@/api/auth";
+import { AUTH_REDIRECT_MESSAGE_KEY } from "@/lib/http";
 import { useAuthStore } from "@/store/auth-store";
 
 export function LoginPage() {
@@ -16,7 +17,23 @@ export function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const from = (location.state as { from?: string } | null)?.from ?? "/dashboard";
+  const locationState = (location.state as { from?: string; message?: string } | null) ?? null;
+  const from = locationState?.from ?? "/dashboard";
+
+  useEffect(() => {
+    const redirectMessage = locationState?.message;
+    const storedMessage =
+      typeof window !== "undefined" ? window.sessionStorage.getItem(AUTH_REDIRECT_MESSAGE_KEY) : null;
+
+    if (storedMessage) {
+      window.sessionStorage.removeItem(AUTH_REDIRECT_MESSAGE_KEY);
+    }
+
+    const nextError = redirectMessage || storedMessage;
+    if (nextError) {
+      setError(nextError);
+    }
+  }, [locationState?.message]);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
