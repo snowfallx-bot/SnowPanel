@@ -1,9 +1,20 @@
 # SnowPanel
 
-SnowPanel is a Linux panel prototype (similar to BT Panel / 1Panel) built as a monorepo:
-- `core-agent`: Rust system/host capability layer (gRPC)
-- `backend`: Go API layer (Gin + GORM + JWT + RBAC)
-- `frontend`: React + TypeScript + Vite admin panel
+[![CI](https://github.com/snowfallx-bot/SnowPanel/actions/workflows/ci.yml/badge.svg)](https://github.com/snowfallx-bot/SnowPanel/actions/workflows/ci.yml)
+[![License: MPL 2.0](https://img.shields.io/badge/License-MPL%202.0-brightgreen.svg)](https://www.mozilla.org/MPL/2.0/)
+
+SnowPanel is a Linux server panel prototype (in the spirit of BT Panel / 1Panel) built as a monorepo.  
+It is split into clear service boundaries so the UI/API layer and host-control layer can evolve independently.
+
+## Architecture
+
+| Component | Stack | Responsibility |
+| --- | --- | --- |
+| `frontend` | React + TypeScript + Vite | Admin UI |
+| `backend` | Go + Gin + GORM + JWT + RBAC | HTTP API and business logic |
+| `core-agent` | Rust + gRPC | Host capability layer (files, services, docker, cron) |
+| `proto` | Protocol Buffers | Shared gRPC contracts |
+| `docs` | Markdown | Architecture, development, security, deployment notes |
 
 ## Repository Layout
 
@@ -17,59 +28,63 @@ SnowPanel is a Linux panel prototype (similar to BT Panel / 1Panel) built as a m
 └── proto        # Shared gRPC proto definitions
 ```
 
-## Prerequisites
+## Requirements
 
-- Docker + Docker Compose v2
-- Optional local toolchain for non-container workflow:
-  - Go 1.25+
-  - Rust stable toolchain
-  - Node.js 22+
+- Docker + Docker Compose v2 (recommended workflow)
+- Optional local toolchains:
+  - Go `1.25+`
+  - Rust stable
+  - Node.js `22+`
 
-## Quick Start (Docker Compose)
+## Quick Start
 
-1. Copy env:
-   - `cp .env.example .env`
+1. Copy environment file:
+   - macOS/Linux: `cp .env.example .env`
+   - PowerShell: `Copy-Item .env.example .env`
 2. Start all services:
    - `make up`
 3. Open:
    - Frontend: `http://127.0.0.1:5173`
    - Backend health: `http://127.0.0.1:8080/health`
-4. Stop:
+4. Default admin (auto-bootstrapped when DB is empty):
+   - username: `admin`
+   - password: `admin123456`
+5. Stop services:
    - `make down`
 
-Notes:
-- PostgreSQL schema is initialized on first startup via `backend/migrations/0001_init_schema.up.sql` mounted to `docker-entrypoint-initdb.d`.
-- Default admin is auto-bootstrapped when database has no users:
-  - username: `admin`
-  - password: `admin123456`
-
-## Local Development (Without Containers)
+## Local Development
 
 1. Start dependencies only:
    - `docker compose up -d postgres redis`
-2. Start core-agent:
+2. Run each service locally:
    - `make agent`
-3. Start backend:
    - `make backend`
-4. Start frontend:
    - `make frontend`
 
-## Common Make Commands
+Common commands:
 
 - `make up`: start all services with build
 - `make down`: stop all services
 - `make logs`: tail compose logs
-- `make backend`: run backend locally
-- `make agent`: run core-agent locally
-- `make frontend`: run frontend locally
-- `make lint`: run baseline static checks
-- `make test`: run backend/core-agent tests and frontend test/build checks
+- `make lint`: baseline static checks
+- `make test`: backend/core-agent tests + frontend test/build checks
 
-## Common Issues
+## Documentation
 
-- `relation "users" does not exist`:
-  - Usually old postgres volume or first boot did not finish initialization. Run `make down`, remove volume, then `make up`.
-- Backend cannot connect to agent:
-  - Verify `AGENT_TARGET` and ensure `core-agent` is running (`docker compose ps`).
-- Frontend login/API request fails:
-  - Check `VITE_API_BASE_URL` in `.env` (default `http://127.0.0.1:8080`).
+- [Architecture](docs/architecture.md)
+- [Development Guide](docs/development.md)
+- [Security Notes](docs/security.md)
+- [Deployment Notes](docs/deployment.md)
+- [Roadmap](docs/roadmap.md)
+
+## Contributing And Community
+
+- [Contributing Guide](CONTRIBUTING.md)
+- [Code of Conduct](CODE_OF_CONDUCT.md)
+- [Security Policy](SECURITY.md)
+- [Issue Templates](.github/ISSUE_TEMPLATE)
+- [Pull Request Template](.github/pull_request_template.md)
+
+## License
+
+This project is licensed under the [Mozilla Public License 2.0](LICENSE).
