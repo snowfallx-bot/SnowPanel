@@ -73,6 +73,7 @@ func (r *fakeUserRepo) GetByID(_ context.Context, id int64) (*model.User, error)
 
 func testAuthConfig() config.AuthConfig {
 	return config.AuthConfig{
+		AppEnv:               "development",
 		JWTSecret:            "unit-test-secret",
 		JWTIssuer:            "snowpanel-test",
 		JWTExpire:            2 * time.Hour,
@@ -80,6 +81,47 @@ func testAuthConfig() config.AuthConfig {
 		DefaultAdminUsername: "admin",
 		DefaultAdminEmail:    "admin@example.com",
 		DefaultAdminPassword: "admin123456",
+	}
+}
+
+func TestEnsureDefaultAdminRejectsWeakPasswordInProduction(t *testing.T) {
+	repo := &fakeUserRepo{
+		count:       0,
+		usersByName: map[string]*model.User{},
+		usersByID:   map[int64]*model.User{},
+	}
+
+	cfg := testAuthConfig()
+	cfg.AppEnv = "production"
+	cfg.DefaultAdminPassword = "admin123456"
+
+	service := NewAuthService(repo, cfg)
+	err := service.EnsureDefaultAdmin(context.Background())
+	if err == nil {
+		t.Fatalf("expected error for weak bootstrap password in production")
+	}
+}
+
+func TestEnsureDefaultAdminGeneratesPasswordInDevelopmentWhenMissing(t *testing.T) {
+	repo := &fakeUserRepo{
+		count:       0,
+		usersByName: map[string]*model.User{},
+		usersByID:   map[int64]*model.User{},
+	}
+
+	cfg := testAuthConfig()
+	cfg.AppEnv = "development"
+	cfg.DefaultAdminPassword = ""
+
+	service := NewAuthService(repo, cfg)
+	if err := service.EnsureDefaultAdmin(context.Background()); err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if repo.createdUser == nil {
+		t.Fatalf("expected default admin to be created")
+	}
+	if repo.createdUser.PasswordHash == "" {
+		t.Fatalf("expected generated password hash")
 	}
 }
 

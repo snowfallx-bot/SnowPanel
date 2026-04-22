@@ -2,6 +2,12 @@ package service
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
+	"errors"
+	"fmt"
+	"log"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -65,7 +71,17 @@ func (s *authService) EnsureDefaultAdmin(ctx context.Context) error {
 		return nil
 	}
 
-	hash, err := bcrypt.GenerateFromPassword([]byte(s.cfg.DefaultAdminPassword), bcrypt.DefaultCost)
+	bootstrapPassword, err := s.resolveBootstrapPassword()
+	if err != nil {
+		return apperror.Wrap(
+			apperror.ErrBootstrapAdminFail.Code,
+			apperror.ErrBootstrapAdminFail.HTTPStatus,
+			apperror.ErrBootstrapAdminFail.Message,
+			err,
+		)
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(bootstrapPassword), bcrypt.DefaultCost)
 	if err != nil {
 		return apperror.Wrap(
 			apperror.ErrBootstrapAdminFail.Code,
@@ -229,4 +245,85 @@ func defaultPermissionsForUser(username string) []string {
 
 func (s *authService) emitAuditLogin(_ context.Context, _ string, _ bool) {
 	// Reserved for audit integration in later stage.
+}
+
+func (s *authService) resolveBootstrapPassword() (string, error) {
+	username := strings.TrimSpace(s.cfg.DefaultAdminUsername)
+	email := strings.TrimSpace(s.cfg.DefaultAdminEmail)
+	if username == "" {
+		return "", errors.New("DEFAULT_ADMIN_USERNAME cannot be empty")
+	}
+	if email == "" {
+		return "", errors.New("DEFAULT_ADMIN_EMAIL cannot be empty")
+	}
+
+	password := strings.TrimSpace(s.cfg.DefaultAdminPassword)
+	if password == "" {
+		if isProductionEnv(s.cfg.AppEnv) {
+			return "", errors.New("DEFAULT_ADMIN_PASSWORD must be set in production")
+		}
+
+		generated, err := generateBootstrapPassword(24)
+		if err != nil {
+			return "", fmt.Errorf("generate bootstrap password: %w", err)
+		}
+		log.Printf(
+			"[security] generated bootstrap admin password for user '%s': %s",
+			username,
+			generated,
+		)
+		return generated, nil
+	}
+
+	if isProductionEnv(s.cfg.AppEnv) && !isStrongPassword(password) {
+		return "", errors.New("DEFAULT_ADMIN_PASSWORD is weak for production environment")
+	}
+
+	if !isStrongPassword(password) {
+		log.Printf(
+			"[security] warning: bootstrap admin password for user '%s' is weak; rotate it after initial login",
+			username,
+		)
+	}
+
+	return password, nil
+}
+
+func isProductionEnv(raw string) bool {
+	return strings.EqualFold(strings.TrimSpace(raw), "production")
+}
+
+func isStrongPassword(raw string) bool {
+	password := strings.TrimSpace(raw)
+	if len(password) < 14 {
+		return false
+	}
+
+	var hasUpper bool
+	var hasLower bool
+	var hasDigit bool
+	var hasSymbol bool
+
+	for _, ch := range password {
+		switch {
+		case ch >= 'A' && ch <= 'Z':
+			hasUpper = true
+		case ch >= 'a' && ch <= 'z':
+			hasLower = true
+		case ch >= '0' && ch <= '9':
+			hasDigit = true
+		default:
+			hasSymbol = true
+		}
+	}
+
+	return hasUpper && hasLower && hasDigit && hasSymbol
+}
+
+func generateBootstrapPassword(byteLen int) (string, error) {
+	buffer := make([]byte, byteLen)
+	if _, err := rand.Read(buffer); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(buffer), nil
 }

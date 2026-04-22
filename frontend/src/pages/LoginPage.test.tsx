@@ -18,7 +18,8 @@ describe("LoginPage", () => {
     );
 
     expect(screen.getByText("Sign In To SnowPanel")).toBeInTheDocument();
-    expect(screen.getByDisplayValue("admin")).toBeInTheDocument();
+    expect(screen.queryByDisplayValue("admin")).not.toBeInTheDocument();
+    expect(screen.queryByDisplayValue("admin123456")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Sign In" })).toBeInTheDocument();
   });
 });

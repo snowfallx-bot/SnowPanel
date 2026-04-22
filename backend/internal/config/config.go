@@ -1,6 +1,9 @@
 package config
 
 import (
+	"crypto/rand"
+	"encoding/base64"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -38,6 +41,7 @@ type DatabaseConfig struct {
 }
 
 type AuthConfig struct {
+	AppEnv               string
 	JWTSecret            string
 	JWTIssuer            string
 	JWTExpire            time.Duration
@@ -65,13 +69,13 @@ func Load() Config {
 	v.SetDefault("BACKEND_WRITE_TIMEOUT", "10s")
 	v.SetDefault("AGENT_TARGET", "127.0.0.1:50051")
 	v.SetDefault("AGENT_TIMEOUT", "3s")
-	v.SetDefault("JWT_SECRET", "change-me-in-production")
+	v.SetDefault("JWT_SECRET", "")
 	v.SetDefault("JWT_ISSUER", "snowpanel-backend")
 	v.SetDefault("JWT_EXPIRE", "24h")
 	v.SetDefault("BOOTSTRAP_ADMIN", true)
 	v.SetDefault("DEFAULT_ADMIN_USERNAME", "admin")
 	v.SetDefault("DEFAULT_ADMIN_EMAIL", "admin@snowpanel.local")
-	v.SetDefault("DEFAULT_ADMIN_PASSWORD", "admin123456")
+	v.SetDefault("DEFAULT_ADMIN_PASSWORD", "")
 
 	v.SetDefault("POSTGRES_HOST", "127.0.0.1")
 	v.SetDefault("POSTGRES_PORT", 5432)
@@ -84,8 +88,17 @@ func Load() Config {
 	v.SetDefault("POSTGRES_MAX_IDLE_CONNS", 5)
 	v.SetDefault("POSTGRES_CONN_MAX_LIFETIME", "30m")
 
+	appEnv := normalizeEnv(v.GetString("APP_ENV"))
+	jwtSecret := strings.TrimSpace(v.GetString("JWT_SECRET"))
+	if !isProductionEnv(appEnv) && isWeakJWTSecret(jwtSecret) {
+		generated, err := generateDevJWTSecret(48)
+		if err == nil {
+			jwtSecret = generated
+		}
+	}
+
 	return Config{
-		AppEnv:      v.GetString("APP_ENV"),
+		AppEnv:      appEnv,
 		AgentTarget: v.GetString("AGENT_TARGET"),
 		AgentTimeout: mustDuration(
 			v.GetString("AGENT_TIMEOUT"),
@@ -113,7 +126,8 @@ func Load() Config {
 			),
 		},
 		Auth: AuthConfig{
-			JWTSecret:            v.GetString("JWT_SECRET"),
+			AppEnv:               appEnv,
+			JWTSecret:            jwtSecret,
 			JWTIssuer:            v.GetString("JWT_ISSUER"),
 			JWTExpire:            mustDuration(v.GetString("JWT_EXPIRE"), 24*time.Hour),
 			BootstrapAdmin:       v.GetBool("BOOTSTRAP_ADMIN"),
@@ -122,6 +136,28 @@ func Load() Config {
 			DefaultAdminPassword: v.GetString("DEFAULT_ADMIN_PASSWORD"),
 		},
 	}
+}
+
+func (c Config) Validate() error {
+	if isProductionEnv(c.AppEnv) {
+		if isWeakJWTSecret(c.Auth.JWTSecret) {
+			return errors.New("JWT_SECRET must be explicitly set to a strong value in production")
+		}
+	}
+
+	if c.Auth.BootstrapAdmin {
+		if strings.TrimSpace(c.Auth.DefaultAdminUsername) == "" {
+			return errors.New("DEFAULT_ADMIN_USERNAME cannot be empty when BOOTSTRAP_ADMIN=true")
+		}
+		if strings.TrimSpace(c.Auth.DefaultAdminEmail) == "" {
+			return errors.New("DEFAULT_ADMIN_EMAIL cannot be empty when BOOTSTRAP_ADMIN=true")
+		}
+		if isProductionEnv(c.AppEnv) && !isStrongPassword(c.Auth.DefaultAdminPassword) {
+			return errors.New("DEFAULT_ADMIN_PASSWORD must be strong in production when BOOTSTRAP_ADMIN=true")
+		}
+	}
+
+	return nil
 }
 
 func (c ServerConfig) Address() string {
@@ -151,4 +187,73 @@ func (c DatabaseConfig) DSN() string {
 		c.SSLMode,
 		c.Timezone,
 	)
+}
+
+func normalizeEnv(raw string) string {
+	normalized := strings.TrimSpace(strings.ToLower(raw))
+	if normalized == "" {
+		return "development"
+	}
+	return normalized
+}
+
+func isProductionEnv(raw string) bool {
+	return normalizeEnv(raw) == "production"
+}
+
+func isWeakJWTSecret(secret string) bool {
+	trimmed := strings.TrimSpace(secret)
+	if len(trimmed) < 32 {
+		return true
+	}
+
+	lowered := strings.ToLower(trimmed)
+	weakValues := []string{
+		"change-me-in-production",
+		"changeme",
+		"password",
+		"admin123456",
+		"snowpanel",
+	}
+	for _, weak := range weakValues {
+		if strings.Contains(lowered, weak) {
+			return true
+		}
+	}
+	return false
+}
+
+func isStrongPassword(raw string) bool {
+	password := strings.TrimSpace(raw)
+	if len(password) < 14 {
+		return false
+	}
+
+	var hasUpper bool
+	var hasLower bool
+	var hasDigit bool
+	var hasSymbol bool
+
+	for _, ch := range password {
+		switch {
+		case ch >= 'A' && ch <= 'Z':
+			hasUpper = true
+		case ch >= 'a' && ch <= 'z':
+			hasLower = true
+		case ch >= '0' && ch <= '9':
+			hasDigit = true
+		default:
+			hasSymbol = true
+		}
+	}
+
+	return hasUpper && hasLower && hasDigit && hasSymbol
+}
+
+func generateDevJWTSecret(byteLen int) (string, error) {
+	buffer := make([]byte, byteLen)
+	if _, err := rand.Read(buffer); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(buffer), nil
 }

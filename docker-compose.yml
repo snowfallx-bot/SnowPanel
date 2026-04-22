@@ -7,8 +7,8 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-snowpanel}
       POSTGRES_USER: ${POSTGRES_USER:-snowpanel}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-snowpanel}
-    ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+    expose:
+      - "5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-snowpanel} -d ${POSTGRES_DB:-snowpanel}"]
       interval: 5s
@@ -23,8 +23,8 @@ services:
     container_name: snowpanel-redis
     restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes"]
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
+    expose:
+      - "6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -69,13 +69,13 @@ services:
       BACKEND_WRITE_TIMEOUT: ${BACKEND_WRITE_TIMEOUT:-10s}
       AGENT_TARGET: core-agent:${CORE_AGENT_PORT:-50051}
       AGENT_TIMEOUT: ${AGENT_TIMEOUT:-3s}
-      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      JWT_SECRET: ${JWT_SECRET:-}
       JWT_ISSUER: ${JWT_ISSUER:-snowpanel-backend}
       JWT_EXPIRE: ${JWT_EXPIRE:-24h}
       BOOTSTRAP_ADMIN: ${BOOTSTRAP_ADMIN:-true}
       DEFAULT_ADMIN_USERNAME: ${DEFAULT_ADMIN_USERNAME:-admin}
       DEFAULT_ADMIN_EMAIL: ${DEFAULT_ADMIN_EMAIL:-admin@snowpanel.local}
-      DEFAULT_ADMIN_PASSWORD: ${DEFAULT_ADMIN_PASSWORD:-admin123456}
+      DEFAULT_ADMIN_PASSWORD: ${DEFAULT_ADMIN_PASSWORD:-}
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
       POSTGRES_DB: ${POSTGRES_DB:-snowpanel}

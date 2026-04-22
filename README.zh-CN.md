@@ -51,21 +51,25 @@ SnowPanel 是一个 Linux 服务器运维面板，采用 Vibe Coding 而成。
 1. 复制环境变量文件：
    - macOS/Linux: `cp .env.example .env`
    - PowerShell: `Copy-Item .env.example .env`
+   - 生产环境提示：设置 `APP_ENV=production`，并显式提供强 `JWT_SECRET` 与 `DEFAULT_ADMIN_PASSWORD`
 2. 启动全部服务：
    - `make up`
 3. 访问地址：
    - 前端：`http://127.0.0.1:5173`
    - 后端健康检查：`http://127.0.0.1:8080/health`
-4. 默认管理员（数据库为空时自动创建）：
-   - 用户名：`admin`
-   - 密码：`admin123456`
+4. 初始化管理员（仅在数据库为空的首次启动时创建）：
+   - 用户名：`DEFAULT_ADMIN_USERNAME`（默认：`admin`）
+   - 密码：
+     - 若配置了 `DEFAULT_ADMIN_PASSWORD`，使用该值
+     - 若开发环境留空，backend 会生成一次性随机密码并写入日志（`docker compose logs backend`）
 5. 停止服务：
    - `make down`
 
 ## 本地开发
 
 1. 仅启动依赖：
-   - `docker compose up -d postgres redis`
+   - 安全默认（不向宿主机暴露 DB/Redis 端口）：`docker compose up -d postgres redis`
+   - 本地二进制调试（按需暴露 DB/Redis 端口）：`docker compose -f docker-compose.yml -f docker-compose.local.yml up -d postgres redis`
 2. 分别启动各服务：
    - `make agent`
    - `make backend`

@@ -11,8 +11,8 @@ export function LoginPage() {
   const location = useLocation();
   const setAuth = useAuthStore((state) => state.setAuth);
 
-  const [username, setUsername] = useState("admin");
-  const [password, setPassword] = useState("admin123456");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -43,11 +43,20 @@ export function LoginPage() {
           <form className="space-y-4" onSubmit={onSubmit}>
             <div className="space-y-1">
               <label className="text-sm font-medium text-slate-700">Username</label>
-              <Input value={username} onChange={(e) => setUsername(e.target.value)} />
+              <Input
+                placeholder="Enter your username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+              />
             </div>
             <div className="space-y-1">
               <label className="text-sm font-medium text-slate-700">Password</label>
-              <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+              <Input
+                type="password"
+                placeholder="Enter your password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
             </div>
             {error && <p className="text-sm text-rose-600">{error}</p>}
             <Button className="w-full" disabled={loading} type="submit">

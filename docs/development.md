@@ -27,6 +27,8 @@ When you want local binaries + containerized dependencies:
 
 1. Start PostgreSQL and Redis:
    - `docker compose up -d postgres redis`
+   - for local backend binaries, publish dependency ports with:
+     `docker compose -f docker-compose.yml -f docker-compose.local.yml up -d postgres redis`
 2. Run core-agent:
    - `make agent`
 3. Run backend:

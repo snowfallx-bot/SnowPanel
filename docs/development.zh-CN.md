@@ -27,6 +27,8 @@
 
 1. 启动 PostgreSQL 和 Redis：
    - `docker compose up -d postgres redis`
+   - 若 backend 以本机二进制运行，需要按需暴露依赖端口：
+     `docker compose -f docker-compose.yml -f docker-compose.local.yml up -d postgres redis`
 2. 运行 core-agent：
    - `make agent`
 3. 运行 backend：

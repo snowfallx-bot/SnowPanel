@@ -28,8 +28,8 @@
 - Frontend：`5173`
 - Backend：`8080`
 - Core-agent gRPC：默认仅容器内部可见（Compose 网络内 `50051`，默认不暴露到宿主机）
-- PostgreSQL：`5432`
-- Redis：`6379`
+- PostgreSQL：默认仅容器内部可见（Compose 网络内 `5432`，默认不暴露到宿主机）
+- Redis：默认仅容器内部可见（Compose 网络内 `6379`，默认不暴露到宿主机）
 
 ## 数据库初始化
 
@@ -46,10 +46,13 @@ PostgreSQL 首次初始化时，会加载以下 schema SQL：
 - core-agent 安全根目录与读写大小限制
 - PostgreSQL + Redis 连接参数
 - frontend API 基地址（`VITE_API_BASE_URL`）
+- 当 `APP_ENV=production` 时，若 `JWT_SECRET` 为空或过弱，启动会 fail fast
+- 当 `APP_ENV=production` 且 `BOOTSTRAP_ADMIN=true` 时，`DEFAULT_ADMIN_PASSWORD` 必须为强密码
 
 ## 生产环境建议
 
-- 替换默认凭据与 JWT 密钥。
+- 设置 `APP_ENV=production` 并显式提供强 `JWT_SECRET`。
+- 若启用管理员初始化（`BOOTSTRAP_ADMIN=true`），显式提供强 `DEFAULT_ADMIN_PASSWORD`。
 - 为 Postgres 数据卷配置持久化备份策略。
 - 在 backend/frontend 前加 HTTPS 反向代理。
 - 仅在可信网络暴露 core-agent。

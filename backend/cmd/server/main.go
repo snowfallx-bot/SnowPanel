@@ -17,6 +17,10 @@ import (
 
 func main() {
 	cfg := config.Load()
+	if err := cfg.Validate(); err != nil {
+		log.Fatalf("invalid runtime config: %v", err)
+	}
+
 	zapLogger, err := logger.New(cfg.AppEnv)
 	if err != nil {
 		log.Fatalf("failed to initialize logger: %v", err)

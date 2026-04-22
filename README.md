@@ -49,21 +49,25 @@ SnowPanel is a Linux server ops panel built with Vibe Coding.
 1. Copy environment file:
    - macOS/Linux: `cp .env.example .env`
    - PowerShell: `Copy-Item .env.example .env`
+   - Production note: set `APP_ENV=production`, then provide strong `JWT_SECRET` and `DEFAULT_ADMIN_PASSWORD`
 2. Start all services:
    - `make up`
 3. Open:
    - Frontend: `http://127.0.0.1:5173`
    - Backend health: `http://127.0.0.1:8080/health`
-4. Default admin (auto-bootstrapped when DB is empty):
-   - username: `admin`
-   - password: `admin123456`
+4. Bootstrap admin (first start only when DB is empty):
+   - username: `DEFAULT_ADMIN_USERNAME` (default: `admin`)
+   - password:
+     - uses `DEFAULT_ADMIN_PASSWORD` when configured
+     - if empty in development, backend generates a one-time random password and logs it (`docker compose logs backend`)
 5. Stop services:
    - `make down`
 
 ## Local Development
 
 1. Start dependencies only:
-   - `docker compose up -d postgres redis`
+   - secure default (no host DB/Redis ports): `docker compose up -d postgres redis`
+   - optional local binary workflow (publish DB/Redis ports): `docker compose -f docker-compose.yml -f docker-compose.local.yml up -d postgres redis`
 2. Run each service locally:
    - `make agent`
    - `make backend`

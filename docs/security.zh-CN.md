@@ -13,6 +13,9 @@
 - 受保护 API 使用基于 JWT 的认证。
 - 路由级权限校验（`RequirePermission` 中间件）。
 - 仅在用户表为空时才执行管理员初始化。
+- 在生产环境中，若 `JWT_SECRET` 为空或过弱，backend 会在启动阶段 fail fast。
+- 在生产环境且 `BOOTSTRAP_ADMIN=true` 时，弱或缺失的 `DEFAULT_ADMIN_PASSWORD` 会被拒绝。
+- 在开发环境中，若 `DEFAULT_ADMIN_PASSWORD` 留空，backend 会生成一次性初始化密码。
 
 ## 文件安全
 
@@ -40,7 +43,7 @@
 
 ## 加固待办
 
-- 生产环境强化 JWT 密钥和凭据策略。
+- 为初始化管理员增加“首次登录强制改密”机制。
 - 增加 refresh token 与会话吊销机制。
 - 对敏感配置/密钥做静态加密存储。
 - 扩展登录尝试的限流与锁定策略。

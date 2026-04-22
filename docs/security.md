@@ -13,6 +13,9 @@ Language: **English** | [简体中文](security.zh-CN.md)
 - JWT-based authentication for protected APIs.
 - Route-level permission checks (`RequirePermission` middleware).
 - Admin bootstrap only when user table is empty.
+- In production, backend startup fails fast when `JWT_SECRET` is weak/empty.
+- In production with `BOOTSTRAP_ADMIN=true`, weak/missing `DEFAULT_ADMIN_PASSWORD` is rejected.
+- In development, if `DEFAULT_ADMIN_PASSWORD` is empty, backend generates a one-time bootstrap password.
 
 ## File Safety
 
@@ -41,7 +44,7 @@ Language: **English** | [简体中文](security.zh-CN.md)
 
 ## Hardening Backlog
 
-- Strengthen JWT secret and credential policy for production.
+- Add first-login forced password rotation for bootstrap admin.
 - Add refresh tokens and session revocation.
 - Encrypt sensitive settings/secrets at rest.
 - Expand rate limiting and lockout policy on login attempts.

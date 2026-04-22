@@ -28,8 +28,8 @@ This project ships with a development-oriented compose stack including:
 - Frontend: `5173`
 - Backend: `8080`
 - Core-agent gRPC: internal-only (`50051` in Compose network, not exposed on host by default)
-- PostgreSQL: `5432`
-- Redis: `6379`
+- PostgreSQL: internal-only (`5432` in Compose network, not exposed on host by default)
+- Redis: internal-only (`6379` in Compose network, not exposed on host by default)
 
 ## Database Initialization
 
@@ -46,10 +46,13 @@ Key settings in `.env`:
 - core-agent safe-root and read/write limits
 - PostgreSQL + Redis connection info
 - frontend API base URL (`VITE_API_BASE_URL`)
+- when `APP_ENV=production`, startup fails fast if `JWT_SECRET` is weak/empty
+- when `APP_ENV=production` and `BOOTSTRAP_ADMIN=true`, `DEFAULT_ADMIN_PASSWORD` must be strong
 
 ## Production Considerations
 
-- Replace default credentials and JWT secret.
+- Set `APP_ENV=production` and provide a strong explicit `JWT_SECRET`.
+- If bootstrap admin is enabled, provide a strong explicit `DEFAULT_ADMIN_PASSWORD`.
 - Use persistent backup strategy for Postgres volumes.
 - Place backend/frontend behind HTTPS reverse proxy.
 - Restrict core-agent exposure to trusted network only.

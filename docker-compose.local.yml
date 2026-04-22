@@ -1,0 +1,12 @@
+services:
+  postgres:
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+
+  redis:
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+
+  core-agent:
+    ports:
+      - "${CORE_AGENT_PORT:-50051}:50051"
