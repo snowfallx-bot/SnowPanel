@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/apperror"
@@ -14,8 +15,9 @@ import (
 )
 
 type authServiceStub struct {
-	claims service.TokenClaims
-	err    error
+	claims      service.TokenClaims
+	err         error
+	validateErr error
 }
 
 func (s authServiceStub) EnsureDefaultAdmin(context.Context) error {
@@ -43,6 +45,10 @@ func (s authServiceStub) ParseToken(string) (service.TokenClaims, error) {
 		return service.TokenClaims{}, s.err
 	}
 	return s.claims, nil
+}
+
+func (s authServiceStub) ValidateSession(context.Context, service.TokenClaims) error {
+	return s.validateErr
 }
 
 func TestJWTAuthRejectsProtectedRouteWhenPasswordChangeRequired(t *testing.T) {
@@ -75,6 +81,40 @@ func TestJWTAuthRejectsProtectedRouteWhenPasswordChangeRequired(t *testing.T) {
 	}
 	if int(body["code"].(float64)) != apperror.ErrPasswordChangeNeed.Code {
 		t.Fatalf("expected password-change-required code, got %v", body["code"])
+	}
+}
+
+func TestJWTAuthRejectsWhenSessionValidationFails(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.GET("/api/v1/dashboard/summary", JWTAuth(authServiceStub{
+		claims: service.TokenClaims{
+			UserID:          100,
+			Username:        "admin",
+			Roles:           []string{"super_admin"},
+			Permissions:     []string{"dashboard.read"},
+			SessionIssuedAt: time.Now().UnixNano(),
+		},
+		validateErr: apperror.ErrSessionExpired,
+	}), func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/dashboard/summary", nil)
+	req.Header.Set("Authorization", "Bearer fake-token")
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", recorder.Code)
+	}
+
+	var body map[string]interface{}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if int(body["code"].(float64)) != apperror.ErrSessionExpired.Code {
+		t.Fatalf("expected session expired code, got %v", body["code"])
 	}
 }
 

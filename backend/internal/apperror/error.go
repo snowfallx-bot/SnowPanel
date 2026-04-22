@@ -55,5 +55,7 @@ var (
 	ErrPermissionDenied   = New(2007, http.StatusForbidden, "permission denied")
 	ErrTaskNotFound       = New(2008, http.StatusNotFound, "task not found")
 	ErrPasswordChangeNeed = New(2009, http.StatusForbidden, "password change required")
+	ErrSessionExpired     = New(2010, http.StatusUnauthorized, "session expired")
+	ErrUserDisabled       = New(2011, http.StatusForbidden, "user is disabled")
 	ErrAgentUnavailable   = New(3001, http.StatusServiceUnavailable, "core agent unavailable")
 )

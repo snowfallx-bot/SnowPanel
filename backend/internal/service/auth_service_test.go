@@ -358,6 +358,9 @@ func TestLoginSuccessAndParseToken(t *testing.T) {
 	if !claims.MustChangePassword {
 		t.Fatalf("expected must_change_password=true in token claims")
 	}
+	if claims.SessionIssuedAt <= 0 {
+		t.Fatalf("expected session_issued_at claim to be set")
+	}
 	if _, exists := repo.updatedLogins[7]; exists {
 		t.Fatalf("did not expect last_login_at update when password change is required")
 	}
@@ -394,6 +397,49 @@ func TestLoginRejectsInvalidCredential(t *testing.T) {
 		t.Fatalf("expected app error, got %T", err)
 	}
 	if appErr.Code != apperror.ErrInvalidCredential.Code {
+		t.Fatalf("unexpected error code: %d", appErr.Code)
+	}
+}
+
+func TestLoginRejectsDisabledUser(t *testing.T) {
+	password := "StrongPassword#1"
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		t.Fatalf("failed to generate bcrypt hash: %v", err)
+	}
+
+	repo := &fakeUserRepo{
+		usersByName: map[string]*model.User{
+			"disabled": {
+				ID:           10,
+				Username:     "disabled",
+				PasswordHash: string(hash),
+				Status:       0,
+			},
+		},
+		usersByID: map[int64]*model.User{
+			10: {
+				ID:           10,
+				Username:     "disabled",
+				PasswordHash: string(hash),
+				Status:       0,
+			},
+		},
+	}
+	service := NewAuthService(repo, testAuthConfig())
+
+	_, err = service.Login(context.Background(), dto.LoginRequest{
+		Username: "disabled",
+		Password: password,
+	})
+	if err == nil {
+		t.Fatalf("expected login failure for disabled user")
+	}
+	appErr, ok := apperror.As(err)
+	if !ok {
+		t.Fatalf("expected app error, got %T", err)
+	}
+	if appErr.Code != apperror.ErrUserDisabled.Code {
 		t.Fatalf("unexpected error code: %d", appErr.Code)
 	}
 }
@@ -453,6 +499,9 @@ func TestLoginUpdatesLastLoginForNonBootstrapUser(t *testing.T) {
 	}
 	if claims.MustChangePassword {
 		t.Fatalf("did not expect must_change_password claim for operator")
+	}
+	if claims.SessionIssuedAt <= 0 {
+		t.Fatalf("expected session_issued_at claim to be set")
 	}
 }
 
@@ -519,5 +568,91 @@ func TestChangePasswordSuccessClearsMustChangeFlag(t *testing.T) {
 	}
 	if claims.MustChangePassword {
 		t.Fatalf("expected must_change_password=false in new token")
+	}
+	if claims.SessionIssuedAt <= 0 {
+		t.Fatalf("expected session_issued_at claim to be set")
+	}
+}
+
+func TestValidateSessionRejectsExpiredSessionByLastLoginAt(t *testing.T) {
+	lastLogin := time.Now().UTC()
+	repo := &fakeUserRepo{
+		usersByID: map[int64]*model.User{
+			7: {
+				ID:          7,
+				Username:    "admin",
+				Email:       "admin@example.com",
+				Status:      1,
+				LastLoginAt: &lastLogin,
+			},
+		},
+	}
+	service := NewAuthService(repo, testAuthConfig())
+	err := service.ValidateSession(context.Background(), TokenClaims{
+		UserID:          7,
+		SessionIssuedAt: lastLogin.Add(-time.Second).UnixNano(),
+	})
+	if err == nil {
+		t.Fatalf("expected session validation failure")
+	}
+	appErr, ok := apperror.As(err)
+	if !ok {
+		t.Fatalf("expected app error, got %T", err)
+	}
+	if appErr.Code != apperror.ErrSessionExpired.Code {
+		t.Fatalf("unexpected error code: %d", appErr.Code)
+	}
+}
+
+func TestValidateSessionRejectsDisabledUser(t *testing.T) {
+	lastLogin := time.Now().UTC()
+	repo := &fakeUserRepo{
+		usersByID: map[int64]*model.User{
+			7: {
+				ID:          7,
+				Username:    "admin",
+				Email:       "admin@example.com",
+				Status:      0,
+				LastLoginAt: &lastLogin,
+			},
+		},
+	}
+	service := NewAuthService(repo, testAuthConfig())
+	err := service.ValidateSession(context.Background(), TokenClaims{
+		UserID:          7,
+		SessionIssuedAt: lastLogin.UnixNano(),
+	})
+	if err == nil {
+		t.Fatalf("expected session validation failure for disabled user")
+	}
+	appErr, ok := apperror.As(err)
+	if !ok {
+		t.Fatalf("expected app error, got %T", err)
+	}
+	if appErr.Code != apperror.ErrSessionExpired.Code {
+		t.Fatalf("unexpected error code: %d", appErr.Code)
+	}
+}
+
+func TestValidateSessionAcceptsFreshSession(t *testing.T) {
+	lastLogin := time.Now().UTC()
+	repo := &fakeUserRepo{
+		usersByID: map[int64]*model.User{
+			7: {
+				ID:          7,
+				Username:    "admin",
+				Email:       "admin@example.com",
+				Status:      1,
+				LastLoginAt: &lastLogin,
+			},
+		},
+	}
+	service := NewAuthService(repo, testAuthConfig())
+	err := service.ValidateSession(context.Background(), TokenClaims{
+		UserID:          7,
+		SessionIssuedAt: lastLogin.UnixNano(),
+	})
+	if err != nil {
+		t.Fatalf("expected session validation success, got %v", err)
 	}
 }

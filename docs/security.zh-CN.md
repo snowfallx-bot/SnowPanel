@@ -23,6 +23,8 @@
 - bootstrap 管理员首次登录会标记为 `must_change_password`。
 - 当 `must_change_password=true` 时，后端仅允许访问 `/api/v1/auth/me` 与 `/api/v1/auth/change-password`。
 - 改密成功后会签发新的 token，并将 `must_change_password` 置为 `false`。
+- 后端会基于数据库用户状态与 `last_login_at` 校验 token 会话状态。
+- 用户重新登录/改密后旧 token 会失效，被禁用用户的活动会话也会失效。
 
 ## 文件安全
 

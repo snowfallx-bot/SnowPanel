@@ -49,6 +49,18 @@ func JWTAuth(authService service.AuthService) gin.HandlerFunc {
 			})
 			return
 		}
+		if err := authService.ValidateSession(c.Request.Context(), claims); err != nil {
+			appErr, ok := apperror.As(err)
+			if !ok {
+				appErr = apperror.ErrTokenParse
+			}
+			c.AbortWithStatusJSON(appErr.HTTPStatus, gin.H{
+				"code":    appErr.Code,
+				"message": appErr.Message,
+				"data":    gin.H{},
+			})
+			return
+		}
 
 		c.Set(CurrentUserIDKey, claims.UserID)
 		c.Set(CurrentUsernameKey, claims.Username)

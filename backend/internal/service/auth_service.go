@@ -25,6 +25,7 @@ type AuthService interface {
 	ChangePassword(ctx context.Context, userID int64, req dto.ChangePasswordRequest) (dto.LoginResponse, error)
 	Me(ctx context.Context, userID int64) (dto.UserProfile, error)
 	ParseToken(token string) (TokenClaims, error)
+	ValidateSession(ctx context.Context, claims TokenClaims) error
 }
 
 type TokenClaims struct {
@@ -33,6 +34,7 @@ type TokenClaims struct {
 	Roles              []string
 	Permissions        []string
 	MustChangePassword bool
+	SessionIssuedAt    int64
 }
 
 type jwtClaims struct {
@@ -41,6 +43,7 @@ type jwtClaims struct {
 	Roles              []string `json:"roles"`
 	Permissions        []string `json:"permissions"`
 	MustChangePassword bool     `json:"must_change_password"`
+	SessionIssuedAt    int64    `json:"session_issued_at"`
 	jwt.RegisteredClaims
 }
 
@@ -165,6 +168,9 @@ func (s *authService) Login(ctx context.Context, req dto.LoginRequest) (dto.Logi
 
 	if bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)) != nil {
 		return dto.LoginResponse{}, apperror.ErrInvalidCredential
+	}
+	if user.Status != 1 {
+		return dto.LoginResponse{}, apperror.ErrUserDisabled
 	}
 
 	roles, permissions, err := s.resolveUserRBAC(ctx, *user)
@@ -355,7 +361,33 @@ func (s *authService) ParseToken(rawToken string) (TokenClaims, error) {
 		Roles:              claims.Roles,
 		Permissions:        claims.Permissions,
 		MustChangePassword: claims.MustChangePassword,
+		SessionIssuedAt:    claims.SessionIssuedAt,
 	}, nil
+}
+
+func (s *authService) ValidateSession(ctx context.Context, claims TokenClaims) error {
+	user, err := s.userRepo.GetByID(ctx, claims.UserID)
+	if err != nil {
+		return apperror.Wrap(
+			apperror.ErrInternal.Code,
+			apperror.ErrInternal.HTTPStatus,
+			apperror.ErrInternal.Message,
+			err,
+		)
+	}
+	if user == nil {
+		return apperror.ErrSessionExpired
+	}
+	if user.Status != 1 {
+		return apperror.ErrSessionExpired
+	}
+	if claims.SessionIssuedAt <= 0 {
+		return apperror.ErrTokenParse
+	}
+	if user.LastLoginAt != nil && claims.SessionIssuedAt < user.LastLoginAt.UnixNano() {
+		return apperror.ErrSessionExpired
+	}
+	return nil
 }
 
 func (s *authService) generateToken(
@@ -364,16 +396,18 @@ func (s *authService) generateToken(
 	permissions []string,
 	mustChangePassword bool,
 ) (string, int64, error) {
-	expireAt := time.Now().Add(s.cfg.JWTExpire)
+	issuedAt := time.Now().UTC()
+	expireAt := issuedAt.Add(s.cfg.JWTExpire)
 	claims := &jwtClaims{
 		UserID:             user.ID,
 		Username:           user.Username,
 		Roles:              roles,
 		Permissions:        permissions,
 		MustChangePassword: mustChangePassword,
+		SessionIssuedAt:    issuedAt.UnixNano(),
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expireAt),
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			IssuedAt:  jwt.NewNumericDate(issuedAt),
 			Issuer:    s.cfg.JWTIssuer,
 			Subject:   user.Username,
 		},

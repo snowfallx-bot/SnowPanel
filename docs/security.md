@@ -23,6 +23,8 @@ Language: **English** | [简体中文](security.zh-CN.md)
 - Bootstrap admin first login is marked as `must_change_password`.
 - When `must_change_password=true`, backend only allows `/api/v1/auth/me` and `/api/v1/auth/change-password`.
 - Password change returns a refreshed token with `must_change_password=false`.
+- Backend validates token session state against DB user status and `last_login_at`.
+- Old tokens are revoked after re-login/password change, and disabled users lose active sessions.
 
 ## File Safety
 
