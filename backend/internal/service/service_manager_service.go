@@ -41,17 +41,14 @@ func (s *serviceManagerService) ListServices(ctx context.Context, query dto.List
 		})
 	}
 
-	s.emitAudit(ctx, "services", "list", query.Keyword, true)
 	return dto.ListServicesResult{Services: items}, nil
 }
 
 func (s *serviceManagerService) StartService(ctx context.Context, name string) (dto.ServiceActionResult, error) {
 	result, err := s.agentClient.StartService(ctx, grpcclient.ServiceActionRequest{Name: name})
 	if err != nil {
-		s.emitAudit(ctx, "services", "start", name, false)
 		return dto.ServiceActionResult{}, mapAgentError(err)
 	}
-	s.emitAudit(ctx, "services", "start", name, true)
 	return dto.ServiceActionResult{
 		Name:   result.Name,
 		Status: result.Status,
@@ -61,10 +58,8 @@ func (s *serviceManagerService) StartService(ctx context.Context, name string) (
 func (s *serviceManagerService) StopService(ctx context.Context, name string) (dto.ServiceActionResult, error) {
 	result, err := s.agentClient.StopService(ctx, grpcclient.ServiceActionRequest{Name: name})
 	if err != nil {
-		s.emitAudit(ctx, "services", "stop", name, false)
 		return dto.ServiceActionResult{}, mapAgentError(err)
 	}
-	s.emitAudit(ctx, "services", "stop", name, true)
 	return dto.ServiceActionResult{
 		Name:   result.Name,
 		Status: result.Status,
@@ -74,16 +69,10 @@ func (s *serviceManagerService) StopService(ctx context.Context, name string) (d
 func (s *serviceManagerService) RestartService(ctx context.Context, name string) (dto.ServiceActionResult, error) {
 	result, err := s.agentClient.RestartService(ctx, grpcclient.ServiceActionRequest{Name: name})
 	if err != nil {
-		s.emitAudit(ctx, "services", "restart", name, false)
 		return dto.ServiceActionResult{}, mapAgentError(err)
 	}
-	s.emitAudit(ctx, "services", "restart", name, true)
 	return dto.ServiceActionResult{
 		Name:   result.Name,
 		Status: result.Status,
 	}, nil
-}
-
-func (s *serviceManagerService) emitAudit(_ context.Context, _ string, _ string, _ string, _ bool) {
-	// Reserved for audit integration in stage 19.
 }

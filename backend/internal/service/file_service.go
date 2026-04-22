@@ -47,7 +47,6 @@ func (s *fileService) ListFiles(ctx context.Context, query dto.ListFilesQuery) (
 		})
 	}
 
-	s.emitAudit(ctx, "files", "list", query.Path, true)
 	return dto.ListFilesResult{
 		CurrentPath: result.CurrentPath,
 		Entries:     entries,
@@ -61,11 +60,9 @@ func (s *fileService) ReadTextFile(ctx context.Context, req dto.ReadTextFileRequ
 		Encoding: req.Encoding,
 	})
 	if err != nil {
-		s.emitAudit(ctx, "files", "read", req.Path, false)
 		return dto.ReadTextFileResult{}, mapAgentError(err)
 	}
 
-	s.emitAudit(ctx, "files", "read", req.Path, true)
 	return dto.ReadTextFileResult{
 		Path:      result.Path,
 		Content:   result.Content,
@@ -84,11 +81,9 @@ func (s *fileService) WriteTextFile(ctx context.Context, req dto.WriteTextFileRe
 		Encoding:          req.Encoding,
 	})
 	if err != nil {
-		s.emitAudit(ctx, "files", "write", req.Path, false)
 		return dto.WriteTextFileResult{}, mapAgentError(err)
 	}
 
-	s.emitAudit(ctx, "files", "write", req.Path, true)
 	return dto.WriteTextFileResult{
 		Path:         result.Path,
 		WrittenBytes: result.WrittenBytes,
@@ -101,11 +96,9 @@ func (s *fileService) CreateDirectory(ctx context.Context, req dto.CreateDirecto
 		CreateParents: req.CreateParents,
 	})
 	if err != nil {
-		s.emitAudit(ctx, "files", "mkdir", req.Path, false)
 		return dto.CreateDirectoryResult{}, mapAgentError(err)
 	}
 
-	s.emitAudit(ctx, "files", "mkdir", req.Path, true)
 	return dto.CreateDirectoryResult{Path: result.Path}, nil
 }
 
@@ -115,11 +108,9 @@ func (s *fileService) DeleteFile(ctx context.Context, req dto.DeleteFileRequest)
 		Recursive: req.Recursive,
 	})
 	if err != nil {
-		s.emitAudit(ctx, "files", "delete", req.Path, false)
 		return dto.DeleteFileResult{}, mapAgentError(err)
 	}
 
-	s.emitAudit(ctx, "files", "delete", req.Path, true)
 	return dto.DeleteFileResult{Path: result.Path}, nil
 }
 
@@ -147,7 +138,6 @@ func (s *fileService) RenameFile(
 	}
 
 	if err := s.ensureTargetDoesNotExist(ctx, targetPath); err != nil {
-		s.emitAudit(ctx, "files", "rename", sourcePath, false)
 		return dto.RenameFileResult{}, err
 	}
 
@@ -157,11 +147,9 @@ func (s *fileService) RenameFile(
 		Encoding: "utf-8",
 	})
 	if err != nil {
-		s.emitAudit(ctx, "files", "rename", sourcePath, false)
 		return dto.RenameFileResult{}, mapAgentError(err)
 	}
 	if readResult.Truncated {
-		s.emitAudit(ctx, "files", "rename", sourcePath, false)
 		return dto.RenameFileResult{}, apperror.Wrap(
 			apperror.ErrBadRequest.Code,
 			apperror.ErrBadRequest.HTTPStatus,
@@ -178,7 +166,6 @@ func (s *fileService) RenameFile(
 		Encoding:          "utf-8",
 	})
 	if err != nil {
-		s.emitAudit(ctx, "files", "rename", sourcePath, false)
 		return dto.RenameFileResult{}, mapAgentError(err)
 	}
 
@@ -187,7 +174,6 @@ func (s *fileService) RenameFile(
 		Recursive: false,
 	})
 	if err != nil {
-		s.emitAudit(ctx, "files", "rename", sourcePath, false)
 		return dto.RenameFileResult{}, apperror.Wrap(
 			apperror.ErrInternal.Code,
 			apperror.ErrInternal.HTTPStatus,
@@ -196,7 +182,6 @@ func (s *fileService) RenameFile(
 		)
 	}
 
-	s.emitAudit(ctx, "files", "rename", sourcePath, true)
 	return dto.RenameFileResult{
 		SourcePath:   sourcePath,
 		TargetPath:   writeResult.Path,
@@ -227,8 +212,4 @@ func (s *fileService) ensureTargetDoesNotExist(ctx context.Context, targetPath s
 		}
 	}
 	return nil
-}
-
-func (s *fileService) emitAudit(_ context.Context, _ string, _ string, _ string, _ bool) {
-	// Reserved for audit integration in stage 19.
 }

@@ -157,12 +157,10 @@ func (s *authService) Login(ctx context.Context, req dto.LoginRequest) (dto.Logi
 		)
 	}
 	if user == nil {
-		s.emitAuditLogin(ctx, req.Username, false)
 		return dto.LoginResponse{}, apperror.ErrInvalidCredential
 	}
 
 	if bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)) != nil {
-		s.emitAuditLogin(ctx, user.Username, false)
 		return dto.LoginResponse{}, apperror.ErrInvalidCredential
 	}
 
@@ -186,7 +184,6 @@ func (s *authService) Login(ctx context.Context, req dto.LoginRequest) (dto.Logi
 		)
 	}
 
-	s.emitAuditLogin(ctx, user.Username, true)
 	return dto.LoginResponse{
 		AccessToken: token,
 		TokenType:   "Bearer",
@@ -269,10 +266,6 @@ func toProfile(user model.User, roles []string, permissions []string) dto.UserPr
 		Roles:       roles,
 		Permissions: permissions,
 	}
-}
-
-func (s *authService) emitAuditLogin(_ context.Context, _ string, _ bool) {
-	// Reserved for audit integration in later stage.
 }
 
 func (s *authService) resolveUserRBAC(ctx context.Context, user model.User) ([]string, []string, error) {

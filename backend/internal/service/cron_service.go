@@ -36,7 +36,6 @@ func (s *cronService) ListTasks(ctx context.Context) (dto.ListCronTasksResult, e
 	for _, task := range result.Tasks {
 		items = append(items, mapCronTask(task))
 	}
-	s.emitAudit(ctx, "cron", "list", "", true)
 	return dto.ListCronTasksResult{Tasks: items}, nil
 }
 
@@ -54,10 +53,8 @@ func (s *cronService) CreateTask(
 		Enabled:    req.Enabled,
 	})
 	if err != nil {
-		s.emitAudit(ctx, "cron", "create", req.Expression, false)
 		return dto.CreateCronTaskResult{}, mapAgentError(err)
 	}
-	s.emitAudit(ctx, "cron", "create", req.Expression, true)
 	return dto.CreateCronTaskResult{Task: mapCronTask(result.Task)}, nil
 }
 
@@ -77,20 +74,16 @@ func (s *cronService) UpdateTask(
 		Enabled:    req.Enabled,
 	})
 	if err != nil {
-		s.emitAudit(ctx, "cron", "update", id, false)
 		return dto.UpdateCronTaskResult{}, mapAgentError(err)
 	}
-	s.emitAudit(ctx, "cron", "update", id, true)
 	return dto.UpdateCronTaskResult{Task: mapCronTask(result.Task)}, nil
 }
 
 func (s *cronService) DeleteTask(ctx context.Context, id string) (dto.DeleteCronTaskResult, error) {
 	result, err := s.agentClient.DeleteCronTask(ctx, grpcclient.DeleteCronTaskRequest{ID: id})
 	if err != nil {
-		s.emitAudit(ctx, "cron", "delete", id, false)
 		return dto.DeleteCronTaskResult{}, mapAgentError(err)
 	}
-	s.emitAudit(ctx, "cron", "delete", id, true)
 	return dto.DeleteCronTaskResult{ID: result.ID}, nil
 }
 
@@ -104,15 +97,9 @@ func (s *cronService) SetEnabled(
 		Enabled: enabled,
 	})
 	if err != nil {
-		s.emitAudit(ctx, "cron", "set_enabled", id, false)
 		return dto.ToggleCronTaskResult{}, mapAgentError(err)
 	}
-	s.emitAudit(ctx, "cron", "set_enabled", id, true)
 	return dto.ToggleCronTaskResult{Task: mapCronTask(result.Task)}, nil
-}
-
-func (s *cronService) emitAudit(_ context.Context, _ string, _ string, _ string, _ bool) {
-	// Reserved for audit integration in stage 19.
 }
 
 func mapCronTask(task grpcclient.CronTask) dto.CronTask {
