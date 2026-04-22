@@ -1,31 +1,20 @@
-# SnowPanel
+# SnowPanel | 雪面板
 
 [![CI](https://github.com/snowfallx-bot/SnowPanel/actions/workflows/ci.yml/badge.svg)](https://github.com/snowfallx-bot/SnowPanel/actions/workflows/ci.yml)
 [![License: MPL 2.0](https://img.shields.io/badge/License-MPL%202.0-brightgreen.svg)](https://www.mozilla.org/MPL/2.0/)
 [![Go](https://img.shields.io/badge/Go-1.25-00ADD8?logo=go&logoColor=white)](backend/go.mod)
-[![Gin](https://img.shields.io/badge/Gin-1.10-008ECF)](backend/go.mod)
-[![GORM](https://img.shields.io/badge/GORM-1.30-0E5A8A)](backend/go.mod)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)](docker-compose.yml)
-[![Redis](https://img.shields.io/badge/Redis-7-DC382D?logo=redis&logoColor=white)](docker-compose.yml)
-[![JWT](https://img.shields.io/badge/JWT-v5-000000?logo=jsonwebtokens&logoColor=white)](backend/go.mod)
 [![Rust](https://img.shields.io/badge/Rust-Edition%202021-000000?logo=rust&logoColor=white)](core-agent/Cargo.toml)
-[![Tokio](https://img.shields.io/badge/Tokio-1.41-333333)](core-agent/Cargo.toml)
-[![Tonic](https://img.shields.io/badge/Tonic-0.12-4A5568)](core-agent/Cargo.toml)
-[![gRPC](https://img.shields.io/badge/gRPC-API-244C5A?logo=grpc&logoColor=white)](proto/README.md)
-[![Protocol Buffers](https://img.shields.io/badge/Protocol_Buffers-Proto3-336791)](proto/agent/v1/agent.proto)
 [![React](https://img.shields.io/badge/React-18.3-61DAFB?logo=react&logoColor=black)](frontend/package.json)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178C6?logo=typescript&logoColor=white)](frontend/package.json)
-[![Vite](https://img.shields.io/badge/Vite-5.4-646CFF?logo=vite&logoColor=white)](frontend/package.json)
-[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3.4-06B6D4?logo=tailwindcss&logoColor=white)](frontend/package.json)
-[![TanStack Query](https://img.shields.io/badge/TanStack_Query-5.68-FF4154)](frontend/package.json)
-[![Zustand](https://img.shields.io/badge/Zustand-5.0-5C4B51)](frontend/package.json)
-[![Docker](https://img.shields.io/badge/Docker-Containerized-2496ED?logo=docker&logoColor=white)](docker-compose.yml)
 [![Docker Compose](https://img.shields.io/badge/Docker_Compose-v2-1488C6?logo=docker&logoColor=white)](docker-compose.yml)
 
-语言: [English](README.md) | **简体中文**
+> “苍山负雪，明烛天南。”
 
-SnowPanel 是一个 Linux 服务器面板原型项目（风格类似 BT Panel / 1Panel），采用 monorepo 组织。  
-项目将 UI/API 层与主机能力层进行清晰拆分，便于独立演进和维护。
+[English](README.md) | **简体中文**
+
+SnowPanel 是一个 Linux 服务器运维面板，采用 Vibe Coding 而成。
+
+**注意！本项目为 GuaiTech 的 AI 编程实验性项目，所有代码均为 AI 生成，我们不能保证代码的安全性与健壮性，请谨慎在生产环境部署！**
 
 ## 架构概览
 
