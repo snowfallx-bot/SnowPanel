@@ -3,6 +3,7 @@ import { AppLayout } from "@/layouts/AppLayout";
 import { DashboardPage } from "@/pages/DashboardPage";
 import { DockerPage } from "@/pages/DockerPage";
 import { CronPage } from "@/pages/CronPage";
+import { AuditLogsPage } from "@/pages/AuditLogsPage";
 import { FilesPage } from "@/pages/FilesPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { ServicesPage } from "@/pages/ServicesPage";
@@ -44,6 +45,10 @@ export const router = createBrowserRouter([
           {
             path: "/cron",
             element: <CronPage />
+          },
+          {
+            path: "/audit",
+            element: <AuditLogsPage />
           }
         ]
       }

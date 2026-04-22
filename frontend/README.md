@@ -6,7 +6,7 @@ React + TypeScript + Vite admin UI with:
 - Zustand auth store
 - Axios API wrapper
 - React Router guards
-- Dashboard, Files, Services, Docker, and Cron pages
+- Dashboard, Files, Services, Docker, Cron, and Audit pages
 
 ## Run
 

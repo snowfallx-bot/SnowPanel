@@ -39,6 +39,7 @@ Go backend baseline with:
 - `DELETE /api/v1/cron/:id` (JWT + `cron.manage`)
 - `POST /api/v1/cron/:id/enable` (JWT + `cron.manage`)
 - `POST /api/v1/cron/:id/disable` (JWT + `cron.manage`)
+- `GET /api/v1/audit/logs` (JWT + `audit.read`)
 
 ## Default Admin Bootstrap
 

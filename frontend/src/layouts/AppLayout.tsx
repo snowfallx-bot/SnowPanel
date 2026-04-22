@@ -66,6 +66,17 @@ export function AppLayout() {
           >
             Cron
           </NavLink>
+          <NavLink
+            to="/audit"
+            className={({ isActive }) =>
+              [
+                "mb-2 block rounded-md px-3 py-2 text-sm transition",
+                isActive ? "bg-panel-700 text-white" : "text-panel-100 hover:bg-panel-800"
+              ].join(" ")
+            }
+          >
+            Audit
+          </NavLink>
         </nav>
       </aside>
       <main className="flex flex-col">

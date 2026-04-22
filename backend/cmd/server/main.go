@@ -31,6 +31,8 @@ func main() {
 	}
 
 	userRepo := repository.NewUserRepository(db)
+	auditRepo := repository.NewAuditRepository(db)
+	auditService := service.NewAuditService(auditRepo)
 	authService := service.NewAuthService(userRepo, cfg.Auth)
 	if err := authService.EnsureDefaultAdmin(context.Background()); err != nil {
 		zapLogger.Fatal("failed to ensure default admin", logger.Err(err))
@@ -55,6 +57,7 @@ func main() {
 			ServiceManager:   serviceManager,
 			DockerService:    dockerService,
 			CronService:      cronService,
+			AuditService:     auditService,
 		}),
 		ReadTimeout:  cfg.Server.ReadTimeout,
 		WriteTimeout: cfg.Server.WriteTimeout,

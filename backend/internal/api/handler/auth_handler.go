@@ -12,12 +12,14 @@ import (
 )
 
 type AuthHandler struct {
-	authService service.AuthService
+	authService  service.AuthService
+	auditService service.AuditService
 }
 
-func NewAuthHandler(authService service.AuthService) *AuthHandler {
+func NewAuthHandler(authService service.AuthService, auditService service.AuditService) *AuthHandler {
 	return &AuthHandler{
-		authService: authService,
+		authService:  authService,
+		auditService: auditService,
 	}
 }
 
@@ -30,10 +32,32 @@ func (h *AuthHandler) Login(c *gin.Context) {
 
 	resp, err := h.authService.Login(c.Request.Context(), req)
 	if err != nil {
+		recordAudit(c, h.auditService, dto.RecordAuditInput{
+			Username:       req.Username,
+			Module:         "auth",
+			Action:         "login",
+			TargetType:     "user",
+			TargetID:       req.Username,
+			RequestSummary: `{"endpoint":"/api/v1/auth/login"}`,
+			Success:        false,
+			ResultCode:     "login_failed",
+			ResultMessage:  err.Error(),
+		})
 		response.FromError(c, err)
 		return
 	}
 
+	recordAudit(c, h.auditService, dto.RecordAuditInput{
+		Username:       req.Username,
+		Module:         "auth",
+		Action:         "login",
+		TargetType:     "user",
+		TargetID:       req.Username,
+		RequestSummary: `{"endpoint":"/api/v1/auth/login"}`,
+		Success:        true,
+		ResultCode:     "ok",
+		ResultMessage:  "login success",
+	})
 	response.OK(c, resp)
 }
 

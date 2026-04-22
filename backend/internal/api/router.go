@@ -22,6 +22,7 @@ type RouterDeps struct {
 	ServiceManager   service.ServiceManagerService
 	DockerService    service.DockerService
 	CronService      service.CronService
+	AuditService     service.AuditService
 }
 
 func NewRouter(deps RouterDeps) *gin.Engine {
@@ -34,12 +35,13 @@ func NewRouter(deps RouterDeps) *gin.Engine {
 
 	healthHandler := handler.NewHealthHandler(deps.DB)
 	systemHandler := handler.NewSystemHandler(time.Now)
-	authHandler := handler.NewAuthHandler(deps.AuthService)
+	authHandler := handler.NewAuthHandler(deps.AuthService, deps.AuditService)
 	dashboardHandler := handler.NewDashboardHandler(deps.DashboardService)
-	fileHandler := handler.NewFileHandler(deps.FileService)
-	serviceHandler := handler.NewServiceHandler(deps.ServiceManager)
-	dockerHandler := handler.NewDockerHandler(deps.DockerService)
+	fileHandler := handler.NewFileHandler(deps.FileService, deps.AuditService)
+	serviceHandler := handler.NewServiceHandler(deps.ServiceManager, deps.AuditService)
+	dockerHandler := handler.NewDockerHandler(deps.DockerService, deps.AuditService)
 	cronHandler := handler.NewCronHandler(deps.CronService)
+	auditHandler := handler.NewAuditHandler(deps.AuditService)
 
 	router.GET("/health", healthHandler.Health)
 
@@ -87,6 +89,11 @@ func NewRouter(deps RouterDeps) *gin.Engine {
 				cron.DELETE("/:id", middleware.RequirePermission("cron.manage"), cronHandler.DeleteTask)
 				cron.POST("/:id/enable", middleware.RequirePermission("cron.manage"), cronHandler.EnableTask)
 				cron.POST("/:id/disable", middleware.RequirePermission("cron.manage"), cronHandler.DisableTask)
+			}
+
+			audit := protected.Group("/audit")
+			{
+				audit.GET("/logs", middleware.RequirePermission("audit.read"), auditHandler.ListLogs)
 			}
 		}
 	}
