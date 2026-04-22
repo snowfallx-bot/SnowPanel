@@ -40,6 +40,7 @@ func main() {
 	dashboardService := service.NewDashboardService(agentClient)
 	fileService := service.NewFileService(agentClient)
 	serviceManager := service.NewServiceManagerService(agentClient)
+	dockerService := service.NewDockerService(agentClient)
 
 	server := &http.Server{
 		Addr: cfg.Server.Address(),
@@ -51,6 +52,7 @@ func main() {
 			DashboardService: dashboardService,
 			FileService:      fileService,
 			ServiceManager:   serviceManager,
+			DockerService:    dockerService,
 		}),
 		ReadTimeout:  cfg.Server.ReadTimeout,
 		WriteTimeout: cfg.Server.WriteTimeout,

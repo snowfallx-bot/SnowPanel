@@ -27,6 +27,6 @@ async fn main() -> Result<()> {
         cfg.max_read_bytes,
         cfg.max_write_bytes,
         cfg.service_whitelist.clone(),
-    );
+    )?;
     server.run(&addr).await
 }

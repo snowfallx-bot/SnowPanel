@@ -28,6 +28,11 @@ Go backend baseline with:
 - `POST /api/v1/services/:name/start` (JWT + `services.manage`)
 - `POST /api/v1/services/:name/stop` (JWT + `services.manage`)
 - `POST /api/v1/services/:name/restart` (JWT + `services.manage`)
+- `GET /api/v1/docker/containers` (JWT + `docker.read`)
+- `POST /api/v1/docker/containers/:id/start` (JWT + `docker.manage`)
+- `POST /api/v1/docker/containers/:id/stop` (JWT + `docker.manage`)
+- `POST /api/v1/docker/containers/:id/restart` (JWT + `docker.manage`)
+- `GET /api/v1/docker/images` (JWT + `docker.read`)
 
 ## Default Admin Bootstrap
 

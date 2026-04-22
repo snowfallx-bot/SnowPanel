@@ -20,6 +20,7 @@ type RouterDeps struct {
 	DashboardService service.DashboardService
 	FileService      service.FileService
 	ServiceManager   service.ServiceManagerService
+	DockerService    service.DockerService
 }
 
 func NewRouter(deps RouterDeps) *gin.Engine {
@@ -36,6 +37,7 @@ func NewRouter(deps RouterDeps) *gin.Engine {
 	dashboardHandler := handler.NewDashboardHandler(deps.DashboardService)
 	fileHandler := handler.NewFileHandler(deps.FileService)
 	serviceHandler := handler.NewServiceHandler(deps.ServiceManager)
+	dockerHandler := handler.NewDockerHandler(deps.DockerService)
 
 	router.GET("/health", healthHandler.Health)
 
@@ -64,6 +66,15 @@ func NewRouter(deps RouterDeps) *gin.Engine {
 				services.POST("/:name/start", middleware.RequirePermission("services.manage"), serviceHandler.StartService)
 				services.POST("/:name/stop", middleware.RequirePermission("services.manage"), serviceHandler.StopService)
 				services.POST("/:name/restart", middleware.RequirePermission("services.manage"), serviceHandler.RestartService)
+			}
+
+			docker := protected.Group("/docker")
+			{
+				docker.GET("/containers", middleware.RequirePermission("docker.read"), dockerHandler.ListContainers)
+				docker.POST("/containers/:id/start", middleware.RequirePermission("docker.manage"), dockerHandler.StartContainer)
+				docker.POST("/containers/:id/stop", middleware.RequirePermission("docker.manage"), dockerHandler.StopContainer)
+				docker.POST("/containers/:id/restart", middleware.RequirePermission("docker.manage"), dockerHandler.RestartContainer)
+				docker.GET("/images", middleware.RequirePermission("docker.read"), dockerHandler.ListImages)
 			}
 		}
 	}

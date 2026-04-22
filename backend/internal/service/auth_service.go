@@ -212,6 +212,8 @@ func defaultPermissionsForUser(username string) []string {
 			"files.write",
 			"services.read",
 			"services.manage",
+			"docker.read",
+			"docker.manage",
 		}
 	}
 	return []string{

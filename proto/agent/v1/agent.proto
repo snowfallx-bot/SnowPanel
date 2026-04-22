@@ -199,6 +199,19 @@ message DockerContainerActionResponse {
   string state = 3;
 }
 
+message DockerImageInfo {
+  string id = 1;
+  repeated string repo_tags = 2;
+  uint64 size = 3;
+}
+
+message ListDockerImagesRequest {}
+
+message ListDockerImagesResponse {
+  Error error = 1;
+  repeated DockerImageInfo images = 2;
+}
+
 message CronTask {
   string id = 1;
   string expression = 2;
@@ -243,6 +256,8 @@ service DockerService {
   rpc ListContainers(ListDockerContainersRequest) returns (ListDockerContainersResponse);
   rpc StartContainer(DockerContainerActionRequest) returns (DockerContainerActionResponse);
   rpc StopContainer(DockerContainerActionRequest) returns (DockerContainerActionResponse);
+  rpc RestartContainer(DockerContainerActionRequest) returns (DockerContainerActionResponse);
+  rpc ListImages(ListDockerImagesRequest) returns (ListDockerImagesResponse);
 }
 
 service CronService {

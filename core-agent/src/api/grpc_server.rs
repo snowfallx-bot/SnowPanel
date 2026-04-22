@@ -11,15 +11,19 @@ use crate::api::proto::health_service_server::{HealthService, HealthServiceServe
 use crate::api::proto::service_manager_service_server::{
     ServiceManagerService, ServiceManagerServiceServer,
 };
+use crate::api::proto::docker_service_server::{DockerService as DockerGrpcService, DockerServiceServer};
 use crate::api::proto::system_service_server::{SystemService, SystemServiceServer};
 use crate::api::proto::{
-    CreateDirectoryRequest, CreateDirectoryResponse, DeleteFileRequest, DeleteFileResponse, Error,
-    GetRealtimeResourceRequest, GetRealtimeResourceResponse, GetSystemOverviewRequest,
-    GetSystemOverviewResponse, HealthCheckRequest, HealthCheckResponse, ListFilesRequest,
-    ListFilesResponse, ListServicesRequest, ListServicesResponse, ReadTextFileRequest,
-    ReadTextFileResponse, ServiceActionRequest, ServiceActionResponse, ServiceInfo,
-    WriteTextFileRequest, WriteTextFileResponse,
+    CreateDirectoryRequest, CreateDirectoryResponse, DeleteFileRequest, DeleteFileResponse,
+    DockerContainerActionRequest, DockerContainerActionResponse, DockerContainerInfo,
+    DockerImageInfo, Error, GetRealtimeResourceRequest, GetRealtimeResourceResponse,
+    GetSystemOverviewRequest, GetSystemOverviewResponse, HealthCheckRequest, HealthCheckResponse,
+    ListDockerContainersRequest, ListDockerContainersResponse, ListDockerImagesRequest,
+    ListDockerImagesResponse, ListFilesRequest, ListFilesResponse, ListServicesRequest,
+    ListServicesResponse, ReadTextFileRequest, ReadTextFileResponse, ServiceActionRequest,
+    ServiceActionResponse, ServiceInfo, WriteTextFileRequest, WriteTextFileResponse,
 };
+use crate::docker::service::{DockerAction, DockerError, DockerService};
 use crate::file::service::FileService as FileOperatorService;
 use crate::process::systemd_service::{ServiceAction, ServiceError, SystemdServiceManager};
 use crate::security::path_validator::PathValidator;
@@ -30,6 +34,7 @@ pub struct GrpcServer {
     system_info_service: Arc<SystemInfoService>,
     file_service: Arc<FileOperatorService>,
     service_manager: Arc<SystemdServiceManager>,
+    docker_service: Arc<DockerService>,
 }
 
 impl GrpcServer {
@@ -38,11 +43,12 @@ impl GrpcServer {
         max_read_bytes: usize,
         max_write_bytes: usize,
         service_whitelist: Vec<String>,
-    ) -> Self {
+    ) -> Result<Self> {
         let roots = allowed_roots.into_iter().map(PathBuf::from).collect::<Vec<_>>();
         let path_validator = PathValidator::new(roots);
+        let docker_service = DockerService::new().context("initialize docker service failed")?;
 
-        Self {
+        Ok(Self {
             system_info_service: Arc::new(SystemInfoService::new()),
             file_service: Arc::new(FileOperatorService::new(
                 path_validator,
@@ -50,7 +56,8 @@ impl GrpcServer {
                 max_write_bytes,
             )),
             service_manager: Arc::new(SystemdServiceManager::new(service_whitelist)),
-        }
+            docker_service: Arc::new(docker_service),
+        })
     }
 
     pub async fn run(&self, addr: &str) -> Result<()> {
@@ -70,6 +77,9 @@ impl GrpcServer {
             }))
             .add_service(ServiceManagerServiceServer::new(ServiceManagerServiceImpl {
                 service_manager: self.service_manager.clone(),
+            }))
+            .add_service(DockerServiceServer::new(DockerServiceImpl {
+                docker_service: self.docker_service.clone(),
             }))
             .serve(socket_addr)
             .await
@@ -280,6 +290,116 @@ impl ServiceManagerServiceImpl {
 }
 
 fn to_error(err: ServiceError) -> Error {
+    Error {
+        code: err.code,
+        message: err.message,
+        detail: err.detail,
+    }
+}
+
+#[derive(Clone)]
+struct DockerServiceImpl {
+    docker_service: Arc<DockerService>,
+}
+
+#[tonic::async_trait]
+impl DockerGrpcService for DockerServiceImpl {
+    async fn list_containers(
+        &self,
+        _request: Request<ListDockerContainersRequest>,
+    ) -> Result<Response<ListDockerContainersResponse>, Status> {
+        let result = self.docker_service.list_containers().await;
+        match result {
+            Ok(containers) => Ok(Response::new(ListDockerContainersResponse {
+                error: Some(ok_error()),
+                containers: containers
+                    .into_iter()
+                    .map(|item| DockerContainerInfo {
+                        id: item.id,
+                        name: item.name,
+                        image: item.image,
+                        state: item.state,
+                        status: item.status,
+                    })
+                    .collect::<Vec<_>>(),
+            })),
+            Err(err) => Ok(Response::new(ListDockerContainersResponse {
+                error: Some(to_docker_error(err)),
+                containers: Vec::new(),
+            })),
+        }
+    }
+
+    async fn start_container(
+        &self,
+        request: Request<DockerContainerActionRequest>,
+    ) -> Result<Response<DockerContainerActionResponse>, Status> {
+        self.handle_action(DockerAction::Start, request.into_inner()).await
+    }
+
+    async fn stop_container(
+        &self,
+        request: Request<DockerContainerActionRequest>,
+    ) -> Result<Response<DockerContainerActionResponse>, Status> {
+        self.handle_action(DockerAction::Stop, request.into_inner()).await
+    }
+
+    async fn restart_container(
+        &self,
+        request: Request<DockerContainerActionRequest>,
+    ) -> Result<Response<DockerContainerActionResponse>, Status> {
+        self.handle_action(DockerAction::Restart, request.into_inner())
+            .await
+    }
+
+    async fn list_images(
+        &self,
+        _request: Request<ListDockerImagesRequest>,
+    ) -> Result<Response<ListDockerImagesResponse>, Status> {
+        let result = self.docker_service.list_images().await;
+        match result {
+            Ok(images) => Ok(Response::new(ListDockerImagesResponse {
+                error: Some(ok_error()),
+                images: images
+                    .into_iter()
+                    .map(|item| DockerImageInfo {
+                        id: item.id,
+                        repo_tags: item.repo_tags,
+                        size: item.size,
+                    })
+                    .collect::<Vec<_>>(),
+            })),
+            Err(err) => Ok(Response::new(ListDockerImagesResponse {
+                error: Some(to_docker_error(err)),
+                images: Vec::new(),
+            })),
+        }
+    }
+}
+
+impl DockerServiceImpl {
+    async fn handle_action(
+        &self,
+        action: DockerAction,
+        payload: DockerContainerActionRequest,
+    ) -> Result<Response<DockerContainerActionResponse>, Status> {
+        let result = self.docker_service.run_action(action, &payload.id).await;
+        match result {
+            Ok(container) => Ok(Response::new(DockerContainerActionResponse {
+                error: Some(ok_error()),
+                id: container.id,
+                state: container.state,
+            })),
+            Err(err) => Ok(Response::new(DockerContainerActionResponse {
+                error: Some(to_docker_error(err)),
+                id: payload.id,
+                state: String::new(),
+            })),
+        }
+    }
+}
+
+fn to_docker_error(err: DockerError) -> Error {
     Error {
         code: err.code,
         message: err.message,

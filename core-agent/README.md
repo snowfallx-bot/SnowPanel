@@ -31,6 +31,11 @@ Environment:
 - `ServiceManagerService.StartService`
 - `ServiceManagerService.StopService`
 - `ServiceManagerService.RestartService`
+- `DockerService.ListContainers`
+- `DockerService.StartContainer`
+- `DockerService.StopContainer`
+- `DockerService.RestartContainer`
+- `DockerService.ListImages`
 
 ## Proto Source
 

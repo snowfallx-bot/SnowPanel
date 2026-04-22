@@ -1,6 +1,7 @@
 import { Navigate, createBrowserRouter } from "react-router-dom";
 import { AppLayout } from "@/layouts/AppLayout";
 import { DashboardPage } from "@/pages/DashboardPage";
+import { DockerPage } from "@/pages/DockerPage";
 import { FilesPage } from "@/pages/FilesPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { ServicesPage } from "@/pages/ServicesPage";
@@ -34,6 +35,10 @@ export const router = createBrowserRouter([
           {
             path: "/services",
             element: <ServicesPage />
+          },
+          {
+            path: "/docker",
+            element: <DockerPage />
           }
         ]
       }

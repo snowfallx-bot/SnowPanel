@@ -112,6 +112,37 @@ type ServiceActionResult struct {
 	Status string
 }
 
+type DockerContainerInfo struct {
+	ID     string
+	Name   string
+	Image  string
+	State  string
+	Status string
+}
+
+type ListDockerContainersResult struct {
+	Containers []DockerContainerInfo
+}
+
+type DockerContainerActionRequest struct {
+	ID string
+}
+
+type DockerContainerActionResult struct {
+	ID    string
+	State string
+}
+
+type DockerImageInfo struct {
+	ID       string
+	RepoTags []string
+	Size     uint64
+}
+
+type ListDockerImagesResult struct {
+	Images []DockerImageInfo
+}
+
 type AgentClient interface {
 	GetSystemOverview(ctx context.Context) (SystemOverview, error)
 	GetRealtimeResource(ctx context.Context) (RealtimeResource, error)
@@ -124,6 +155,11 @@ type AgentClient interface {
 	StartService(ctx context.Context, req ServiceActionRequest) (ServiceActionResult, error)
 	StopService(ctx context.Context, req ServiceActionRequest) (ServiceActionResult, error)
 	RestartService(ctx context.Context, req ServiceActionRequest) (ServiceActionResult, error)
+	ListDockerContainers(ctx context.Context) (ListDockerContainersResult, error)
+	StartDockerContainer(ctx context.Context, req DockerContainerActionRequest) (DockerContainerActionResult, error)
+	StopDockerContainer(ctx context.Context, req DockerContainerActionRequest) (DockerContainerActionResult, error)
+	RestartDockerContainer(ctx context.Context, req DockerContainerActionRequest) (DockerContainerActionResult, error)
+	ListDockerImages(ctx context.Context) (ListDockerImagesResult, error)
 }
 
 type Client struct {
@@ -208,4 +244,41 @@ func (c *Client) RestartService(ctx context.Context, req ServiceActionRequest) (
 	_ = ctx
 	_ = req
 	return ServiceActionResult{}, ErrNotImplemented
+}
+
+func (c *Client) ListDockerContainers(ctx context.Context) (ListDockerContainersResult, error) {
+	_ = ctx
+	return ListDockerContainersResult{}, ErrNotImplemented
+}
+
+func (c *Client) StartDockerContainer(
+	ctx context.Context,
+	req DockerContainerActionRequest,
+) (DockerContainerActionResult, error) {
+	_ = ctx
+	_ = req
+	return DockerContainerActionResult{}, ErrNotImplemented
+}
+
+func (c *Client) StopDockerContainer(
+	ctx context.Context,
+	req DockerContainerActionRequest,
+) (DockerContainerActionResult, error) {
+	_ = ctx
+	_ = req
+	return DockerContainerActionResult{}, ErrNotImplemented
+}
+
+func (c *Client) RestartDockerContainer(
+	ctx context.Context,
+	req DockerContainerActionRequest,
+) (DockerContainerActionResult, error) {
+	_ = ctx
+	_ = req
+	return DockerContainerActionResult{}, ErrNotImplemented
+}
+
+func (c *Client) ListDockerImages(ctx context.Context) (ListDockerImagesResult, error) {
+	_ = ctx
+	return ListDockerImagesResult{}, ErrNotImplemented
 }
