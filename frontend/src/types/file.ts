@@ -55,3 +55,14 @@ export interface DeleteFilePayload {
 export interface DeleteFileResult {
   path: string;
 }
+
+export interface RenameFilePayload {
+  source_path: string;
+  target_path: string;
+}
+
+export interface RenameFileResult {
+  source_path: string;
+  target_path: string;
+  written_bytes: number;
+}

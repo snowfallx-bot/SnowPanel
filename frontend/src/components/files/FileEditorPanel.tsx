@@ -6,11 +6,23 @@ interface FileEditorPanelProps {
   path: string;
   content: string;
   truncated: boolean;
+  binary: boolean;
   loading: boolean;
+  canDownload: boolean;
+  onDownload: () => void;
   onSave: (content: string) => Promise<void>;
 }
 
-export function FileEditorPanel({ path, content, truncated, loading, onSave }: FileEditorPanelProps) {
+export function FileEditorPanel({
+  path,
+  content,
+  truncated,
+  binary,
+  loading,
+  canDownload,
+  onDownload,
+  onSave
+}: FileEditorPanelProps) {
   const [draft, setDraft] = useState(content);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -50,21 +62,33 @@ export function FileEditorPanel({ path, content, truncated, loading, onSave }: F
           <CardTitle className="text-base">Editor</CardTitle>
           <p className="mt-1 text-xs text-slate-500">{path}</p>
         </div>
-        <Button disabled={saving} onClick={handleSave} size="sm">
-          {saving ? "Saving..." : "Save"}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button disabled={!canDownload} onClick={onDownload} size="sm" variant="ghost">
+            Download
+          </Button>
+          <Button disabled={saving || binary} onClick={handleSave} size="sm">
+            {saving ? "Saving..." : "Save"}
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="space-y-3">
+        {binary && (
+          <p className="rounded bg-slate-100 px-3 py-2 text-xs text-slate-700">
+            This file appears to be binary or non UTF-8 text, so inline editing is disabled.
+          </p>
+        )}
         {truncated && (
           <p className="rounded bg-amber-50 px-3 py-2 text-xs text-amber-700">
             File content was truncated by server-side max read size.
           </p>
         )}
-        <textarea
-          className="min-h-[320px] w-full rounded-md border border-slate-300 p-3 font-mono text-sm"
-          onChange={(event) => setDraft(event.target.value)}
-          value={draft}
-        />
+        {!binary && (
+          <textarea
+            className="min-h-[320px] w-full rounded-md border border-slate-300 p-3 font-mono text-sm"
+            onChange={(event) => setDraft(event.target.value)}
+            value={draft}
+          />
+        )}
         {message && <p className="text-sm text-slate-600">{message}</p>}
       </CardContent>
     </Card>

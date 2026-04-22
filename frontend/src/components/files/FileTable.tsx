@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 interface FileTableProps {
   entries: FileEntry[];
   onOpen: (entry: FileEntry) => void;
+  onRename: (entry: FileEntry) => void;
   onDelete: (entry: FileEntry) => void;
 }
 
@@ -27,7 +28,7 @@ function formatSize(size: number, isDir: boolean) {
   return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export function FileTable({ entries, onOpen, onDelete }: FileTableProps) {
+export function FileTable({ entries, onOpen, onRename, onDelete }: FileTableProps) {
   return (
     <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
       <table className="w-full text-left text-sm">
@@ -52,9 +53,14 @@ export function FileTable({ entries, onOpen, onDelete }: FileTableProps) {
               <td className="px-4 py-3">{formatSize(entry.size, entry.is_dir)}</td>
               <td className="px-4 py-3">{formatTime(entry.modified_at_unix)}</td>
               <td className="px-4 py-3">
-                <Button size="sm" variant="ghost" onClick={() => onDelete(entry)}>
-                  Delete
-                </Button>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="ghost" onClick={() => onRename(entry)}>
+                    Rename
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => onDelete(entry)}>
+                    Delete
+                  </Button>
+                </div>
               </td>
             </tr>
           ))}

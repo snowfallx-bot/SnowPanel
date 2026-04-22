@@ -28,6 +28,11 @@ type DeleteFileRequest struct {
 	Recursive bool   `json:"recursive"`
 }
 
+type RenameFileRequest struct {
+	SourcePath string `json:"source_path" binding:"required"`
+	TargetPath string `json:"target_path" binding:"required"`
+}
+
 type FileEntry struct {
 	Name       string `json:"name"`
 	Path       string `json:"path"`
@@ -60,4 +65,10 @@ type CreateDirectoryResult struct {
 
 type DeleteFileResult struct {
 	Path string `json:"path"`
+}
+
+type RenameFileResult struct {
+	SourcePath   string `json:"source_path"`
+	TargetPath   string `json:"target_path"`
+	WrittenBytes uint64 `json:"written_bytes"`
 }

@@ -37,10 +37,17 @@ Language: **English** | [简体中文](api-design.zh-CN.md)
 - `GET /files/list?path=/abs/path` (`files.read`)
 - `POST /files/read` (`files.read`)
 - `POST /files/write` (`files.write`)
+- `POST /files/rename` (`files.write`)
 - `POST /files/mkdir` (`files.write`)
 - `DELETE /files/delete` (`files.write`)
 
 All file paths are validated by the agent safe-root policy.
+
+Current behavior notes:
+- File read/write APIs are text-oriented (`utf-8`) and return `truncated` when max preview bytes are exceeded.
+- The frontend supports text upload/download by reusing read/write APIs.
+- Binary or non-UTF-8 files are shown with a clear hint and inline editing is disabled.
+- Preview size is selectable (`256KB` to `8MB`); offset/chunk pagination is not yet exposed as a dedicated API.
 
 ## Service Management
 

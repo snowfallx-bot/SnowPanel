@@ -196,3 +196,38 @@ func (h *FileHandler) DeleteFile(c *gin.Context) {
 	})
 	response.OK(c, result)
 }
+
+func (h *FileHandler) RenameFile(c *gin.Context) {
+	var req dto.RenameFileRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Fail(c, http.StatusBadRequest, apperror.ErrBadRequest.Code, "invalid request payload")
+		return
+	}
+
+	result, err := h.fileService.RenameFile(c.Request.Context(), req)
+	if err != nil {
+		recordAudit(c, h.auditService, dto.RecordAuditInput{
+			Module:         "files",
+			Action:         "rename",
+			TargetType:     "path",
+			TargetID:       req.SourcePath,
+			RequestSummary: `{"op":"rename"}`,
+			Success:        false,
+			ResultCode:     "failed",
+			ResultMessage:  err.Error(),
+		})
+		response.FromError(c, err)
+		return
+	}
+	recordAudit(c, h.auditService, dto.RecordAuditInput{
+		Module:         "files",
+		Action:         "rename",
+		TargetType:     "path",
+		TargetID:       req.SourcePath,
+		RequestSummary: `{"op":"rename"}`,
+		Success:        true,
+		ResultCode:     "ok",
+		ResultMessage:  "rename success",
+	})
+	response.OK(c, result)
+}

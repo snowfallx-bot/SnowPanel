@@ -5,6 +5,8 @@ import {
   DeleteFilePayload,
   DeleteFileResult,
   ListFilesResult,
+  RenameFilePayload,
+  RenameFileResult,
   ReadTextFilePayload,
   ReadTextFileResult,
   WriteTextFilePayload,
@@ -33,4 +35,8 @@ export function deleteFile(payload: DeleteFilePayload) {
       data: payload
     })
   );
+}
+
+export function renameFile(payload: RenameFilePayload) {
+  return unwrap<RenameFileResult>(http.post("/api/v1/files/rename", payload));
 }

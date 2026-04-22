@@ -2,7 +2,11 @@ package service
 
 import (
 	"context"
+	"fmt"
+	"path"
+	"strings"
 
+	"github.com/snowfallx-bot/SnowPanel/backend/internal/apperror"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/dto"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/grpcclient"
 )
@@ -13,6 +17,7 @@ type FileService interface {
 	WriteTextFile(ctx context.Context, req dto.WriteTextFileRequest) (dto.WriteTextFileResult, error)
 	CreateDirectory(ctx context.Context, req dto.CreateDirectoryRequest) (dto.CreateDirectoryResult, error)
 	DeleteFile(ctx context.Context, req dto.DeleteFileRequest) (dto.DeleteFileResult, error)
+	RenameFile(ctx context.Context, req dto.RenameFileRequest) (dto.RenameFileResult, error)
 }
 
 type fileService struct {
@@ -116,6 +121,112 @@ func (s *fileService) DeleteFile(ctx context.Context, req dto.DeleteFileRequest)
 
 	s.emitAudit(ctx, "files", "delete", req.Path, true)
 	return dto.DeleteFileResult{Path: result.Path}, nil
+}
+
+func (s *fileService) RenameFile(
+	ctx context.Context,
+	req dto.RenameFileRequest,
+) (dto.RenameFileResult, error) {
+	sourcePath := strings.TrimSpace(req.SourcePath)
+	targetPath := strings.TrimSpace(req.TargetPath)
+	if sourcePath == "" || targetPath == "" {
+		return dto.RenameFileResult{}, apperror.Wrap(
+			apperror.ErrBadRequest.Code,
+			apperror.ErrBadRequest.HTTPStatus,
+			apperror.ErrBadRequest.Message,
+			fmt.Errorf("source_path and target_path are required"),
+		)
+	}
+	if sourcePath == targetPath {
+		return dto.RenameFileResult{}, apperror.Wrap(
+			apperror.ErrBadRequest.Code,
+			apperror.ErrBadRequest.HTTPStatus,
+			apperror.ErrBadRequest.Message,
+			fmt.Errorf("source_path and target_path cannot be the same"),
+		)
+	}
+
+	if err := s.ensureTargetDoesNotExist(ctx, targetPath); err != nil {
+		s.emitAudit(ctx, "files", "rename", sourcePath, false)
+		return dto.RenameFileResult{}, err
+	}
+
+	readResult, err := s.agentClient.ReadTextFile(ctx, grpcclient.ReadTextFileRequest{
+		Path:     sourcePath,
+		MaxBytes: 8 * 1024 * 1024,
+		Encoding: "utf-8",
+	})
+	if err != nil {
+		s.emitAudit(ctx, "files", "rename", sourcePath, false)
+		return dto.RenameFileResult{}, mapAgentError(err)
+	}
+	if readResult.Truncated {
+		s.emitAudit(ctx, "files", "rename", sourcePath, false)
+		return dto.RenameFileResult{}, apperror.Wrap(
+			apperror.ErrBadRequest.Code,
+			apperror.ErrBadRequest.HTTPStatus,
+			apperror.ErrBadRequest.Message,
+			fmt.Errorf("rename only supports files that can be fully read in one request"),
+		)
+	}
+
+	writeResult, err := s.agentClient.WriteTextFile(ctx, grpcclient.WriteTextFileRequest{
+		Path:              targetPath,
+		Content:           readResult.Content,
+		CreateIfNotExists: true,
+		Truncate:          true,
+		Encoding:          "utf-8",
+	})
+	if err != nil {
+		s.emitAudit(ctx, "files", "rename", sourcePath, false)
+		return dto.RenameFileResult{}, mapAgentError(err)
+	}
+
+	_, err = s.agentClient.DeleteFile(ctx, grpcclient.DeleteFileRequest{
+		Path:      sourcePath,
+		Recursive: false,
+	})
+	if err != nil {
+		s.emitAudit(ctx, "files", "rename", sourcePath, false)
+		return dto.RenameFileResult{}, apperror.Wrap(
+			apperror.ErrInternal.Code,
+			apperror.ErrInternal.HTTPStatus,
+			"rename failed after write; source cleanup failed",
+			err,
+		)
+	}
+
+	s.emitAudit(ctx, "files", "rename", sourcePath, true)
+	return dto.RenameFileResult{
+		SourcePath:   sourcePath,
+		TargetPath:   writeResult.Path,
+		WrittenBytes: writeResult.WrittenBytes,
+	}, nil
+}
+
+func (s *fileService) ensureTargetDoesNotExist(ctx context.Context, targetPath string) error {
+	parent := path.Dir(targetPath)
+	if parent == "." {
+		parent = "/"
+	}
+
+	listResult, err := s.agentClient.ListFiles(ctx, grpcclient.ListFilesRequest{Path: parent})
+	if err != nil {
+		return mapAgentError(err)
+	}
+
+	targetName := path.Base(targetPath)
+	for _, entry := range listResult.Entries {
+		if entry.Name == targetName {
+			return apperror.Wrap(
+				apperror.ErrBadRequest.Code,
+				apperror.ErrBadRequest.HTTPStatus,
+				apperror.ErrBadRequest.Message,
+				fmt.Errorf("target path already exists: %s", targetPath),
+			)
+		}
+	}
+	return nil
 }
 
 func (s *fileService) emitAudit(_ context.Context, _ string, _ string, _ string, _ bool) {
