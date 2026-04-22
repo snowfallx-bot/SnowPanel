@@ -149,3 +149,98 @@ fn is_dangerous_target(path: &Path, operation: FileOperation) -> bool {
 
     blocked.iter().any(|item| path == *item)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{FileOperation, PathValidationError, PathValidator};
+    use std::fs;
+    use std::path::PathBuf;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn make_temp_dir(prefix: &str) -> PathBuf {
+        let mut dir = std::env::temp_dir();
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time must be after unix epoch")
+            .as_nanos();
+        dir.push(format!("snowpanel_{prefix}_{nonce}"));
+        fs::create_dir_all(&dir).expect("failed to create temp dir");
+        dir
+    }
+
+    #[test]
+    fn validate_returns_normalized_path_inside_allowed_root() {
+        let root = make_temp_dir("path_validator_root");
+        let nested = root.join("sub");
+        fs::create_dir_all(&nested).expect("failed to create nested dir");
+
+        let validator = PathValidator::new(vec![root.clone()]);
+        let output = validator
+            .validate(
+                nested
+                    .to_str()
+                    .expect("path should be valid utf8 for this test"),
+                &[],
+                true,
+                FileOperation::List,
+            )
+            .expect("path should be accepted");
+
+        assert!(
+            output.starts_with(&root),
+            "normalized path should stay within allowed root"
+        );
+
+        fs::remove_dir_all(root).expect("failed to cleanup temp dir");
+    }
+
+    #[test]
+    fn validate_rejects_relative_path() {
+        let root = make_temp_dir("path_validator_relative");
+        let validator = PathValidator::new(vec![root.clone()]);
+
+        let result = validator.validate("relative/path.txt", &[], true, FileOperation::Read);
+        assert!(
+            matches!(result, Err(PathValidationError::InvalidPath(_))),
+            "relative path should be rejected"
+        );
+
+        fs::remove_dir_all(root).expect("failed to cleanup temp dir");
+    }
+
+    #[test]
+    fn validate_rejects_path_outside_allowed_root() {
+        let root = make_temp_dir("path_validator_allowed");
+        let outside = make_temp_dir("path_validator_outside");
+        let target = outside.join("file.txt");
+        fs::write(&target, "hello").expect("failed to create outside file");
+
+        let validator = PathValidator::new(vec![root.clone()]);
+        let result = validator.validate(
+            target
+                .to_str()
+                .expect("path should be valid utf8 for this test"),
+            &[],
+            true,
+            FileOperation::Read,
+        );
+        assert!(
+            matches!(result, Err(PathValidationError::UnsafePath(_))),
+            "path outside root should be rejected"
+        );
+
+        fs::remove_dir_all(root).expect("failed to cleanup temp dir");
+        fs::remove_dir_all(outside).expect("failed to cleanup outside dir");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn validate_blocks_dangerous_delete_targets() {
+        let validator = PathValidator::new(vec![PathBuf::from("/")]);
+        let result = validator.validate("/etc", &[], false, FileOperation::Delete);
+        assert!(
+            matches!(result, Err(PathValidationError::DangerousPath(_))),
+            "dangerous delete target should be blocked"
+        );
+    }
+}

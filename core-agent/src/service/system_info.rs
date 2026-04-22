@@ -119,3 +119,66 @@ impl SystemInfoService {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::SystemInfoService;
+
+    #[test]
+    fn overview_contains_basic_fields() {
+        let service = SystemInfoService::new();
+        let overview = service.get_overview();
+
+        assert!(
+            !overview.hostname.trim().is_empty(),
+            "hostname should not be empty"
+        );
+        assert!(
+            !overview.os.trim().is_empty(),
+            "os description should not be empty"
+        );
+        assert!(
+            !overview.kernel.trim().is_empty(),
+            "kernel version should not be empty"
+        );
+        assert!(
+            overview.cpu.is_some(),
+            "cpu information should be returned"
+        );
+        assert!(
+            overview.memory.is_some(),
+            "memory information should be returned"
+        );
+    }
+
+    #[test]
+    fn realtime_resource_contains_non_negative_numbers() {
+        let service = SystemInfoService::new();
+        let resource = service.get_realtime_resource();
+
+        assert!(
+            resource.cpu_usage_percent.is_finite(),
+            "cpu usage should be finite"
+        );
+        assert!(
+            resource.memory_usage_percent.is_finite(),
+            "memory usage should be finite"
+        );
+        assert!(
+            resource.disk_usage_percent.is_finite(),
+            "disk usage should be finite"
+        );
+        assert!(
+            resource.cpu_usage_percent >= 0.0,
+            "cpu usage should be non-negative"
+        );
+        assert!(
+            resource.memory_usage_percent >= 0.0,
+            "memory usage should be non-negative"
+        );
+        assert!(
+            resource.disk_usage_percent >= 0.0,
+            "disk usage should be non-negative"
+        );
+    }
+}
