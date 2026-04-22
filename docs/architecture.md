@@ -1,5 +1,7 @@
 # Architecture
 
+Language: **English** | [简体中文](architecture.zh-CN.md)
+
 ## System Components
 
 SnowPanel is a monorepo with three runtime services:

@@ -92,11 +92,12 @@ SnowPanel 是一个 Linux 服务器面板原型项目（风格类似 BT Panel / 
 
 ## 文档导航
 
-- [Architecture](docs/architecture.md)
-- [Development Guide](docs/development.md)
-- [Security Notes](docs/security.md)
-- [Deployment Notes](docs/deployment.md)
-- [Roadmap](docs/roadmap.md)
+- [架构说明](docs/architecture.zh-CN.md) | [Architecture](docs/architecture.md)
+- [开发指南](docs/development.zh-CN.md) | [Development Guide](docs/development.md)
+- [API 设计](docs/api-design.zh-CN.md) | [API Design](docs/api-design.md)
+- [安全说明](docs/security.zh-CN.md) | [Security Notes](docs/security.md)
+- [部署指南](docs/deployment.zh-CN.md) | [Deployment Guide](docs/deployment.md)
+- [路线图草案](docs/roadmap.zh-CN.md) | [Roadmap](docs/roadmap.md)
 
 ## 贡献与社区
 

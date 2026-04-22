@@ -1,5 +1,7 @@
 # Development Guide
 
+Language: **English** | [简体中文](development.zh-CN.md)
+
 ## Prerequisites
 
 - Docker + Docker Compose v2

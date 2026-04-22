@@ -1,5 +1,7 @@
 # Security Notes
 
+Language: **English** | [简体中文](security.zh-CN.md)
+
 ## Security Goals
 
 - Prevent arbitrary command execution.

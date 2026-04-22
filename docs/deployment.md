@@ -1,5 +1,7 @@
 # Deployment Guide
 
+Language: **English** | [简体中文](deployment.zh-CN.md)
+
 ## Docker Compose Deployment (Prototype)
 
 This project ships with a development-oriented compose stack including:

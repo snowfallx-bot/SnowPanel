@@ -1,5 +1,7 @@
 # API Design
 
+Language: **English** | [简体中文](api-design.zh-CN.md)
+
 ## Base Information
 
 - Base path: `/api/v1`
