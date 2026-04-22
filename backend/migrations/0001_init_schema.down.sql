@@ -1,0 +1,16 @@
+DROP TABLE IF EXISTS backups;
+DROP TABLE IF EXISTS plugins;
+DROP TABLE IF EXISTS databases;
+DROP TABLE IF EXISTS database_instances;
+DROP TABLE IF EXISTS website_domains;
+DROP TABLE IF EXISTS websites;
+DROP TABLE IF EXISTS task_logs;
+DROP TABLE IF EXISTS tasks;
+DROP TABLE IF EXISTS hosts;
+DROP TABLE IF EXISTS system_settings;
+DROP TABLE IF EXISTS audit_logs;
+DROP TABLE IF EXISTS user_roles;
+DROP TABLE IF EXISTS role_permissions;
+DROP TABLE IF EXISTS permissions;
+DROP TABLE IF EXISTS roles;
+DROP TABLE IF EXISTS users;

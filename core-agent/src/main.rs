@@ -8,24 +8,20 @@ mod security;
 mod service;
 mod system;
 
-use std::env;
-use std::io;
-use std::net::TcpListener;
+use anyhow::Result;
+use tracing_subscriber::EnvFilter;
 
-fn main() -> io::Result<()> {
-    let host = env::var("CORE_AGENT_HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
-    let port = env::var("CORE_AGENT_PORT").unwrap_or_else(|_| "50051".to_string());
-    let addr = format!("{host}:{port}");
+#[tokio::main]
+async fn main() -> Result<()> {
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
+        )
+        .init();
 
-    let listener = TcpListener::bind(&addr)?;
-    println!("core-agent bootstrap listening on {addr}");
+    let cfg = config::Config::from_env();
+    let addr = cfg.address();
 
-    for incoming in listener.incoming() {
-        match incoming {
-            Ok(_) => {}
-            Err(err) => eprintln!("core-agent incoming connection error: {err}"),
-        }
-    }
-
-    Ok(())
+    let server = api::grpc_server::GrpcServer::new();
+    server.run(&addr).await
 }

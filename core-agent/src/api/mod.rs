@@ -1,1 +1,5 @@
-// API layer for gRPC server handlers (to be implemented in later stages).
+pub mod grpc_server;
+
+pub mod proto {
+    tonic::include_proto!("snowpanel.agent.v1");
+}

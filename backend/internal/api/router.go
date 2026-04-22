@@ -1,45 +1,52 @@
 package api
 
 import (
-	"encoding/json"
-	"net/http"
+	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/snowfallx-bot/SnowPanel/backend/internal/api/handler"
+	"github.com/snowfallx-bot/SnowPanel/backend/internal/grpcclient"
+	"github.com/snowfallx-bot/SnowPanel/backend/internal/middleware"
+	"github.com/snowfallx-bot/SnowPanel/backend/internal/service"
+	"go.uber.org/zap"
+	"gorm.io/gorm"
 )
 
-type response struct {
-	Code    int         `json:"code"`
-	Message string      `json:"message"`
-	Data    interface{} `json:"data"`
+type RouterDeps struct {
+	Logger           *zap.Logger
+	DB               *gorm.DB
+	AgentClient      grpcclient.AgentClient
+	AuthService      service.AuthService
+	DashboardService service.DashboardService
 }
 
-func NewRouter() http.Handler {
-	mux := http.NewServeMux()
+func NewRouter(deps RouterDeps) *gin.Engine {
+	router := gin.New()
+	router.Use(
+		middleware.RequestID(),
+		middleware.Recover(deps.Logger),
+		middleware.AccessLog(deps.Logger),
+	)
 
-	mux.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
-		writeJSON(w, http.StatusOK, response{
-			Code:    0,
-			Message: "ok",
-			Data: map[string]string{
-				"service": "backend",
-				"status":  "up",
-			},
-		})
-	})
+	healthHandler := handler.NewHealthHandler(deps.DB)
+	systemHandler := handler.NewSystemHandler(time.Now)
+	authHandler := handler.NewAuthHandler(deps.AuthService)
+	dashboardHandler := handler.NewDashboardHandler(deps.DashboardService)
 
-	mux.HandleFunc("GET /api/v1/ping", func(w http.ResponseWriter, _ *http.Request) {
-		writeJSON(w, http.StatusOK, response{
-			Code:    0,
-			Message: "ok",
-			Data: map[string]string{
-				"pong": "snowpanel",
-			},
-		})
-	})
+	router.GET("/health", healthHandler.Health)
 
-	return mux
-}
+	v1 := router.Group("/api/v1")
+	{
+		v1.GET("/ping", systemHandler.Ping)
+		v1.POST("/auth/login", authHandler.Login)
 
-func writeJSON(w http.ResponseWriter, status int, payload response) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(payload)
+		protected := v1.Group("")
+		protected.Use(middleware.JWTAuth(deps.AuthService))
+		{
+			protected.GET("/auth/me", authHandler.Me)
+			protected.GET("/dashboard/summary", dashboardHandler.Summary)
+		}
+	}
+
+	return router
 }
