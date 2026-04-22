@@ -2,9 +2,7 @@ package service
 
 import (
 	"context"
-	"errors"
 
-	"github.com/snowfallx-bot/SnowPanel/backend/internal/apperror"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/dto"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/grpcclient"
 )
@@ -26,12 +24,12 @@ func NewDashboardService(agentClient grpcclient.AgentClient) DashboardService {
 func (s *dashboardService) GetSummary(ctx context.Context) (dto.DashboardSummary, error) {
 	overview, err := s.agentClient.GetSystemOverview(ctx)
 	if err != nil {
-		return dto.DashboardSummary{}, toAgentError(err)
+		return dto.DashboardSummary{}, mapAgentError(err)
 	}
 
 	realtime, err := s.agentClient.GetRealtimeResource(ctx)
 	if err != nil {
-		return dto.DashboardSummary{}, toAgentError(err)
+		return dto.DashboardSummary{}, mapAgentError(err)
 	}
 
 	cpuUsage := realtime.CPUUsagePercent
@@ -56,16 +54,4 @@ func (s *dashboardService) GetSummary(ctx context.Context) (dto.DashboardSummary
 		DiskUsage:     diskUsage,
 		Uptime:        overview.Uptime,
 	}, nil
-}
-
-func toAgentError(err error) error {
-	if errors.Is(err, grpcclient.ErrNotImplemented) {
-		return apperror.ErrAgentUnavailable
-	}
-	return apperror.Wrap(
-		apperror.ErrAgentUnavailable.Code,
-		apperror.ErrAgentUnavailable.HTTPStatus,
-		apperror.ErrAgentUnavailable.Message,
-		err,
-	)
 }

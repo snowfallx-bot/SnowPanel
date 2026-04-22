@@ -21,13 +21,17 @@ type AuthService interface {
 }
 
 type TokenClaims struct {
-	UserID   int64
-	Username string
+	UserID      int64
+	Username    string
+	Roles       []string
+	Permissions []string
 }
 
 type jwtClaims struct {
-	UserID   int64  `json:"user_id"`
-	Username string `json:"username"`
+	UserID      int64    `json:"user_id"`
+	Username    string   `json:"username"`
+	Roles       []string `json:"roles"`
+	Permissions []string `json:"permissions"`
 	jwt.RegisteredClaims
 }
 
@@ -152,16 +156,20 @@ func (s *authService) ParseToken(rawToken string) (TokenClaims, error) {
 		return TokenClaims{}, apperror.ErrTokenParse
 	}
 	return TokenClaims{
-		UserID:   claims.UserID,
-		Username: claims.Username,
+		UserID:      claims.UserID,
+		Username:    claims.Username,
+		Roles:       claims.Roles,
+		Permissions: claims.Permissions,
 	}, nil
 }
 
 func (s *authService) generateToken(user model.User) (string, int64, error) {
 	expireAt := time.Now().Add(s.cfg.JWTExpire)
 	claims := &jwtClaims{
-		UserID:   user.ID,
-		Username: user.Username,
+		UserID:      user.ID,
+		Username:    user.Username,
+		Roles:       defaultRolesForUser(user.Username),
+		Permissions: defaultPermissionsForUser(user.Username),
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expireAt),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -184,8 +192,31 @@ func toProfile(user model.User) dto.UserProfile {
 		Username:    user.Username,
 		Email:       user.Email,
 		Status:      user.Status,
-		Roles:       []string{},
-		Permissions: []string{},
+		Roles:       defaultRolesForUser(user.Username),
+		Permissions: defaultPermissionsForUser(user.Username),
+	}
+}
+
+func defaultRolesForUser(username string) []string {
+	if username == "admin" {
+		return []string{"super_admin"}
+	}
+	return []string{"operator"}
+}
+
+func defaultPermissionsForUser(username string) []string {
+	if username == "admin" {
+		return []string{
+			"dashboard.read",
+			"files.read",
+			"files.write",
+			"services.read",
+			"services.manage",
+		}
+	}
+	return []string{
+		"dashboard.read",
+		"files.read",
 	}
 }
 

@@ -52,5 +52,6 @@ var (
 	ErrTokenGenerate      = New(2004, http.StatusInternalServerError, "failed to generate token")
 	ErrTokenParse         = New(2005, http.StatusUnauthorized, "invalid token")
 	ErrBootstrapAdminFail = New(2006, http.StatusInternalServerError, "failed to bootstrap default admin")
+	ErrPermissionDenied   = New(2007, http.StatusForbidden, "permission denied")
 	ErrAgentUnavailable   = New(3001, http.StatusServiceUnavailable, "core agent unavailable")
 )

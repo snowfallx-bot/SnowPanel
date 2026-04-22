@@ -19,6 +19,11 @@ Go backend baseline with:
 - `POST /api/v1/auth/login`
 - `GET /api/v1/auth/me` (JWT protected)
 - `GET /api/v1/dashboard/summary` (JWT protected, data source is core-agent via grpc client)
+- `GET /api/v1/files/list?path=` (JWT + `files.read`)
+- `POST /api/v1/files/read` (JWT + `files.read`)
+- `POST /api/v1/files/write` (JWT + `files.write`)
+- `POST /api/v1/files/mkdir` (JWT + `files.write`)
+- `DELETE /api/v1/files/delete` (JWT + `files.write`)
 
 ## Default Admin Bootstrap
 

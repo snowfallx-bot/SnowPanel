@@ -12,6 +12,8 @@ import (
 const (
 	CurrentUserIDKey   = "current_user_id"
 	CurrentUsernameKey = "current_username"
+	CurrentRolesKey    = "current_roles"
+	CurrentPermsKey    = "current_permissions"
 )
 
 func JWTAuth(authService service.AuthService) gin.HandlerFunc {
@@ -49,6 +51,8 @@ func JWTAuth(authService service.AuthService) gin.HandlerFunc {
 
 		c.Set(CurrentUserIDKey, claims.UserID)
 		c.Set(CurrentUsernameKey, claims.Username)
+		c.Set(CurrentRolesKey, claims.Roles)
+		c.Set(CurrentPermsKey, claims.Permissions)
 		c.Next()
 	}
 }
@@ -60,4 +64,22 @@ func GetCurrentUserID(c *gin.Context) (int64, bool) {
 	}
 	userID, ok := value.(int64)
 	return userID, ok
+}
+
+func GetCurrentUsername(c *gin.Context) (string, bool) {
+	value, exists := c.Get(CurrentUsernameKey)
+	if !exists {
+		return "", false
+	}
+	username, ok := value.(string)
+	return username, ok
+}
+
+func GetCurrentPermissions(c *gin.Context) ([]string, bool) {
+	value, exists := c.Get(CurrentPermsKey)
+	if !exists {
+		return nil, false
+	}
+	permissions, ok := value.([]string)
+	return permissions, ok
 }

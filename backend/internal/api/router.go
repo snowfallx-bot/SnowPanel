@@ -18,6 +18,7 @@ type RouterDeps struct {
 	AgentClient      grpcclient.AgentClient
 	AuthService      service.AuthService
 	DashboardService service.DashboardService
+	FileService      service.FileService
 }
 
 func NewRouter(deps RouterDeps) *gin.Engine {
@@ -32,6 +33,7 @@ func NewRouter(deps RouterDeps) *gin.Engine {
 	systemHandler := handler.NewSystemHandler(time.Now)
 	authHandler := handler.NewAuthHandler(deps.AuthService)
 	dashboardHandler := handler.NewDashboardHandler(deps.DashboardService)
+	fileHandler := handler.NewFileHandler(deps.FileService)
 
 	router.GET("/health", healthHandler.Health)
 
@@ -45,6 +47,14 @@ func NewRouter(deps RouterDeps) *gin.Engine {
 		{
 			protected.GET("/auth/me", authHandler.Me)
 			protected.GET("/dashboard/summary", dashboardHandler.Summary)
+			files := protected.Group("/files")
+			{
+				files.GET("/list", middleware.RequirePermission("files.read"), fileHandler.ListFiles)
+				files.POST("/read", middleware.RequirePermission("files.read"), fileHandler.ReadTextFile)
+				files.POST("/write", middleware.RequirePermission("files.write"), fileHandler.WriteTextFile)
+				files.POST("/mkdir", middleware.RequirePermission("files.write"), fileHandler.CreateDirectory)
+				files.DELETE("/delete", middleware.RequirePermission("files.write"), fileHandler.DeleteFile)
+			}
 		}
 	}
 

@@ -1,6 +1,7 @@
 import { Navigate, createBrowserRouter } from "react-router-dom";
 import { AppLayout } from "@/layouts/AppLayout";
 import { DashboardPage } from "@/pages/DashboardPage";
+import { FilesPage } from "@/pages/FilesPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { ProtectedRoute } from "@/routes/ProtectedRoute";
 
@@ -24,6 +25,10 @@ export const router = createBrowserRouter([
           {
             path: "/dashboard",
             element: <DashboardPage />
+          },
+          {
+            path: "/files",
+            element: <FilesPage />
           }
         ]
       }

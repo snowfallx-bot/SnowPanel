@@ -22,6 +22,10 @@ async fn main() -> Result<()> {
     let cfg = config::Config::from_env();
     let addr = cfg.address();
 
-    let server = api::grpc_server::GrpcServer::new();
+    let server = api::grpc_server::GrpcServer::new(
+        cfg.allowed_roots.clone(),
+        cfg.max_read_bytes,
+        cfg.max_write_bytes,
+    );
     server.run(&addr).await
 }
