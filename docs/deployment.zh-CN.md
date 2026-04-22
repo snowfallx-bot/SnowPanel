@@ -27,7 +27,7 @@
 
 - Frontend：`5173`
 - Backend：`8080`
-- Core-agent gRPC：`50051`
+- Core-agent gRPC：默认仅容器内部可见（Compose 网络内 `50051`，默认不暴露到宿主机）
 - PostgreSQL：`5432`
 - Redis：`6379`
 

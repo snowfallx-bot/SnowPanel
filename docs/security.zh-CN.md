@@ -26,6 +26,7 @@
 - 服务操作是显式动作（`start/stop/restart`），并进行名称校验。
 - Docker 操作是显式动作（`start/stop/restart/list`），不透传 shell。
 - Cron 操作通过结构化模型与校验流程执行。
+- Cron 调度仅允许命令模板白名单（`CORE_AGENT_CRON_ALLOWED_COMMANDS`），并拒绝 shell 元字符。
 
 ## 可审计性
 

@@ -51,6 +51,7 @@ impl GrpcServer {
         max_read_bytes: usize,
         max_write_bytes: usize,
         service_whitelist: Vec<String>,
+        cron_allowed_commands: Vec<String>,
     ) -> Result<Self> {
         let roots = allowed_roots
             .into_iter()
@@ -68,7 +69,7 @@ impl GrpcServer {
             )),
             service_manager: Arc::new(SystemdServiceManager::new(service_whitelist)),
             docker_service: Arc::new(docker_service),
-            cron_service: Arc::new(CronService::new()),
+            cron_service: Arc::new(CronService::new(cron_allowed_commands)),
         })
     }
 

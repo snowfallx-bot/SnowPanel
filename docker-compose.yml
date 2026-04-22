@@ -46,8 +46,9 @@ services:
       CORE_AGENT_MAX_READ_BYTES: ${CORE_AGENT_MAX_READ_BYTES:-1048576}
       CORE_AGENT_MAX_WRITE_BYTES: ${CORE_AGENT_MAX_WRITE_BYTES:-1048576}
       CORE_AGENT_SERVICE_WHITELIST: ${CORE_AGENT_SERVICE_WHITELIST:-nginx.service,sshd.service,docker.service}
-    ports:
-      - "${CORE_AGENT_PORT:-50051}:50051"
+      CORE_AGENT_CRON_ALLOWED_COMMANDS: ${CORE_AGENT_CRON_ALLOWED_COMMANDS:-backup,logrotate,cleanup}
+    expose:
+      - "50051"
     depends_on:
       postgres:
         condition: service_healthy

@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::fmt::{Display, Formatter};
 use std::io::Write;
 use std::process::{Command, Stdio};
@@ -26,11 +27,21 @@ impl Display for CronError {
 
 impl std::error::Error for CronError {}
 
-pub struct CronService;
+pub struct CronService {
+    allowed_commands: HashSet<String>,
+}
 
 impl CronService {
-    pub fn new() -> Self {
-        Self
+    pub fn new(allowed_commands: Vec<String>) -> Self {
+        let normalized = allowed_commands
+            .into_iter()
+            .map(|item| item.trim().to_string())
+            .filter(|item| !item.is_empty())
+            .collect::<HashSet<_>>();
+
+        Self {
+            allowed_commands: normalized,
+        }
     }
 
     pub fn list_tasks(&self) -> Result<Vec<CronTaskEntity>, CronError> {
@@ -46,7 +57,7 @@ impl CronService {
         enabled: bool,
     ) -> Result<CronTaskEntity, CronError> {
         validate_expression(expression)?;
-        validate_command(command)?;
+        validate_command(command, &self.allowed_commands)?;
 
         let content = read_current_crontab()?;
         let (other_lines, mut tasks) = parse_crontab_document(&content);
@@ -73,7 +84,7 @@ impl CronService {
     ) -> Result<CronTaskEntity, CronError> {
         validate_task_id(id)?;
         validate_expression(expression)?;
-        validate_command(command)?;
+        validate_command(command, &self.allowed_commands)?;
 
         let content = read_current_crontab()?;
         let (other_lines, mut tasks) = parse_crontab_document(&content);
@@ -185,7 +196,7 @@ fn validate_expression(raw: &str) -> Result<(), CronError> {
     Ok(())
 }
 
-fn validate_command(raw: &str) -> Result<(), CronError> {
+fn validate_command(raw: &str, allowed_commands: &HashSet<String>) -> Result<(), CronError> {
     let command = raw.trim();
     if command.is_empty() {
         return Err(CronError::bad_request("command is empty".to_string()));
@@ -200,6 +211,37 @@ fn validate_command(raw: &str) -> Result<(), CronError> {
             "command length exceeds 1024".to_string(),
         ));
     }
+
+    // Do not allow shell metacharacters so cron.manage cannot become arbitrary shell injection.
+    const BLOCKED_CHARS: &[char] = &['|', '&', ';', '>', '<', '`', '$', '\\'];
+    if command.chars().any(|ch| BLOCKED_CHARS.contains(&ch)) {
+        return Err(CronError::bad_request(
+            "command contains blocked shell metacharacters".to_string(),
+        ));
+    }
+
+    let valid_chars = command
+        .chars()
+        .all(|ch| ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' || ch == '.' || ch == '/');
+    if !valid_chars {
+        return Err(CronError::bad_request(
+            "command contains unsupported characters".to_string(),
+        ));
+    }
+
+    if allowed_commands.is_empty() {
+        return Err(CronError::bad_request(
+            "no allowed cron commands configured".to_string(),
+        ));
+    }
+
+    if !allowed_commands.contains(command) {
+        return Err(CronError::bad_request(format!(
+            "command '{}' is not in allowlist",
+            command
+        )));
+    }
+
     Ok(())
 }
 
@@ -370,5 +412,47 @@ fn render_crontab_document(other_lines: &[String], tasks: &[CronTaskEntity]) -> 
         String::new()
     } else {
         format!("{}\n", lines.join("\n"))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{validate_command, HashSet};
+
+    fn allowlist() -> HashSet<String> {
+        ["backup", "logrotate", "cleanup"]
+            .iter()
+            .map(|item| item.to_string())
+            .collect::<HashSet<_>>()
+    }
+
+    #[test]
+    fn validate_command_accepts_allowlisted_command() {
+        let result = validate_command("backup", &allowlist());
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn validate_command_rejects_unknown_command() {
+        let result = validate_command("whoami", &allowlist());
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn validate_command_rejects_pipeline_injection() {
+        let result = validate_command("backup|sh", &allowlist());
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn validate_command_rejects_redirect_injection() {
+        let result = validate_command("backup>file", &allowlist());
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn validate_command_rejects_subcommand_injection() {
+        let result = validate_command("backup$(id)", &allowlist());
+        assert!(result.is_err());
     }
 }

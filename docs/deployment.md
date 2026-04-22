@@ -27,7 +27,7 @@ This project ships with a development-oriented compose stack including:
 
 - Frontend: `5173`
 - Backend: `8080`
-- Core-agent gRPC: `50051`
+- Core-agent gRPC: internal-only (`50051` in Compose network, not exposed on host by default)
 - PostgreSQL: `5432`
 - Redis: `6379`
 

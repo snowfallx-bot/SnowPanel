@@ -2,7 +2,10 @@ package service
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
+	"github.com/snowfallx-bot/SnowPanel/backend/internal/apperror"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/dto"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/grpcclient"
 )
@@ -41,6 +44,10 @@ func (s *cronService) CreateTask(
 	ctx context.Context,
 	req dto.CreateCronTaskRequest,
 ) (dto.CreateCronTaskResult, error) {
+	if err := validateCronCommand(req.Command); err != nil {
+		return dto.CreateCronTaskResult{}, err
+	}
+
 	result, err := s.agentClient.CreateCronTask(ctx, grpcclient.CreateCronTaskRequest{
 		Expression: req.Expression,
 		Command:    req.Command,
@@ -59,6 +66,10 @@ func (s *cronService) UpdateTask(
 	id string,
 	req dto.UpdateCronTaskRequest,
 ) (dto.UpdateCronTaskResult, error) {
+	if err := validateCronCommand(req.Command); err != nil {
+		return dto.UpdateCronTaskResult{}, err
+	}
+
 	result, err := s.agentClient.UpdateCronTask(ctx, grpcclient.UpdateCronTaskRequest{
 		ID:         id,
 		Expression: req.Expression,
@@ -111,4 +122,45 @@ func mapCronTask(task grpcclient.CronTask) dto.CronTask {
 		Command:    task.Command,
 		Enabled:    task.Enabled,
 	}
+}
+
+func validateCronCommand(command string) error {
+	normalized := strings.TrimSpace(command)
+	if normalized == "" {
+		return apperror.Wrap(
+			apperror.ErrBadRequest.Code,
+			apperror.ErrBadRequest.HTTPStatus,
+			"invalid cron command template",
+			fmt.Errorf("command is empty"),
+		)
+	}
+
+	blockedTokens := []string{"|", "&", ";", ">", "<", "`", "$", "\\", "(", ")"}
+	for _, token := range blockedTokens {
+		if strings.Contains(normalized, token) {
+			return apperror.Wrap(
+				apperror.ErrBadRequest.Code,
+				apperror.ErrBadRequest.HTTPStatus,
+				"invalid cron command template",
+				fmt.Errorf("blocked shell token '%s' in command", token),
+			)
+		}
+	}
+
+	for _, ch := range normalized {
+		if (ch >= 'a' && ch <= 'z') ||
+			(ch >= 'A' && ch <= 'Z') ||
+			(ch >= '0' && ch <= '9') ||
+			ch == '-' || ch == '_' || ch == '.' || ch == '/' {
+			continue
+		}
+		return apperror.Wrap(
+			apperror.ErrBadRequest.Code,
+			apperror.ErrBadRequest.HTTPStatus,
+			"invalid cron command template",
+			fmt.Errorf("unsupported character '%c' in command", ch),
+		)
+	}
+
+	return nil
 }

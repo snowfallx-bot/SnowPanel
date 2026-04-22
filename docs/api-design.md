@@ -66,6 +66,11 @@ All file paths are validated by the agent safe-root policy.
 - `POST /cron/:id/enable` (`cron.manage`)
 - `POST /cron/:id/disable` (`cron.manage`)
 
+Security constraints:
+- `command` is treated as a command template key, not arbitrary shell text.
+- Only commands configured in `CORE_AGENT_CRON_ALLOWED_COMMANDS` are accepted.
+- Shell metacharacters (`|`, `&`, `;`, `>`, `<`, `` ` ``, `$`, etc.) are rejected.
+
 ## Audit Log
 
 - `GET /audit/logs` (`audit.read`)

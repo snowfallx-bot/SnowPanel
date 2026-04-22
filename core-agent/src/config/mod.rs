@@ -7,6 +7,7 @@ pub struct Config {
     pub max_read_bytes: usize,
     pub max_write_bytes: usize,
     pub service_whitelist: Vec<String>,
+    pub cron_allowed_commands: Vec<String>,
 }
 
 impl Config {
@@ -36,6 +37,12 @@ impl Config {
             .map(|item| item.trim().to_string())
             .filter(|item| !item.is_empty())
             .collect::<Vec<_>>();
+        let cron_allowed_commands = env::var("CORE_AGENT_CRON_ALLOWED_COMMANDS")
+            .unwrap_or_else(|_| "backup,logrotate,cleanup".to_string())
+            .split(',')
+            .map(|item| item.trim().to_string())
+            .filter(|item| !item.is_empty())
+            .collect::<Vec<_>>();
 
         Self {
             host,
@@ -44,6 +51,7 @@ impl Config {
             max_read_bytes,
             max_write_bytes,
             service_whitelist,
+            cron_allowed_commands,
         }
     }
 

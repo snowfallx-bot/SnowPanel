@@ -66,6 +66,11 @@
 - `POST /cron/:id/enable`（`cron.manage`）
 - `POST /cron/:id/disable`（`cron.manage`）
 
+安全约束：
+- `command` 按“命令模板标识”处理，不再接受任意 shell 文本。
+- 仅允许 `CORE_AGENT_CRON_ALLOWED_COMMANDS` 配置中的命令。
+- 会拒绝 shell 元字符（`|`、`&`、`;`、`>`、`<`、`` ` ``、`$` 等）。
+
 ## 审计日志
 
 - `GET /audit/logs`（`audit.read`）

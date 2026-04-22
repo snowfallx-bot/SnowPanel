@@ -26,6 +26,8 @@ Language: **English** | [简体中文](security.zh-CN.md)
 - Service operations are explicit (`start/stop/restart`) and name-validated.
 - Docker operations are explicit (`start/stop/restart/list`) with no shell passthrough.
 - Cron operations use structured model + validation flow.
+- Cron command scheduling is restricted to allowlisted command templates
+  (`CORE_AGENT_CRON_ALLOWED_COMMANDS`) and blocks shell metacharacters.
 
 ## Auditability
 

@@ -16,6 +16,11 @@ Environment:
 - `CORE_AGENT_MAX_READ_BYTES` (default `1048576`)
 - `CORE_AGENT_MAX_WRITE_BYTES` (default `1048576`)
 - `CORE_AGENT_SERVICE_WHITELIST` (comma-separated; empty means no whitelist restriction)
+- `CORE_AGENT_CRON_ALLOWED_COMMANDS` (comma-separated command template allowlist, default `backup,logrotate,cleanup`)
+
+Cron safety policy:
+- `command` must match an allowlisted template exactly.
+- Shell metacharacters (`|`, `&`, `;`, `>`, `<`, `` ` ``, `$`, `\`) are blocked.
 
 ## Implemented gRPC APIs
 
