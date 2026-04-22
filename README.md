@@ -22,7 +22,7 @@ SnowPanel is a Linux panel prototype (similar to BT Panel / 1Panel) built as a m
 - Docker + Docker Compose v2
 - Optional local toolchain for non-container workflow:
   - Go 1.25+
-  - Rust 1.82+
+  - Rust stable toolchain
   - Node.js 22+
 
 ## Quick Start (Docker Compose)
@@ -63,7 +63,7 @@ Notes:
 - `make agent`: run core-agent locally
 - `make frontend`: run frontend locally
 - `make lint`: run baseline static checks
-- `make test`: run backend/core-agent tests and frontend build check
+- `make test`: run backend/core-agent tests and frontend test/build checks
 
 ## Common Issues
 

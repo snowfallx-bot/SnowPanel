@@ -26,4 +26,5 @@ lint:
 test:
 	cd backend && go test ./...
 	cd core-agent && cargo test
+	cd frontend && npm run test
 	cd frontend && npm run build

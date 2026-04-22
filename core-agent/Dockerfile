@@ -1,8 +1,4 @@
-FROM rust:1.82-bookworm
-
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends protobuf-compiler pkg-config libssl-dev ca-certificates \
-  && rm -rf /var/lib/apt/lists/*
+FROM rust:bookworm
 
 WORKDIR /workspace
 

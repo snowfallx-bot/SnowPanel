@@ -4,7 +4,7 @@
 
 - Docker + Docker Compose v2
 - Go 1.25+
-- Rust 1.82+
+- Rust stable toolchain
 - Node.js 22+
 
 ## One-Command Local Stack

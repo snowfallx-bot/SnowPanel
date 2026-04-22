@@ -100,10 +100,13 @@ impl DockerService {
 
         Ok(items
             .into_iter()
-            .map(|item| ImageInfo {
-                id: item.id.unwrap_or_default(),
-                repo_tags: item.repo_tags.unwrap_or_default(),
-                size: item.size.unwrap_or_default() as u64,
+            .map(|item| {
+                let size = if item.size < 0 { 0 } else { item.size as u64 };
+                ImageInfo {
+                    id: item.id,
+                    repo_tags: item.repo_tags,
+                    size,
+                }
             })
             .collect::<Vec<_>>())
     }
@@ -156,12 +159,17 @@ impl DockerService {
             state: details
                 .state
                 .as_ref()
-                .and_then(|state| state.status.clone())
+                .and_then(|state| state.status.clone().map(|status| status.to_string()))
                 .unwrap_or_default(),
             status: details
                 .state
                 .as_ref()
-                .and_then(|state| state.health.as_ref().and_then(|health| health.status.clone()))
+                .and_then(|state| {
+                    state
+                        .health
+                        .as_ref()
+                        .and_then(|health| health.status.clone().map(|status| status.to_string()))
+                })
                 .unwrap_or_default(),
         })
     }
