@@ -36,6 +36,11 @@ Environment:
 - `DockerService.StopContainer`
 - `DockerService.RestartContainer`
 - `DockerService.ListImages`
+- `CronService.ListCronTasks`
+- `CronService.CreateCronTask`
+- `CronService.UpdateCronTask`
+- `CronService.DeleteCronTask`
+- `CronService.SetCronTaskEnabled`
 
 ## Proto Source
 

@@ -13,16 +13,22 @@ use crate::api::proto::service_manager_service_server::{
 };
 use crate::api::proto::docker_service_server::{DockerService as DockerGrpcService, DockerServiceServer};
 use crate::api::proto::system_service_server::{SystemService, SystemServiceServer};
+use crate::api::proto::cron_service_server::{CronService as CronGrpcService, CronServiceServer};
 use crate::api::proto::{
-    CreateDirectoryRequest, CreateDirectoryResponse, DeleteFileRequest, DeleteFileResponse,
-    DockerContainerActionRequest, DockerContainerActionResponse, DockerContainerInfo,
-    DockerImageInfo, Error, GetRealtimeResourceRequest, GetRealtimeResourceResponse,
-    GetSystemOverviewRequest, GetSystemOverviewResponse, HealthCheckRequest, HealthCheckResponse,
+    CreateCronTaskRequest, CreateCronTaskResponse, CreateDirectoryRequest,
+    CreateDirectoryResponse, DeleteCronTaskRequest, DeleteCronTaskResponse, DeleteFileRequest,
+    DeleteFileResponse, DockerContainerActionRequest, DockerContainerActionResponse,
+    DockerContainerInfo, DockerImageInfo, Error, GetRealtimeResourceRequest,
+    GetRealtimeResourceResponse, GetSystemOverviewRequest, GetSystemOverviewResponse,
+    HealthCheckRequest, HealthCheckResponse, ListCronTasksRequest, ListCronTasksResponse,
     ListDockerContainersRequest, ListDockerContainersResponse, ListDockerImagesRequest,
     ListDockerImagesResponse, ListFilesRequest, ListFilesResponse, ListServicesRequest,
     ListServicesResponse, ReadTextFileRequest, ReadTextFileResponse, ServiceActionRequest,
-    ServiceActionResponse, ServiceInfo, WriteTextFileRequest, WriteTextFileResponse,
+    ServiceActionResponse, ServiceInfo, SetCronTaskEnabledRequest, SetCronTaskEnabledResponse,
+    UpdateCronTaskRequest, UpdateCronTaskResponse, WriteTextFileRequest,
+    WriteTextFileResponse, CronTask,
 };
+use crate::cron::service::{CronError, CronService};
 use crate::docker::service::{DockerAction, DockerError, DockerService};
 use crate::file::service::FileService as FileOperatorService;
 use crate::process::systemd_service::{ServiceAction, ServiceError, SystemdServiceManager};
@@ -35,6 +41,7 @@ pub struct GrpcServer {
     file_service: Arc<FileOperatorService>,
     service_manager: Arc<SystemdServiceManager>,
     docker_service: Arc<DockerService>,
+    cron_service: Arc<CronService>,
 }
 
 impl GrpcServer {
@@ -57,6 +64,7 @@ impl GrpcServer {
             )),
             service_manager: Arc::new(SystemdServiceManager::new(service_whitelist)),
             docker_service: Arc::new(docker_service),
+            cron_service: Arc::new(CronService::new()),
         })
     }
 
@@ -80,6 +88,9 @@ impl GrpcServer {
             }))
             .add_service(DockerServiceServer::new(DockerServiceImpl {
                 docker_service: self.docker_service.clone(),
+            }))
+            .add_service(CronServiceServer::new(CronServiceImpl {
+                cron_service: self.cron_service.clone(),
             }))
             .serve(socket_addr)
             .await
@@ -404,5 +415,128 @@ fn to_docker_error(err: DockerError) -> Error {
         code: err.code,
         message: err.message,
         detail: err.detail,
+    }
+}
+
+#[derive(Clone)]
+struct CronServiceImpl {
+    cron_service: Arc<CronService>,
+}
+
+#[tonic::async_trait]
+impl CronGrpcService for CronServiceImpl {
+    async fn list_cron_tasks(
+        &self,
+        _request: Request<ListCronTasksRequest>,
+    ) -> Result<Response<ListCronTasksResponse>, Status> {
+        let result = self.cron_service.list_tasks();
+        match result {
+            Ok(tasks) => Ok(Response::new(ListCronTasksResponse {
+                error: Some(ok_error()),
+                tasks: tasks.into_iter().map(to_proto_cron_task).collect::<Vec<_>>(),
+            })),
+            Err(err) => Ok(Response::new(ListCronTasksResponse {
+                error: Some(to_cron_error(err)),
+                tasks: Vec::new(),
+            })),
+        }
+    }
+
+    async fn create_cron_task(
+        &self,
+        request: Request<CreateCronTaskRequest>,
+    ) -> Result<Response<CreateCronTaskResponse>, Status> {
+        let payload = request.into_inner();
+        let result = self
+            .cron_service
+            .create_task(&payload.expression, &payload.command, payload.enabled);
+
+        match result {
+            Ok(task) => Ok(Response::new(CreateCronTaskResponse {
+                error: Some(ok_error()),
+                task: Some(to_proto_cron_task(task)),
+            })),
+            Err(err) => Ok(Response::new(CreateCronTaskResponse {
+                error: Some(to_cron_error(err)),
+                task: None,
+            })),
+        }
+    }
+
+    async fn update_cron_task(
+        &self,
+        request: Request<UpdateCronTaskRequest>,
+    ) -> Result<Response<UpdateCronTaskResponse>, Status> {
+        let payload = request.into_inner();
+        let result = self.cron_service.update_task(
+            &payload.id,
+            &payload.expression,
+            &payload.command,
+            payload.enabled,
+        );
+
+        match result {
+            Ok(task) => Ok(Response::new(UpdateCronTaskResponse {
+                error: Some(ok_error()),
+                task: Some(to_proto_cron_task(task)),
+            })),
+            Err(err) => Ok(Response::new(UpdateCronTaskResponse {
+                error: Some(to_cron_error(err)),
+                task: None,
+            })),
+        }
+    }
+
+    async fn delete_cron_task(
+        &self,
+        request: Request<DeleteCronTaskRequest>,
+    ) -> Result<Response<DeleteCronTaskResponse>, Status> {
+        let payload = request.into_inner();
+        let result = self.cron_service.delete_task(&payload.id);
+        match result {
+            Ok(()) => Ok(Response::new(DeleteCronTaskResponse {
+                error: Some(ok_error()),
+                id: payload.id,
+            })),
+            Err(err) => Ok(Response::new(DeleteCronTaskResponse {
+                error: Some(to_cron_error(err)),
+                id: String::new(),
+            })),
+        }
+    }
+
+    async fn set_cron_task_enabled(
+        &self,
+        request: Request<SetCronTaskEnabledRequest>,
+    ) -> Result<Response<SetCronTaskEnabledResponse>, Status> {
+        let payload = request.into_inner();
+        let result = self.cron_service.set_enabled(&payload.id, payload.enabled);
+        match result {
+            Ok(task) => Ok(Response::new(SetCronTaskEnabledResponse {
+                error: Some(ok_error()),
+                task: Some(to_proto_cron_task(task)),
+            })),
+            Err(err) => Ok(Response::new(SetCronTaskEnabledResponse {
+                error: Some(to_cron_error(err)),
+                task: None,
+            })),
+        }
+    }
+}
+
+fn to_cron_error(err: CronError) -> Error {
+    Error {
+        code: err.code,
+        message: err.message,
+        detail: err.detail,
+    }
+}
+
+fn to_proto_cron_task(task: crate::cron::service::CronTaskEntity) -> CronTask {
+    CronTask {
+        id: task.id,
+        expression: task.expression,
+        command: task.command,
+        enabled: task.enabled,
     }
 }

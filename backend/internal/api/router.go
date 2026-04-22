@@ -21,6 +21,7 @@ type RouterDeps struct {
 	FileService      service.FileService
 	ServiceManager   service.ServiceManagerService
 	DockerService    service.DockerService
+	CronService      service.CronService
 }
 
 func NewRouter(deps RouterDeps) *gin.Engine {
@@ -38,6 +39,7 @@ func NewRouter(deps RouterDeps) *gin.Engine {
 	fileHandler := handler.NewFileHandler(deps.FileService)
 	serviceHandler := handler.NewServiceHandler(deps.ServiceManager)
 	dockerHandler := handler.NewDockerHandler(deps.DockerService)
+	cronHandler := handler.NewCronHandler(deps.CronService)
 
 	router.GET("/health", healthHandler.Health)
 
@@ -75,6 +77,16 @@ func NewRouter(deps RouterDeps) *gin.Engine {
 				docker.POST("/containers/:id/stop", middleware.RequirePermission("docker.manage"), dockerHandler.StopContainer)
 				docker.POST("/containers/:id/restart", middleware.RequirePermission("docker.manage"), dockerHandler.RestartContainer)
 				docker.GET("/images", middleware.RequirePermission("docker.read"), dockerHandler.ListImages)
+			}
+
+			cron := protected.Group("/cron")
+			{
+				cron.GET("", middleware.RequirePermission("cron.read"), cronHandler.ListTasks)
+				cron.POST("", middleware.RequirePermission("cron.manage"), cronHandler.CreateTask)
+				cron.PUT("/:id", middleware.RequirePermission("cron.manage"), cronHandler.UpdateTask)
+				cron.DELETE("/:id", middleware.RequirePermission("cron.manage"), cronHandler.DeleteTask)
+				cron.POST("/:id/enable", middleware.RequirePermission("cron.manage"), cronHandler.EnableTask)
+				cron.POST("/:id/disable", middleware.RequirePermission("cron.manage"), cronHandler.DisableTask)
 			}
 		}
 	}

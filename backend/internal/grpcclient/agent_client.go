@@ -143,6 +143,55 @@ type ListDockerImagesResult struct {
 	Images []DockerImageInfo
 }
 
+type CronTask struct {
+	ID         string
+	Expression string
+	Command    string
+	Enabled    bool
+}
+
+type ListCronTasksResult struct {
+	Tasks []CronTask
+}
+
+type CreateCronTaskRequest struct {
+	Expression string
+	Command    string
+	Enabled    bool
+}
+
+type CreateCronTaskResult struct {
+	Task CronTask
+}
+
+type UpdateCronTaskRequest struct {
+	ID         string
+	Expression string
+	Command    string
+	Enabled    bool
+}
+
+type UpdateCronTaskResult struct {
+	Task CronTask
+}
+
+type DeleteCronTaskRequest struct {
+	ID string
+}
+
+type DeleteCronTaskResult struct {
+	ID string
+}
+
+type SetCronTaskEnabledRequest struct {
+	ID      string
+	Enabled bool
+}
+
+type SetCronTaskEnabledResult struct {
+	Task CronTask
+}
+
 type AgentClient interface {
 	GetSystemOverview(ctx context.Context) (SystemOverview, error)
 	GetRealtimeResource(ctx context.Context) (RealtimeResource, error)
@@ -160,6 +209,11 @@ type AgentClient interface {
 	StopDockerContainer(ctx context.Context, req DockerContainerActionRequest) (DockerContainerActionResult, error)
 	RestartDockerContainer(ctx context.Context, req DockerContainerActionRequest) (DockerContainerActionResult, error)
 	ListDockerImages(ctx context.Context) (ListDockerImagesResult, error)
+	ListCronTasks(ctx context.Context) (ListCronTasksResult, error)
+	CreateCronTask(ctx context.Context, req CreateCronTaskRequest) (CreateCronTaskResult, error)
+	UpdateCronTask(ctx context.Context, req UpdateCronTaskRequest) (UpdateCronTaskResult, error)
+	DeleteCronTask(ctx context.Context, req DeleteCronTaskRequest) (DeleteCronTaskResult, error)
+	SetCronTaskEnabled(ctx context.Context, req SetCronTaskEnabledRequest) (SetCronTaskEnabledResult, error)
 }
 
 type Client struct {
@@ -281,4 +335,36 @@ func (c *Client) RestartDockerContainer(
 func (c *Client) ListDockerImages(ctx context.Context) (ListDockerImagesResult, error) {
 	_ = ctx
 	return ListDockerImagesResult{}, ErrNotImplemented
+}
+
+func (c *Client) ListCronTasks(ctx context.Context) (ListCronTasksResult, error) {
+	_ = ctx
+	return ListCronTasksResult{}, ErrNotImplemented
+}
+
+func (c *Client) CreateCronTask(ctx context.Context, req CreateCronTaskRequest) (CreateCronTaskResult, error) {
+	_ = ctx
+	_ = req
+	return CreateCronTaskResult{}, ErrNotImplemented
+}
+
+func (c *Client) UpdateCronTask(ctx context.Context, req UpdateCronTaskRequest) (UpdateCronTaskResult, error) {
+	_ = ctx
+	_ = req
+	return UpdateCronTaskResult{}, ErrNotImplemented
+}
+
+func (c *Client) DeleteCronTask(ctx context.Context, req DeleteCronTaskRequest) (DeleteCronTaskResult, error) {
+	_ = ctx
+	_ = req
+	return DeleteCronTaskResult{}, ErrNotImplemented
+}
+
+func (c *Client) SetCronTaskEnabled(
+	ctx context.Context,
+	req SetCronTaskEnabledRequest,
+) (SetCronTaskEnabledResult, error) {
+	_ = ctx
+	_ = req
+	return SetCronTaskEnabledResult{}, ErrNotImplemented
 }

@@ -41,6 +41,7 @@ func main() {
 	fileService := service.NewFileService(agentClient)
 	serviceManager := service.NewServiceManagerService(agentClient)
 	dockerService := service.NewDockerService(agentClient)
+	cronService := service.NewCronService(agentClient)
 
 	server := &http.Server{
 		Addr: cfg.Server.Address(),
@@ -53,6 +54,7 @@ func main() {
 			FileService:      fileService,
 			ServiceManager:   serviceManager,
 			DockerService:    dockerService,
+			CronService:      cronService,
 		}),
 		ReadTimeout:  cfg.Server.ReadTimeout,
 		WriteTimeout: cfg.Server.WriteTimeout,

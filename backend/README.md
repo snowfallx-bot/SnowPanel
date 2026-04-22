@@ -33,6 +33,12 @@ Go backend baseline with:
 - `POST /api/v1/docker/containers/:id/stop` (JWT + `docker.manage`)
 - `POST /api/v1/docker/containers/:id/restart` (JWT + `docker.manage`)
 - `GET /api/v1/docker/images` (JWT + `docker.read`)
+- `GET /api/v1/cron` (JWT + `cron.read`)
+- `POST /api/v1/cron` (JWT + `cron.manage`)
+- `PUT /api/v1/cron/:id` (JWT + `cron.manage`)
+- `DELETE /api/v1/cron/:id` (JWT + `cron.manage`)
+- `POST /api/v1/cron/:id/enable` (JWT + `cron.manage`)
+- `POST /api/v1/cron/:id/disable` (JWT + `cron.manage`)
 
 ## Default Admin Bootstrap
 

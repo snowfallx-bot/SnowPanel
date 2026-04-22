@@ -2,6 +2,7 @@ import { Navigate, createBrowserRouter } from "react-router-dom";
 import { AppLayout } from "@/layouts/AppLayout";
 import { DashboardPage } from "@/pages/DashboardPage";
 import { DockerPage } from "@/pages/DockerPage";
+import { CronPage } from "@/pages/CronPage";
 import { FilesPage } from "@/pages/FilesPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { ServicesPage } from "@/pages/ServicesPage";
@@ -39,6 +40,10 @@ export const router = createBrowserRouter([
           {
             path: "/docker",
             element: <DockerPage />
+          },
+          {
+            path: "/cron",
+            element: <CronPage />
           }
         ]
       }
