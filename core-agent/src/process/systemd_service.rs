@@ -42,9 +42,17 @@ impl SystemdServiceManager {
 
     pub fn list_services(&self, keyword: &str) -> Result<Vec<ManagedService>, ServiceError> {
         let output = Command::new("systemctl")
-            .args(["list-units", "--type=service", "--all", "--no-legend", "--no-pager"])
+            .args([
+                "list-units",
+                "--type=service",
+                "--all",
+                "--no-legend",
+                "--no-pager",
+            ])
             .output()
-            .map_err(|err| ServiceError::io(format!("execute systemctl list-units failed: {err}")))?;
+            .map_err(|err| {
+                ServiceError::io(format!("execute systemctl list-units failed: {err}"))
+            })?;
 
         if !output.status.success() {
             return Err(ServiceError::command_failed(format!(
@@ -131,7 +139,10 @@ impl SystemdServiceManager {
             .args(["is-active", name, "--no-pager"])
             .output()
             .map_err(|err| {
-                ServiceError::io(format!("execute systemctl is-active '{}' failed: {err}", name))
+                ServiceError::io(format!(
+                    "execute systemctl is-active '{}' failed: {err}",
+                    name
+                ))
             })?;
 
         if !output.status.success() {
@@ -204,7 +215,9 @@ impl ServiceError {
 fn normalize_service_name(raw_name: &str) -> Result<String, ServiceError> {
     let trimmed = raw_name.trim();
     if trimmed.is_empty() {
-        return Err(ServiceError::bad_request("service name is empty".to_string()));
+        return Err(ServiceError::bad_request(
+            "service name is empty".to_string(),
+        ));
     }
     if trimmed.len() > 128 {
         return Err(ServiceError::bad_request(
@@ -212,7 +225,9 @@ fn normalize_service_name(raw_name: &str) -> Result<String, ServiceError> {
         ));
     }
 
-    let valid = trimmed.chars().all(|ch| ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' || ch == '.' || ch == '@');
+    let valid = trimmed
+        .chars()
+        .all(|ch| ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' || ch == '.' || ch == '@');
     if !valid {
         return Err(ServiceError::bad_request(format!(
             "service name '{}' contains invalid characters",

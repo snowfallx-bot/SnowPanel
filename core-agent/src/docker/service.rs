@@ -123,12 +123,12 @@ impl DockerService {
                 .docker
                 .start_container::<String>(&id, None)
                 .await
-                .map_err(|err| DockerError::command_failed(format!("start container '{id}' failed: {err}")))?,
-            DockerAction::Stop => self
-                .docker
-                .stop_container(&id, None)
-                .await
-                .map_err(|err| DockerError::command_failed(format!("stop container '{id}' failed: {err}")))?,
+                .map_err(|err| {
+                    DockerError::command_failed(format!("start container '{id}' failed: {err}"))
+                })?,
+            DockerAction::Stop => self.docker.stop_container(&id, None).await.map_err(|err| {
+                DockerError::command_failed(format!("stop container '{id}' failed: {err}"))
+            })?,
             DockerAction::Restart => self
                 .docker
                 .restart_container(&id, None::<RestartContainerOptions>)
@@ -146,7 +146,9 @@ impl DockerService {
             .docker
             .inspect_container(id, None)
             .await
-            .map_err(|err| DockerError::not_found(format!("inspect container '{id}' failed: {err}")))?;
+            .map_err(|err| {
+                DockerError::not_found(format!("inspect container '{id}' failed: {err}"))
+            })?;
 
         Ok(ContainerInfo {
             id: details.id.unwrap_or_else(|| id.to_string()),
@@ -204,7 +206,9 @@ impl DockerError {
 fn normalize_container_id(raw: &str) -> Result<String, DockerError> {
     let trimmed = raw.trim();
     if trimmed.is_empty() {
-        return Err(DockerError::bad_request("container id is empty".to_string()));
+        return Err(DockerError::bad_request(
+            "container id is empty".to_string(),
+        ));
     }
     if trimmed.len() > 128 {
         return Err(DockerError::bad_request(

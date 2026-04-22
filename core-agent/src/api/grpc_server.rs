@@ -6,27 +6,28 @@ use anyhow::{Context, Result};
 use tonic::{Request, Response, Status};
 use tracing::info;
 
+use crate::api::proto::cron_service_server::{CronService as CronGrpcService, CronServiceServer};
+use crate::api::proto::docker_service_server::{
+    DockerService as DockerGrpcService, DockerServiceServer,
+};
 use crate::api::proto::file_service_server::{FileService, FileServiceServer};
 use crate::api::proto::health_service_server::{HealthService, HealthServiceServer};
 use crate::api::proto::service_manager_service_server::{
     ServiceManagerService, ServiceManagerServiceServer,
 };
-use crate::api::proto::docker_service_server::{DockerService as DockerGrpcService, DockerServiceServer};
 use crate::api::proto::system_service_server::{SystemService, SystemServiceServer};
-use crate::api::proto::cron_service_server::{CronService as CronGrpcService, CronServiceServer};
 use crate::api::proto::{
-    CreateCronTaskRequest, CreateCronTaskResponse, CreateDirectoryRequest,
-    CreateDirectoryResponse, DeleteCronTaskRequest, DeleteCronTaskResponse, DeleteFileRequest,
-    DeleteFileResponse, DockerContainerActionRequest, DockerContainerActionResponse,
-    DockerContainerInfo, DockerImageInfo, Error, GetRealtimeResourceRequest,
-    GetRealtimeResourceResponse, GetSystemOverviewRequest, GetSystemOverviewResponse,
-    HealthCheckRequest, HealthCheckResponse, ListCronTasksRequest, ListCronTasksResponse,
-    ListDockerContainersRequest, ListDockerContainersResponse, ListDockerImagesRequest,
-    ListDockerImagesResponse, ListFilesRequest, ListFilesResponse, ListServicesRequest,
-    ListServicesResponse, ReadTextFileRequest, ReadTextFileResponse, ServiceActionRequest,
-    ServiceActionResponse, ServiceInfo, SetCronTaskEnabledRequest, SetCronTaskEnabledResponse,
-    UpdateCronTaskRequest, UpdateCronTaskResponse, WriteTextFileRequest,
-    WriteTextFileResponse, CronTask,
+    CreateCronTaskRequest, CreateCronTaskResponse, CreateDirectoryRequest, CreateDirectoryResponse,
+    CronTask, DeleteCronTaskRequest, DeleteCronTaskResponse, DeleteFileRequest, DeleteFileResponse,
+    DockerContainerActionRequest, DockerContainerActionResponse, DockerContainerInfo,
+    DockerImageInfo, Error, GetRealtimeResourceRequest, GetRealtimeResourceResponse,
+    GetSystemOverviewRequest, GetSystemOverviewResponse, HealthCheckRequest, HealthCheckResponse,
+    ListCronTasksRequest, ListCronTasksResponse, ListDockerContainersRequest,
+    ListDockerContainersResponse, ListDockerImagesRequest, ListDockerImagesResponse,
+    ListFilesRequest, ListFilesResponse, ListServicesRequest, ListServicesResponse,
+    ReadTextFileRequest, ReadTextFileResponse, ServiceActionRequest, ServiceActionResponse,
+    ServiceInfo, SetCronTaskEnabledRequest, SetCronTaskEnabledResponse, UpdateCronTaskRequest,
+    UpdateCronTaskResponse, WriteTextFileRequest, WriteTextFileResponse,
 };
 use crate::cron::service::{CronError, CronService};
 use crate::docker::service::{DockerAction, DockerError, DockerService};
@@ -51,7 +52,10 @@ impl GrpcServer {
         max_write_bytes: usize,
         service_whitelist: Vec<String>,
     ) -> Result<Self> {
-        let roots = allowed_roots.into_iter().map(PathBuf::from).collect::<Vec<_>>();
+        let roots = allowed_roots
+            .into_iter()
+            .map(PathBuf::from)
+            .collect::<Vec<_>>();
         let path_validator = PathValidator::new(roots);
         let docker_service = DockerService::new().context("initialize docker service failed")?;
 
@@ -83,9 +87,11 @@ impl GrpcServer {
             .add_service(FileServiceServer::new(FileServiceImpl {
                 file_service: self.file_service.clone(),
             }))
-            .add_service(ServiceManagerServiceServer::new(ServiceManagerServiceImpl {
-                service_manager: self.service_manager.clone(),
-            }))
+            .add_service(ServiceManagerServiceServer::new(
+                ServiceManagerServiceImpl {
+                    service_manager: self.service_manager.clone(),
+                },
+            ))
             .add_service(DockerServiceServer::new(DockerServiceImpl {
                 docker_service: self.docker_service.clone(),
             }))
@@ -345,14 +351,16 @@ impl DockerGrpcService for DockerServiceImpl {
         &self,
         request: Request<DockerContainerActionRequest>,
     ) -> Result<Response<DockerContainerActionResponse>, Status> {
-        self.handle_action(DockerAction::Start, request.into_inner()).await
+        self.handle_action(DockerAction::Start, request.into_inner())
+            .await
     }
 
     async fn stop_container(
         &self,
         request: Request<DockerContainerActionRequest>,
     ) -> Result<Response<DockerContainerActionResponse>, Status> {
-        self.handle_action(DockerAction::Stop, request.into_inner()).await
+        self.handle_action(DockerAction::Stop, request.into_inner())
+            .await
     }
 
     async fn restart_container(
@@ -433,7 +441,10 @@ impl CronGrpcService for CronServiceImpl {
         match result {
             Ok(tasks) => Ok(Response::new(ListCronTasksResponse {
                 error: Some(ok_error()),
-                tasks: tasks.into_iter().map(to_proto_cron_task).collect::<Vec<_>>(),
+                tasks: tasks
+                    .into_iter()
+                    .map(to_proto_cron_task)
+                    .collect::<Vec<_>>(),
             })),
             Err(err) => Ok(Response::new(ListCronTasksResponse {
                 error: Some(to_cron_error(err)),
@@ -447,9 +458,9 @@ impl CronGrpcService for CronServiceImpl {
         request: Request<CreateCronTaskRequest>,
     ) -> Result<Response<CreateCronTaskResponse>, Status> {
         let payload = request.into_inner();
-        let result = self
-            .cron_service
-            .create_task(&payload.expression, &payload.command, payload.enabled);
+        let result =
+            self.cron_service
+                .create_task(&payload.expression, &payload.command, payload.enabled);
 
         match result {
             Ok(task) => Ok(Response::new(CreateCronTaskResponse {

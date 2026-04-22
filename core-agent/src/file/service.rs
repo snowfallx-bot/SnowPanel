@@ -22,7 +22,11 @@ pub struct FileService {
 }
 
 impl FileService {
-    pub fn new(path_validator: PathValidator, max_read_bytes: usize, max_write_bytes: usize) -> Self {
+    pub fn new(
+        path_validator: PathValidator,
+        max_read_bytes: usize,
+        max_write_bytes: usize,
+    ) -> Self {
         Self {
             path_validator,
             max_read_bytes,
@@ -253,7 +257,10 @@ impl FileService {
         }
 
         let mut options = OpenOptions::new();
-        options.write(true).create(create_if_not_exists).truncate(truncate);
+        options
+            .write(true)
+            .create(create_if_not_exists)
+            .truncate(truncate);
         let mut file = match options.open(&normalized) {
             Ok(value) => value,
             Err(err) => {
@@ -292,7 +299,9 @@ impl FileService {
             FileOperation::Mkdir,
         ) {
             Ok(value) => value,
-            Err(err) => return CreateDirectoryResponse::from_error(file_error_from_validation(err)),
+            Err(err) => {
+                return CreateDirectoryResponse::from_error(file_error_from_validation(err))
+            }
         };
 
         let result = if create_parents {
@@ -481,7 +490,11 @@ fn is_supported_encoding(encoding: &str) -> bool {
 fn is_probably_text_file(path: &Path) -> bool {
     path.extension()
         .and_then(|value| value.to_str())
-        .map(|ext| DEFAULT_TEXT_EXTENSIONS.iter().any(|item| item.eq_ignore_ascii_case(ext)))
+        .map(|ext| {
+            DEFAULT_TEXT_EXTENSIONS
+                .iter()
+                .any(|item| item.eq_ignore_ascii_case(ext))
+        })
         .unwrap_or(false)
 }
 

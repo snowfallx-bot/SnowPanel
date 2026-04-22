@@ -100,7 +100,10 @@ impl CronService {
         let original_len = tasks.len();
         tasks.retain(|task| task.id != id);
         if tasks.len() == original_len {
-            return Err(CronError::not_found(format!("cron task '{}' not found", id)));
+            return Err(CronError::not_found(format!(
+                "cron task '{}' not found",
+                id
+            )));
         }
 
         let next = render_crontab_document(&other_lines, &tasks);
@@ -155,7 +158,9 @@ impl CronError {
 fn validate_expression(raw: &str) -> Result<(), CronError> {
     let expression = raw.trim();
     if expression.is_empty() {
-        return Err(CronError::bad_request("cron expression is empty".to_string()));
+        return Err(CronError::bad_request(
+            "cron expression is empty".to_string(),
+        ));
     }
 
     let parts = expression.split_whitespace().collect::<Vec<_>>();
@@ -166,9 +171,9 @@ fn validate_expression(raw: &str) -> Result<(), CronError> {
     }
 
     for field in parts {
-        let valid = field
-            .chars()
-            .all(|ch| ch.is_ascii_alphanumeric() || ch == '*' || ch == '/' || ch == ',' || ch == '-');
+        let valid = field.chars().all(|ch| {
+            ch.is_ascii_alphanumeric() || ch == '*' || ch == '/' || ch == ',' || ch == '-'
+        });
         if !valid {
             return Err(CronError::bad_request(format!(
                 "cron field '{}' contains unsupported characters",
@@ -254,9 +259,9 @@ fn apply_crontab(content: &str) -> Result<(), CronError> {
         .map_err(|err| CronError::command_failed(format!("spawn 'crontab -' failed: {err}")))?;
 
     if let Some(stdin) = child.stdin.as_mut() {
-        stdin
-            .write_all(content.as_bytes())
-            .map_err(|err| CronError::command_failed(format!("write cron content failed: {err}")))?;
+        stdin.write_all(content.as_bytes()).map_err(|err| {
+            CronError::command_failed(format!("write cron content failed: {err}"))
+        })?;
     }
 
     let output = child
@@ -336,7 +341,12 @@ fn parse_task_line(line: &str, id: &str, enabled_from_header: bool) -> Option<Cr
 
 fn render_crontab_document(other_lines: &[String], tasks: &[CronTaskEntity]) -> String {
     let mut lines = Vec::new();
-    lines.extend(other_lines.iter().filter(|item| !item.trim().is_empty()).cloned());
+    lines.extend(
+        other_lines
+            .iter()
+            .filter(|item| !item.trim().is_empty())
+            .cloned(),
+    );
 
     if !lines.is_empty() {
         lines.push(String::new());

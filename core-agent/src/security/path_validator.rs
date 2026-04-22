@@ -72,7 +72,9 @@ impl PathValidator {
                 ));
             }
 
-            let allowed = allowed_roots.iter().any(|root| normalized.starts_with(root));
+            let allowed = allowed_roots
+                .iter()
+                .any(|root| normalized.starts_with(root));
             if !allowed {
                 return Err(PathValidationError::UnsafePath(format!(
                     "path '{}' is out of allowed roots",
@@ -91,7 +93,10 @@ impl PathValidator {
         Ok(normalized)
     }
 
-    fn resolve_roots(&self, override_roots: &[String]) -> Result<Vec<PathBuf>, PathValidationError> {
+    fn resolve_roots(
+        &self,
+        override_roots: &[String],
+    ) -> Result<Vec<PathBuf>, PathValidationError> {
         let roots = if override_roots.is_empty() {
             self.allowed_roots.clone()
         } else {
@@ -129,7 +134,10 @@ fn normalize_path(path: &Path) -> Result<PathBuf, PathValidationError> {
 }
 
 fn is_dangerous_target(path: &Path, operation: FileOperation) -> bool {
-    if !matches!(operation, FileOperation::Delete | FileOperation::Write | FileOperation::Mkdir) {
+    if !matches!(
+        operation,
+        FileOperation::Delete | FileOperation::Write | FileOperation::Mkdir
+    ) {
         return false;
     }
 

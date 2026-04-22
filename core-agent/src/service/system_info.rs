@@ -141,10 +141,7 @@ mod tests {
             !overview.kernel.trim().is_empty(),
             "kernel version should not be empty"
         );
-        assert!(
-            overview.cpu.is_some(),
-            "cpu information should be returned"
-        );
+        assert!(overview.cpu.is_some(), "cpu information should be returned");
         assert!(
             overview.memory.is_some(),
             "memory information should be returned"
