@@ -40,6 +40,9 @@ Go backend baseline with:
 - `POST /api/v1/cron/:id/enable` (JWT + `cron.manage`)
 - `POST /api/v1/cron/:id/disable` (JWT + `cron.manage`)
 - `GET /api/v1/audit/logs` (JWT + `audit.read`)
+- `GET /api/v1/tasks` (JWT + `tasks.read`)
+- `GET /api/v1/tasks/:id` (JWT + `tasks.read`)
+- `POST /api/v1/tasks/demo` (JWT + `tasks.manage`)
 
 ## Default Admin Bootstrap
 

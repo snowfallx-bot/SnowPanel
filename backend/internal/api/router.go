@@ -23,6 +23,7 @@ type RouterDeps struct {
 	DockerService    service.DockerService
 	CronService      service.CronService
 	AuditService     service.AuditService
+	TaskService      service.TaskService
 }
 
 func NewRouter(deps RouterDeps) *gin.Engine {
@@ -42,6 +43,7 @@ func NewRouter(deps RouterDeps) *gin.Engine {
 	dockerHandler := handler.NewDockerHandler(deps.DockerService, deps.AuditService)
 	cronHandler := handler.NewCronHandler(deps.CronService)
 	auditHandler := handler.NewAuditHandler(deps.AuditService)
+	taskHandler := handler.NewTaskHandler(deps.TaskService, deps.AuditService)
 
 	router.GET("/health", healthHandler.Health)
 
@@ -94,6 +96,13 @@ func NewRouter(deps RouterDeps) *gin.Engine {
 			audit := protected.Group("/audit")
 			{
 				audit.GET("/logs", middleware.RequirePermission("audit.read"), auditHandler.ListLogs)
+			}
+
+			tasks := protected.Group("/tasks")
+			{
+				tasks.GET("", middleware.RequirePermission("tasks.read"), taskHandler.ListTasks)
+				tasks.GET("/:id", middleware.RequirePermission("tasks.read"), taskHandler.GetTaskDetail)
+				tasks.POST("/demo", middleware.RequirePermission("tasks.manage"), taskHandler.CreateDemoTask)
 			}
 		}
 	}

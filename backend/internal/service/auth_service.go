@@ -217,6 +217,8 @@ func defaultPermissionsForUser(username string) []string {
 			"cron.read",
 			"cron.manage",
 			"audit.read",
+			"tasks.read",
+			"tasks.manage",
 		}
 	}
 	return []string{

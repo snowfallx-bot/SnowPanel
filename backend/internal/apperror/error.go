@@ -53,5 +53,6 @@ var (
 	ErrTokenParse         = New(2005, http.StatusUnauthorized, "invalid token")
 	ErrBootstrapAdminFail = New(2006, http.StatusInternalServerError, "failed to bootstrap default admin")
 	ErrPermissionDenied   = New(2007, http.StatusForbidden, "permission denied")
+	ErrTaskNotFound       = New(2008, http.StatusNotFound, "task not found")
 	ErrAgentUnavailable   = New(3001, http.StatusServiceUnavailable, "core agent unavailable")
 )
