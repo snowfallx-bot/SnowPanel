@@ -75,13 +75,7 @@ export function FileTable({
                 <td className="px-4 py-3">{formatTime(entry.modified_at_unix)}</td>
                 <td className="px-4 py-3">
                   <div className="flex gap-2">
-                    <Button
-                      disabled={entry.is_dir}
-                      size="sm"
-                      title={entry.is_dir ? "Directory rename is not supported yet." : undefined}
-                      variant="ghost"
-                      onClick={() => onRename(entry)}
-                    >
+                    <Button size="sm" variant="ghost" onClick={() => onRename(entry)}>
                       Rename
                     </Button>
                     <Button size="sm" variant="ghost" onClick={() => onDelete(entry)}>

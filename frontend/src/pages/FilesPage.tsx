@@ -299,12 +299,7 @@ export function FilesPage() {
   }
 
   async function handleRename(entry: FileEntry) {
-    if (entry.is_dir) {
-      setFeedback("Directory rename is not supported yet.");
-      return;
-    }
-
-    const nextName = window.prompt("Rename file to:", entry.name);
+    const nextName = window.prompt(`Rename ${entry.is_dir ? "directory" : "file"} to:`, entry.name);
     if (!nextName) {
       return;
     }
@@ -313,7 +308,7 @@ export function FilesPage() {
       return;
     }
     if (normalizedName.includes("/") || normalizedName.includes("\\")) {
-      setFeedback("Rename target must be a file name, not a path.");
+      setFeedback("Rename target must be a single name, not a path.");
       return;
     }
 
