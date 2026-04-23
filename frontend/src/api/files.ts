@@ -40,3 +40,11 @@ export function deleteFile(payload: DeleteFilePayload) {
 export function renameFile(payload: RenameFilePayload) {
   return unwrap<RenameFileResult>(http.post("/api/v1/files/rename", payload));
 }
+
+export async function downloadFile(path: string) {
+  const response = await http.get("/api/v1/files/download", {
+    params: { path },
+    responseType: "blob"
+  });
+  return response.data as Blob;
+}

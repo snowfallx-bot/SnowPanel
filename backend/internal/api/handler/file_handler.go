@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"fmt"
 	"net/http"
+	"path"
 
 	"github.com/gin-gonic/gin"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/api/response"
@@ -55,6 +57,47 @@ func (h *FileHandler) ListFiles(c *gin.Context) {
 		ResultMessage:  "list success",
 	})
 	response.OK(c, result)
+}
+
+func (h *FileHandler) DownloadFile(c *gin.Context) {
+	var query dto.DownloadFileQuery
+	if err := c.ShouldBindQuery(&query); err != nil {
+		response.Fail(c, http.StatusBadRequest, apperror.ErrBadRequest.Code, "invalid query params")
+		return
+	}
+
+	result, err := h.fileService.DownloadTextFile(c.Request.Context(), query)
+	if err != nil {
+		recordAudit(c, h.auditService, dto.RecordAuditInput{
+			Module:         "files",
+			Action:         "download",
+			TargetType:     "path",
+			TargetID:       query.Path,
+			RequestSummary: `{"op":"download"}`,
+			Success:        false,
+			ResultCode:     "failed",
+			ResultMessage:  err.Error(),
+		})
+		response.FromError(c, err)
+		return
+	}
+
+	fileName := path.Base(result.Path)
+	c.Header("Content-Type", "text/plain; charset=utf-8")
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%q", fileName))
+	c.Header("X-Content-Type-Options", "nosniff")
+	c.String(http.StatusOK, result.Content)
+
+	recordAudit(c, h.auditService, dto.RecordAuditInput{
+		Module:         "files",
+		Action:         "download",
+		TargetType:     "path",
+		TargetID:       query.Path,
+		RequestSummary: `{"op":"download"}`,
+		Success:        true,
+		ResultCode:     "ok",
+		ResultMessage:  "download success",
+	})
 }
 
 func (h *FileHandler) ReadTextFile(c *gin.Context) {

@@ -33,6 +33,10 @@ type RenameFileRequest struct {
 	TargetPath string `json:"target_path" binding:"required"`
 }
 
+type DownloadFileQuery struct {
+	Path string `form:"path" binding:"required"`
+}
+
 type FileEntry struct {
 	Name       string `json:"name"`
 	Path       string `json:"path"`

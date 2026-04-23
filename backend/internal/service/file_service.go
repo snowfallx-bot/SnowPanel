@@ -18,6 +18,7 @@ type FileService interface {
 	CreateDirectory(ctx context.Context, req dto.CreateDirectoryRequest) (dto.CreateDirectoryResult, error)
 	DeleteFile(ctx context.Context, req dto.DeleteFileRequest) (dto.DeleteFileResult, error)
 	RenameFile(ctx context.Context, req dto.RenameFileRequest) (dto.RenameFileResult, error)
+	DownloadTextFile(ctx context.Context, query dto.DownloadFileQuery) (dto.ReadTextFileResult, error)
 }
 
 type fileService struct {
@@ -112,6 +113,46 @@ func (s *fileService) DeleteFile(ctx context.Context, req dto.DeleteFileRequest)
 	}
 
 	return dto.DeleteFileResult{Path: result.Path}, nil
+}
+
+func (s *fileService) DownloadTextFile(
+	ctx context.Context,
+	query dto.DownloadFileQuery,
+) (dto.ReadTextFileResult, error) {
+	path := strings.TrimSpace(query.Path)
+	if path == "" {
+		return dto.ReadTextFileResult{}, apperror.Wrap(
+			apperror.ErrBadRequest.Code,
+			apperror.ErrBadRequest.HTTPStatus,
+			apperror.ErrBadRequest.Message,
+			fmt.Errorf("path is required"),
+		)
+	}
+
+	result, err := s.agentClient.ReadTextFile(ctx, grpcclient.ReadTextFileRequest{
+		Path:     path,
+		MaxBytes: 8 * 1024 * 1024,
+		Encoding: "utf-8",
+	})
+	if err != nil {
+		return dto.ReadTextFileResult{}, mapAgentError(err)
+	}
+	if result.Truncated {
+		return dto.ReadTextFileResult{}, apperror.Wrap(
+			apperror.ErrBadRequest.Code,
+			apperror.ErrBadRequest.HTTPStatus,
+			apperror.ErrBadRequest.Message,
+			fmt.Errorf("download only supports text files up to 8 MB"),
+		)
+	}
+
+	return dto.ReadTextFileResult{
+		Path:      result.Path,
+		Content:   result.Content,
+		Size:      result.Size,
+		Truncated: result.Truncated,
+		Encoding:  result.Encoding,
+	}, nil
 }
 
 func (s *fileService) RenameFile(

@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createDirectory,
   deleteFile,
+  downloadFile,
   listFiles,
   readTextFile,
   renameFile,
@@ -186,7 +187,7 @@ export function FilesPage() {
 
   const currentPath = listQuery.data?.current_path || path;
   const canLoadMorePreview = selectedTruncated && readMaxBytes < 8 * 1024 * 1024;
-  const canDownload = !selectedBinary && !!selectedPath && !selectedTruncated;
+  const canDownload = !!selectedPath;
 
   function setPreviewLimit(nextMaxBytes: number) {
     setReadMaxBytes(nextMaxBytes);
@@ -268,18 +269,23 @@ export function FilesPage() {
     });
   }
 
-  function handleDownload() {
+  async function handleDownload() {
     if (!canDownload) {
       return;
     }
-    const name = fileNameFromPath(selectedPath) || "download.txt";
-    const blob = new Blob([selectedContent], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = name;
-    anchor.click();
-    URL.revokeObjectURL(url);
+    try {
+      const name = fileNameFromPath(selectedPath) || "download.txt";
+      const blob = await downloadFile(selectedPath);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = name;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      setFeedback(`Downloaded ${name}`);
+    } catch (error) {
+      setFeedback(describeFileApiError(error, "Download failed"));
+    }
   }
 
   async function handleUpload(event: ChangeEvent<HTMLInputElement>) {
@@ -398,33 +404,20 @@ export function FilesPage() {
             binary={selectedBinary}
             canDownload={canDownload}
             content={selectedContent}
-            loading={readMutation.isPending}
+            loading={readMutation.isPending || writeMutation.isPending}
             onDownload={handleDownload}
             onSave={handleSave}
             path={selectedPath || "No file selected"}
             truncated={selectedTruncated}
           />
 
-          {canLoadMorePreview && (
-            <Button
-              onClick={() => {
-                const nextOption = readLimitOptions.find((option) => option.value > readMaxBytes);
-                if (nextOption) {
-                  setPreviewLimit(nextOption.value);
-                }
-              }}
-              size="sm"
-              variant="ghost"
-            >
-              Increase Preview Limit
-            </Button>
-          )}
+          {message ? (
+            <Card>
+              <CardContent className="pt-6 text-sm text-slate-600">{message}</CardContent>
+            </Card>
+          ) : null}
         </div>
       </div>
-
-      {message && (
-        <p className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">{message}</p>
-      )}
     </div>
   );
 }
