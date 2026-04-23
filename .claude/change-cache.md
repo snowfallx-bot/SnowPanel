@@ -12,64 +12,52 @@
 
 ============
 
-本轮按新目标实现了 Ubuntu 25.10 的“一键安装”sh 脚本（Host-Agent 推荐模式），并补齐部署文档入口。
+本轮针对 Ubuntu 25.10 一键安装过程中的 Docker 拉取失败（`descriptor content size of zero`）进行了安装器稳定性修复。
 
 本次核心完成项
 
-1. 一键安装脚本：
-   - 新增 `deploy/one-click/ubuntu-25.10/install.sh`（已设可执行权限）
-   - 关键能力：
-     - OS 检测：默认只允许 `ubuntu 25.10`，支持 `--force-unsupported`
-     - 自动安装依赖：`docker`/`compose plugin`、`rust`、构建依赖
-     - 自动获取/更新仓库到 `/opt/snowpanel`（可参数化）
-     - 自动准备 `.env`，注入 Host-Agent 模式关键变量
-     - 自动生成强 `JWT_SECRET` 与 bootstrap 管理员密码（可显式传参覆盖）
-     - 构建并安装 `core-agent` 到 systemd
-     - 启动 compose（`docker-compose.yml + docker-compose.host-agent.yml`）
-     - 自动做 `/health` 和 `/ready` 验证
-     - 输出并落盘安装凭据到 `/root/.snowpanel/installer-output.env`
-   - 稳定性补强：
-     - 修复 `pipefail` 下随机串生成的潜在 SIGPIPE 失败
-     - Docker apt repo 对 codename 不可用时回退 `noble`
-     - 新增参数防呆校验（必填值、端口范围、安装目录安全）
+1. 一键安装脚本增强（网络抖动容错）：
+   - 更新 `deploy/one-click/ubuntu-25.10/install.sh`
+   - 新增参数：
+     - `--docker-registry-mirror <url>`：配置 Docker daemon 镜像加速
+     - `--docker-pull-retries <n>`：控制镜像拉取与 compose 启动重试次数（默认 3）
+   - 新增能力：
+     - `configure_docker_registry_mirror`：在 `/etc/docker/daemon.json` 合并写入 `registry-mirrors`（保留已有配置；非法 JSON 自动备份并修复）
+     - `run_with_retry`：失败后自动重试，并在重试前重启 Docker daemon
+     - 在 `compose up` 前，先预拉取 `postgres:16-alpine` 与 `redis:7-alpine` 并重试
+     - `docker compose up -d --build` 也纳入重试路径
+   - 新增参数校验：
+     - `DOCKER_PULL_RETRIES` 必须为正整数
+     - `DOCKER_REGISTRY_MIRROR` 必须是 `http://` 或 `https://` URL
 
-2. 文档与入口：
-   - 新增：
-     - `deploy/one-click/ubuntu-25.10/README.md`
-     - `deploy/one-click/ubuntu-25.10/README.zh-CN.md`
-   - 更新：
-     - `deploy/README.md`
-     - `deploy/README.zh-CN.md`
-     - `docs/deployment.md`
-     - `docs/deployment.zh-CN.md`
-   - 已在部署文档中添加“一键安装”入口链接。
+2. 一键安装文档同步：
+   - 更新 `deploy/one-click/ubuntu-25.10/README.md`
+   - 更新 `deploy/one-click/ubuntu-25.10/README.zh-CN.md`
+   - 补充了新参数说明与示例（含 `--docker-pull-retries`）。
 
 本轮修改文件
 
 - `deploy/one-click/ubuntu-25.10/install.sh`
 - `deploy/one-click/ubuntu-25.10/README.md`
 - `deploy/one-click/ubuntu-25.10/README.zh-CN.md`
-- `deploy/README.md`
-- `deploy/README.zh-CN.md`
-- `docs/deployment.md`
-- `docs/deployment.zh-CN.md`
+- `.claude/change-cache.md`
 
 本地验证
 
-- 由于当前执行环境是 Windows，无法在本机直接执行 Ubuntu 25.10 安装脚本做端到端验证（这是当前交付风险点）。
-- 文档链接与脚本内容已静态检查；脚本可执行位已设置。
+- 脚本逻辑与 diff 已检查。
+- 由于当前为 Windows 工作环境，无法本机直接执行 Ubuntu bash 安装脚本做端到端验证。
 
 commit摘要
 
 待提交：
-- `feat(deploy): add ubuntu 25.10 one-click installer`
+- `fix(deploy): harden one-click installer against docker pull failures`
 
 希望接下来的 AI 做什么
 
-1. 在全新 Ubuntu 25.10 VM 上执行端到端冒烟：
-   - `sudo bash deploy/one-click/ubuntu-25.10/install.sh`
-   - 验证 `core-agent` systemd、`docker compose ps`、`/health`、`/ready`
-2. 补一份“交付测试 checklist”文档（安装、登录、核心模块 smoke）。
-3. 根据真实测试日志修复脚本兼容性问题（若出现 Docker 源、Rust 构建或 systemd 权限差异）。
+1. 在 Ubuntu 25.10 测试机验证以下两种场景：
+   - 默认参数安装（无镜像加速）
+   - `--docker-registry-mirror` + `--docker-pull-retries 5` 安装
+2. 若现场网络仍不稳定，补充“推荐镜像加速配置”到部署文档。
+3. 收集安装日志，确认 `core-agent`、`backend /ready`、前端登录全链路通过。
 
 by: gpt-5.4

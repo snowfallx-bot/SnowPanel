@@ -33,13 +33,16 @@ sudo bash install.sh \
   --backend-port 8080 \
   --frontend-port 5173 \
   --admin-username admin \
-  --admin-email admin@example.com
+  --admin-email admin@example.com \
+  --docker-pull-retries 5
 ```
 
 Important options:
 
 - `--admin-password`: set bootstrap admin password explicitly
 - `--jwt-secret`: set JWT secret explicitly
+- `--docker-registry-mirror`: configure Docker daemon mirror (useful in regions with unstable Docker Hub access)
+- `--docker-pull-retries`: retry count for image pull and compose up
 - `--force-unsupported`: allow non-Ubuntu-25.10 hosts (not recommended)
 
 ## Output
@@ -59,4 +62,3 @@ After install:
   - `/etc/snowpanel/core-agent.env`
   - `${INSTALL_DIR}/.env`
 - Restrict network access to backend/core-agent ports before internet exposure.
-

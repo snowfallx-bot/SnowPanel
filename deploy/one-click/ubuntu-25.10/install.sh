@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_VERSION="0.2.0"
+SCRIPT_VERSION="0.3.0"
 SUPPORTED_OS_ID="ubuntu"
 SUPPORTED_VERSION_ID="25.10"
 
@@ -17,6 +17,8 @@ BOOTSTRAP_ADMIN="true"
 JWT_SECRET=""
 ADMIN_PASSWORD=""
 FORCE_UNSUPPORTED="false"
+DOCKER_REGISTRY_MIRROR=""
+DOCKER_PULL_RETRIES="3"
 
 GENERATED_JWT_SECRET="false"
 GENERATED_ADMIN_PASSWORD="false"
@@ -52,6 +54,8 @@ Options:
   --admin-email <email>      Bootstrap admin email
   --admin-password <secret>  Bootstrap admin password (auto-generate if omitted)
   --jwt-secret <secret>      JWT secret (auto-generate if omitted)
+  --docker-registry-mirror <url>  Docker registry mirror URL
+  --docker-pull-retries <n>  Retry count for docker pull/compose up (default: 3)
   --force-unsupported        Allow non-Ubuntu-25.10 systems
   -h, --help                 Show this help
 
@@ -77,6 +81,17 @@ validate_port() {
   fi
   if (( value < 1 || value > 65535 )); then
     die "${name} must be between 1 and 65535: ${value}"
+  fi
+}
+
+validate_positive_int() {
+  local name="$1"
+  local value="$2"
+  if ! [[ "${value}" =~ ^[0-9]+$ ]]; then
+    die "${name} must be a positive integer: ${value}"
+  fi
+  if (( value < 1 )); then
+    die "${name} must be >= 1: ${value}"
   fi
 }
 
@@ -132,6 +147,16 @@ while [[ $# -gt 0 ]]; do
       JWT_SECRET="${2:-}"
       shift 2
       ;;
+    --docker-registry-mirror)
+      require_option_value "$1" "${2:-}"
+      DOCKER_REGISTRY_MIRROR="${2:-}"
+      shift 2
+      ;;
+    --docker-pull-retries)
+      require_option_value "$1" "${2:-}"
+      DOCKER_PULL_RETRIES="${2:-}"
+      shift 2
+      ;;
     --force-unsupported)
       FORCE_UNSUPPORTED="true"
       shift 1
@@ -155,6 +180,10 @@ fi
 
 validate_port "BACKEND_PORT" "${BACKEND_PORT}"
 validate_port "FRONTEND_PORT" "${FRONTEND_PORT}"
+validate_positive_int "DOCKER_PULL_RETRIES" "${DOCKER_PULL_RETRIES}"
+if [[ -n "${DOCKER_REGISTRY_MIRROR}" ]] && ! [[ "${DOCKER_REGISTRY_MIRROR}" =~ ^https?:// ]]; then
+  die "DOCKER_REGISTRY_MIRROR must start with http:// or https://"
+fi
 
 if [[ "${EUID}" -ne 0 ]]; then
   die "please run as root (example: sudo bash install.sh)"
@@ -184,6 +213,59 @@ fi
 
 apt_install() {
   DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "$@"
+}
+
+configure_docker_registry_mirror() {
+  local mirror="$1"
+  if [[ -z "${mirror}" ]]; then
+    return 0
+  fi
+
+  log "configuring docker registry mirror: ${mirror}"
+  install -d -m 755 /etc/docker
+  local daemon_file="/etc/docker/daemon.json"
+  local tmp_file
+  tmp_file="$(mktemp)"
+
+  if [[ -f "${daemon_file}" ]]; then
+    if jq empty "${daemon_file}" >/dev/null 2>&1; then
+      jq --arg mirror "${mirror}" \
+        '.["registry-mirrors"] = ((.["registry-mirrors"] // []) + [$mirror] | unique)' \
+        "${daemon_file}" >"${tmp_file}"
+    else
+      warn "existing ${daemon_file} is invalid json; backup and replace with mirror config"
+      cp "${daemon_file}" "${daemon_file}.bak.$(date +%s)"
+      jq -n --arg mirror "${mirror}" '{"registry-mirrors": [$mirror]}' >"${tmp_file}"
+    fi
+  else
+    jq -n --arg mirror "${mirror}" '{"registry-mirrors": [$mirror]}' >"${tmp_file}"
+  fi
+
+  install -m 644 "${tmp_file}" "${daemon_file}"
+  rm -f "${tmp_file}"
+  systemctl restart docker
+}
+
+run_with_retry() {
+  local retries="$1"
+  local description="$2"
+  shift 2
+
+  local attempt=1
+  while (( attempt <= retries )); do
+    if "$@"; then
+      return 0
+    fi
+    warn "${description} failed (attempt ${attempt}/${retries})"
+    if (( attempt < retries )); then
+      warn "restarting docker daemon before retry"
+      systemctl restart docker || true
+      sleep $((attempt * 3))
+    fi
+    attempt=$((attempt + 1))
+  done
+
+  return 1
 }
 
 set_env_file_value() {
@@ -247,6 +329,7 @@ EOF
 fi
 
 systemctl enable --now docker
+configure_docker_registry_mirror "${DOCKER_REGISTRY_MIRROR}"
 
 if ! command -v cargo >/dev/null 2>&1; then
   log "installing rust toolchain (minimal)"
@@ -324,7 +407,15 @@ systemctl is-active --quiet core-agent || die "core-agent service is not active"
 
 log "starting docker compose stack (host-agent mode)"
 pushd "${INSTALL_DIR}" >/dev/null
-docker compose -f docker-compose.yml -f docker-compose.host-agent.yml up -d --build
+log "pre-pulling runtime images (with retries)"
+run_with_retry "${DOCKER_PULL_RETRIES}" "docker pull postgres:16-alpine" docker pull postgres:16-alpine \
+  || die "failed to pull postgres:16-alpine after ${DOCKER_PULL_RETRIES} attempts"
+run_with_retry "${DOCKER_PULL_RETRIES}" "docker pull redis:7-alpine" docker pull redis:7-alpine \
+  || die "failed to pull redis:7-alpine after ${DOCKER_PULL_RETRIES} attempts"
+
+run_with_retry "${DOCKER_PULL_RETRIES}" "docker compose up" \
+  docker compose -f docker-compose.yml -f docker-compose.host-agent.yml up -d --build \
+  || die "docker compose up failed after ${DOCKER_PULL_RETRIES} attempts"
 popd >/dev/null
 
 wait_http() {

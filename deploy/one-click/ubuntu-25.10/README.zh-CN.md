@@ -33,13 +33,16 @@ sudo bash install.sh \
   --backend-port 8080 \
   --frontend-port 5173 \
   --admin-username admin \
-  --admin-email admin@example.com
+  --admin-email admin@example.com \
+  --docker-pull-retries 5
 ```
 
 关键参数：
 
 - `--admin-password`：显式指定初始管理员密码
 - `--jwt-secret`：显式指定 JWT 密钥
+- `--docker-registry-mirror`：配置 Docker 镜像加速地址（Docker Hub 不稳定地区建议使用）
+- `--docker-pull-retries`：镜像拉取与 compose 启动的重试次数
 - `--force-unsupported`：允许在非 Ubuntu 25.10 上继续（不推荐）
 
 ## 输出结果
@@ -59,4 +62,3 @@ sudo bash install.sh \
   - `/etc/snowpanel/core-agent.env`
   - `${INSTALL_DIR}/.env`
 - 对外开放前请先限制 backend/core-agent 端口访问范围。
-
