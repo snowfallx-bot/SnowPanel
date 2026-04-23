@@ -25,6 +25,7 @@ Language: **English** | [简体中文](api-design.zh-CN.md)
   - request: `{ "username": "...", "password": "..." }`
   - response: access token + user profile + permission list
   - note: bootstrap admin first login may return `user.must_change_password = true`
+  - security note: too many failed attempts for the same `username + client IP` are temporarily locked with `429`
 - `GET /auth/me` (protected)
   - response: current user profile
 - `POST /auth/change-password` (protected)

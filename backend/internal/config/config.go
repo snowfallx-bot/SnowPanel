@@ -45,6 +45,9 @@ type AuthConfig struct {
 	JWTSecret            string
 	JWTIssuer            string
 	JWTExpire            time.Duration
+	LoginMaxFailures     int
+	LoginFailureWindow   time.Duration
+	LoginLockDuration    time.Duration
 	BootstrapAdmin       bool
 	DefaultAdminUsername string
 	DefaultAdminEmail    string
@@ -72,6 +75,9 @@ func Load() Config {
 	v.SetDefault("JWT_SECRET", "")
 	v.SetDefault("JWT_ISSUER", "snowpanel-backend")
 	v.SetDefault("JWT_EXPIRE", "24h")
+	v.SetDefault("LOGIN_MAX_FAILURES", 5)
+	v.SetDefault("LOGIN_FAILURE_WINDOW", "15m")
+	v.SetDefault("LOGIN_LOCK_DURATION", "15m")
 	v.SetDefault("BOOTSTRAP_ADMIN", true)
 	v.SetDefault("DEFAULT_ADMIN_USERNAME", "admin")
 	v.SetDefault("DEFAULT_ADMIN_EMAIL", "admin@snowpanel.local")
@@ -130,6 +136,9 @@ func Load() Config {
 			JWTSecret:            jwtSecret,
 			JWTIssuer:            v.GetString("JWT_ISSUER"),
 			JWTExpire:            mustDuration(v.GetString("JWT_EXPIRE"), 24*time.Hour),
+			LoginMaxFailures:     v.GetInt("LOGIN_MAX_FAILURES"),
+			LoginFailureWindow:   mustDuration(v.GetString("LOGIN_FAILURE_WINDOW"), 15*time.Minute),
+			LoginLockDuration:    mustDuration(v.GetString("LOGIN_LOCK_DURATION"), 15*time.Minute),
 			BootstrapAdmin:       v.GetBool("BOOTSTRAP_ADMIN"),
 			DefaultAdminUsername: v.GetString("DEFAULT_ADMIN_USERNAME"),
 			DefaultAdminEmail:    v.GetString("DEFAULT_ADMIN_EMAIL"),

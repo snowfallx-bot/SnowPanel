@@ -25,6 +25,7 @@
   - 请求：`{ "username": "...", "password": "..." }`
   - 响应：访问令牌 + 用户信息 + 权限列表
   - 说明：若为 bootstrap 管理员首次登录，可能返回 `user.must_change_password = true`
+  - 安全说明：同一 `username + client IP` 连续失败过多会被临时锁定并返回 `429`
 - `GET /auth/me`（受保护）
   - 响应：当前用户信息
 - `POST /auth/change-password`（受保护）

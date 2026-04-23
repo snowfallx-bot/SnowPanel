@@ -8,18 +8,28 @@ import (
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/apperror"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/dto"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/middleware"
+	"github.com/snowfallx-bot/SnowPanel/backend/internal/security"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/service"
 )
 
 type AuthHandler struct {
-	authService  service.AuthService
-	auditService service.AuditService
+	authService   service.AuthService
+	auditService  service.AuditService
+	loginAttempts *security.LoginAttemptLimiter
 }
 
-func NewAuthHandler(authService service.AuthService, auditService service.AuditService) *AuthHandler {
+func NewAuthHandler(
+	authService service.AuthService,
+	auditService service.AuditService,
+	loginAttempts *security.LoginAttemptLimiter,
+) *AuthHandler {
+	if loginAttempts == nil {
+		loginAttempts = security.NewLoginAttemptLimiter(security.LoginAttemptLimiterOptions{})
+	}
 	return &AuthHandler{
-		authService:  authService,
-		auditService: auditService,
+		authService:   authService,
+		auditService:  auditService,
+		loginAttempts: loginAttempts,
 	}
 }
 
@@ -29,9 +39,30 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		response.Fail(c, http.StatusBadRequest, apperror.ErrBadRequest.Code, "invalid login payload")
 		return
 	}
+	attemptKey := security.BuildLoginAttemptKey(req.Username, c.ClientIP())
+	if err := h.loginAttempts.Allow(attemptKey); err != nil {
+		recordAudit(c, h.auditService, dto.RecordAuditInput{
+			Username:       req.Username,
+			Module:         "auth",
+			Action:         "login",
+			TargetType:     "user",
+			TargetID:       req.Username,
+			RequestSummary: `{"endpoint":"/api/v1/auth/login"}`,
+			Success:        false,
+			ResultCode:     "rate_limited",
+			ResultMessage:  err.Error(),
+		})
+		response.FromError(c, err)
+		return
+	}
 
 	resp, err := h.authService.Login(c.Request.Context(), req)
 	if err != nil {
+		appErr, ok := apperror.As(err)
+		if ok && (appErr.Code == apperror.ErrInvalidCredential.Code || appErr.Code == apperror.ErrUserDisabled.Code) {
+			h.loginAttempts.RecordFailure(attemptKey)
+		}
+
 		recordAudit(c, h.auditService, dto.RecordAuditInput{
 			Username:       req.Username,
 			Module:         "auth",
@@ -46,6 +77,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		response.FromError(c, err)
 		return
 	}
+	h.loginAttempts.RecordSuccess(attemptKey)
 
 	recordAudit(c, h.auditService, dto.RecordAuditInput{
 		Username:       req.Username,

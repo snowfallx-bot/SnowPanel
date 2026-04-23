@@ -12,6 +12,7 @@ import (
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/grpcclient"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/logger"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/repository"
+	"github.com/snowfallx-bot/SnowPanel/backend/internal/security"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/service"
 )
 
@@ -50,6 +51,11 @@ func main() {
 	dockerService := service.NewDockerService(agentClient)
 	cronService := service.NewCronService(agentClient)
 	taskService := service.NewTaskService(taskRepo, dockerService, serviceManager)
+	loginAttempts := security.NewLoginAttemptLimiter(security.LoginAttemptLimiterOptions{
+		MaxFailures:   cfg.Auth.LoginMaxFailures,
+		FailureWindow: cfg.Auth.LoginFailureWindow,
+		LockDuration:  cfg.Auth.LoginLockDuration,
+	})
 
 	server := &http.Server{
 		Addr: cfg.Server.Address(),
@@ -65,6 +71,7 @@ func main() {
 			CronService:      cronService,
 			AuditService:     auditService,
 			TaskService:      taskService,
+			LoginAttempts:    loginAttempts,
 		}),
 		ReadTimeout:  cfg.Server.ReadTimeout,
 		WriteTimeout: cfg.Server.WriteTimeout,

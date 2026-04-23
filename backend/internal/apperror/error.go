@@ -57,5 +57,6 @@ var (
 	ErrPasswordChangeNeed = New(2009, http.StatusForbidden, "password change required")
 	ErrSessionExpired     = New(2010, http.StatusUnauthorized, "session expired")
 	ErrUserDisabled       = New(2011, http.StatusForbidden, "user is disabled")
+	ErrLoginRateLimited   = New(2012, http.StatusTooManyRequests, "too many login attempts, try later")
 	ErrAgentUnavailable   = New(3001, http.StatusServiceUnavailable, "core agent unavailable")
 )

@@ -7,6 +7,7 @@ import (
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/api/handler"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/grpcclient"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/middleware"
+	"github.com/snowfallx-bot/SnowPanel/backend/internal/security"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/service"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -24,6 +25,7 @@ type RouterDeps struct {
 	CronService      service.CronService
 	AuditService     service.AuditService
 	TaskService      service.TaskService
+	LoginAttempts    *security.LoginAttemptLimiter
 }
 
 func NewRouter(deps RouterDeps) *gin.Engine {
@@ -36,7 +38,7 @@ func NewRouter(deps RouterDeps) *gin.Engine {
 
 	healthHandler := handler.NewHealthHandler(deps.DB)
 	systemHandler := handler.NewSystemHandler(time.Now)
-	authHandler := handler.NewAuthHandler(deps.AuthService, deps.AuditService)
+	authHandler := handler.NewAuthHandler(deps.AuthService, deps.AuditService, deps.LoginAttempts)
 	dashboardHandler := handler.NewDashboardHandler(deps.DashboardService)
 	fileHandler := handler.NewFileHandler(deps.FileService, deps.AuditService)
 	serviceHandler := handler.NewServiceHandler(deps.ServiceManager, deps.AuditService)
