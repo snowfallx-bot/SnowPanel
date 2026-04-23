@@ -25,11 +25,15 @@
 4. 更新 API 文档（中/英）：
    - 明确 `GET /files/download`
    - 明确当前下载能力边界（UTF-8 文本，8MB，上游仍非二进制分块链路）
+5. 追加 backend gRPC 集成测试覆盖：
+   - 新增 `TestFileService_DownloadTextFileViaGRPC`
+   - fake agent 补充 `ReadTextFile` 响应，覆盖 backend->grpcclient->agent 的下载调用链
 
 本轮修改文件
 
 backend/internal/api/handler/file_handler_test.go
 backend/internal/service/file_service_test.go
+backend/internal/service/agent_integration_test.go
 frontend/src/api/files.ts
 docs/api-design.md
 docs/api-design.zh-CN.md
@@ -41,7 +45,8 @@ docs/api-design.zh-CN.md
 
 commit摘要
 
-待提交：`test(files): cover download endpoint and improve download error handling`
+已提交：`test(files): cover download endpoint and improve error handling`（`6095883`）
+待提交：`test(files): add grpc integration coverage for download path`
 
 希望接下来的 AI 做什么
 

@@ -54,6 +54,28 @@ func TestFileService_ListFilesViaGRPC(t *testing.T) {
 	}
 }
 
+func TestFileService_DownloadTextFileViaGRPC(t *testing.T) {
+	target := startFakeAgentServer(t)
+	client := grpcclient.New(target, 2*time.Second)
+	service := NewFileService(client)
+
+	result, err := service.DownloadTextFile(context.Background(), dto.DownloadFileQuery{
+		Path: "/tmp/demo.txt",
+	})
+	if err != nil {
+		t.Fatalf("DownloadTextFile() error = %v", err)
+	}
+	if result.Path != "/tmp/demo.txt" {
+		t.Fatalf("unexpected path: %s", result.Path)
+	}
+	if result.Content != "hello from fake agent" {
+		t.Fatalf("unexpected content: %s", result.Content)
+	}
+	if result.Encoding != "utf-8" {
+		t.Fatalf("unexpected encoding: %s", result.Encoding)
+	}
+}
+
 func TestServiceManagerService_ListServicesViaGRPC(t *testing.T) {
 	target := startFakeAgentServer(t)
 	client := grpcclient.New(target, 2*time.Second)
@@ -217,6 +239,20 @@ func (s *fakeFileService) ListFiles(
 				ModifiedAtUnix: 1710000000,
 			},
 		},
+	}, nil
+}
+
+func (s *fakeFileService) ReadTextFile(
+	context.Context,
+	*agentv1.ReadTextFileRequest,
+) (*agentv1.ReadTextFileResponse, error) {
+	return &agentv1.ReadTextFileResponse{
+		Error:     okError(),
+		Path:      "/tmp/demo.txt",
+		Content:   "hello from fake agent",
+		Size:      21,
+		Truncated: false,
+		Encoding:  "utf-8",
 	}, nil
 }
 
