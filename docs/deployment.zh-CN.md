@@ -74,7 +74,8 @@ PostgreSQL 首次初始化时，会加载以下 schema SQL：
 - 登录防爆破模式与阈值（`LOGIN_ATTEMPT_STORE`、`LOGIN_ATTEMPT_REDIS_PREFIX`、`LOGIN_*`）
 - core-agent 安全根目录与读写大小限制
 - PostgreSQL + Redis 连接参数（`REDIS_HOST`、`REDIS_PORT`、`REDIS_PASSWORD`、`REDIS_DB`）
-- frontend API 基地址（`VITE_API_BASE_URL`）
+- frontend API 基地址（`VITE_API_BASE_URL`，推荐留空并走同源请求）
+- frontend 的 Vite 代理目标（`VITE_API_PROXY_TARGET`，Docker 下默认指向 backend 服务）
 - 当 `APP_ENV=production` 时，若 `JWT_SECRET` 为空或过弱，启动会 fail fast
 - 当 `APP_ENV=production` 且 `BOOTSTRAP_ADMIN=true` 时，`DEFAULT_ADMIN_PASSWORD` 必须为强密码
 

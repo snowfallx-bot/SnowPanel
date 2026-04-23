@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_VERSION="0.5.0"
+SCRIPT_VERSION="0.5.2"
 SUPPORTED_OS_ID="ubuntu"
 SUPPORTED_VERSION_ID="25.10"
 
@@ -395,6 +395,10 @@ set_env_file_value() {
   fi
 }
 
+compose_stack() {
+  docker compose -f docker-compose.yml -f docker-compose.host-agent.yml "$@"
+}
+
 generate_token() {
   local length="$1"
   set +o pipefail
@@ -497,7 +501,8 @@ set_env_file_value "${ENV_FILE}" "DEFAULT_ADMIN_USERNAME" "${ADMIN_USERNAME}"
 set_env_file_value "${ENV_FILE}" "DEFAULT_ADMIN_EMAIL" "${ADMIN_EMAIL}"
 set_env_file_value "${ENV_FILE}" "DEFAULT_ADMIN_PASSWORD" "${ADMIN_PASSWORD}"
 set_env_file_value "${ENV_FILE}" "LOGIN_ATTEMPT_STORE" "redis"
-set_env_file_value "${ENV_FILE}" "VITE_API_BASE_URL" "http://127.0.0.1:${BACKEND_PORT}"
+set_env_file_value "${ENV_FILE}" "VITE_API_BASE_URL" ""
+set_env_file_value "${ENV_FILE}" "VITE_API_PROXY_TARGET" "http://backend:8080"
 
 log "building and installing host core-agent service"
 pushd "${INSTALL_DIR}/core-agent" >/dev/null
@@ -533,9 +538,24 @@ set_env_file_value "${ENV_FILE}" "REDIS_IMAGE" "${REDIS_IMAGE}"
 log "selected runtime images: POSTGRES_IMAGE=${POSTGRES_IMAGE}, REDIS_IMAGE=${REDIS_IMAGE}"
 
 run_with_retry "${DOCKER_PULL_RETRIES}" "docker compose up" \
-  docker compose -f docker-compose.yml -f docker-compose.host-agent.yml up -d --build \
+  compose_stack up -d --build \
   || die "docker compose up failed after ${DOCKER_PULL_RETRIES} attempts"
 popd >/dev/null
+
+apply_postgres_schema() {
+  log "ensuring postgres baseline schema is applied"
+  pushd "${INSTALL_DIR}" >/dev/null
+  if ! compose_stack exec -T postgres \
+    sh -lc 'psql -v ON_ERROR_STOP=1 -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" -f /docker-entrypoint-initdb.d/0001_init_schema.sql'; then
+    popd >/dev/null
+    die "failed to apply postgres baseline schema"
+  fi
+  if ! compose_stack up -d backend frontend >/dev/null; then
+    popd >/dev/null
+    die "failed to restart application services after schema sync"
+  fi
+  popd >/dev/null
+}
 
 wait_http() {
   local url="$1"
@@ -543,7 +563,7 @@ wait_http() {
   local interval_seconds="${3:-2}"
   local attempt=1
   while (( attempt <= max_attempts )); do
-    if curl -fsS "${url}" >/dev/null 2>&1; then
+    if curl --connect-timeout 2 --max-time 5 -fsS "${url}" >/dev/null 2>&1; then
       return 0
     fi
     sleep "${interval_seconds}"
@@ -552,9 +572,51 @@ wait_http() {
   return 1
 }
 
+collect_runtime_diagnostics() {
+  local url="${1:-}"
+  warn "collecting runtime diagnostics"
+
+  pushd "${INSTALL_DIR}" >/dev/null
+  warn "docker compose ps"
+  compose_stack ps || true
+  warn "backend container state"
+  docker inspect \
+    --format 'status={{.State.Status}} running={{.State.Running}} restarting={{.State.Restarting}} exit_code={{.State.ExitCode}} error={{.State.Error}} started_at={{.State.StartedAt}} finished_at={{.State.FinishedAt}}' \
+    snowpanel-backend 2>&1 || true
+  warn "backend logs (tail 200)"
+  compose_stack logs --tail=200 backend || true
+  popd >/dev/null || true
+
+  if [[ -n "${url}" ]]; then
+    warn "curl probe for ${url}"
+    curl -sv --connect-timeout 2 --max-time 5 "${url}" >/dev/null || true
+  fi
+
+  warn "core-agent service status"
+  systemctl status core-agent --no-pager || true
+  warn "recent core-agent logs"
+  journalctl -u core-agent -n 100 --no-pager || true
+}
+
+verify_http_or_report() {
+  local url="$1"
+  local error_message="$2"
+  local max_attempts="${3:-60}"
+  local interval_seconds="${4:-2}"
+
+  if wait_http "${url}" "${max_attempts}" "${interval_seconds}"; then
+    return 0
+  fi
+
+  collect_runtime_diagnostics "${url}"
+  die "${error_message}"
+}
+
+apply_postgres_schema
+
 log "verifying backend health"
-wait_http "http://127.0.0.1:${BACKEND_PORT}/health" 60 2 || die "backend /health check failed"
-wait_http "http://127.0.0.1:${BACKEND_PORT}/ready" 60 2 || die "backend /ready check failed"
+verify_http_or_report "http://127.0.0.1:${BACKEND_PORT}/health" "backend /health check failed" 60 2
+verify_http_or_report "http://127.0.0.1:${BACKEND_PORT}/ready" "backend /ready check failed" 60 2
 
 CREDENTIAL_DIR="/root/.snowpanel"
 CREDENTIAL_FILE="${CREDENTIAL_DIR}/installer-output.env"

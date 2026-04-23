@@ -55,6 +55,8 @@ sudo bash install.sh --postgres-image postgres:16 --redis-image redis:7
 
 The installer also includes an automatic fallback: if both primary and fallback pulls fail and Docker has `registry-mirrors` configured, it will temporarily remove mirrors and retry pulls once.
 
+On every install run, the script also re-applies the baseline PostgreSQL schema in an idempotent way after `postgres` becomes healthy. This helps repeated installs and hosts that already have a persisted `postgres_data` volume.
+
 ## Output
 
 Installer writes generated credentials to:
@@ -66,9 +68,12 @@ After install:
 - Frontend: `http://127.0.0.1:<FRONTEND_PORT>`
 - Backend health: `http://127.0.0.1:<BACKEND_PORT>/health`
 
+The installer configures frontend API access in same-origin mode by default and lets the Vite container proxy `/api`, `/health`, and `/ready` to the backend service. This avoids remote-browser login failures caused by `127.0.0.1` pointing to the user's own machine.
+
 ## Notes
 
 - For production tests, review and tighten:
   - `/etc/snowpanel/core-agent.env`
   - `${INSTALL_DIR}/.env`
+- If backend health verification fails, the installer now prints `docker compose ps`, backend logs, and `core-agent` status/logs automatically before exiting.
 - Restrict network access to backend/core-agent ports before internet exposure.

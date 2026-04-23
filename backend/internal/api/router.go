@@ -31,6 +31,7 @@ type RouterDeps struct {
 func NewRouter(deps RouterDeps) *gin.Engine {
 	router := gin.New()
 	router.Use(
+		middleware.CORS(),
 		middleware.RequestID(),
 		middleware.Recover(deps.Logger),
 		middleware.AccessLog(deps.Logger),

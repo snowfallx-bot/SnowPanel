@@ -1,4 +1,4 @@
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
     id BIGSERIAL PRIMARY KEY,
     username VARCHAR(64) NOT NULL UNIQUE,
     email VARCHAR(255) UNIQUE,
@@ -10,10 +10,10 @@ CREATE TABLE users (
     deleted_at TIMESTAMPTZ
 );
 
-CREATE INDEX idx_users_status ON users (status);
-CREATE INDEX idx_users_last_login_at ON users (last_login_at);
+CREATE INDEX IF NOT EXISTS idx_users_status ON users (status);
+CREATE INDEX IF NOT EXISTS idx_users_last_login_at ON users (last_login_at);
 
-CREATE TABLE roles (
+CREATE TABLE IF NOT EXISTS roles (
     id BIGSERIAL PRIMARY KEY,
     name VARCHAR(64) NOT NULL UNIQUE,
     slug VARCHAR(64) NOT NULL UNIQUE,
@@ -22,7 +22,7 @@ CREATE TABLE roles (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE permissions (
+CREATE TABLE IF NOT EXISTS permissions (
     id BIGSERIAL PRIMARY KEY,
     name VARCHAR(128) NOT NULL UNIQUE,
     description TEXT NOT NULL DEFAULT '',
@@ -30,25 +30,25 @@ CREATE TABLE permissions (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE role_permissions (
+CREATE TABLE IF NOT EXISTS role_permissions (
     role_id BIGINT NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
     permission_id BIGINT NOT NULL REFERENCES permissions(id) ON DELETE CASCADE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (role_id, permission_id)
 );
 
-CREATE INDEX idx_role_permissions_permission_id ON role_permissions (permission_id);
+CREATE INDEX IF NOT EXISTS idx_role_permissions_permission_id ON role_permissions (permission_id);
 
-CREATE TABLE user_roles (
+CREATE TABLE IF NOT EXISTS user_roles (
     user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     role_id BIGINT NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (user_id, role_id)
 );
 
-CREATE INDEX idx_user_roles_role_id ON user_roles (role_id);
+CREATE INDEX IF NOT EXISTS idx_user_roles_role_id ON user_roles (role_id);
 
-CREATE TABLE audit_logs (
+CREATE TABLE IF NOT EXISTS audit_logs (
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
     username VARCHAR(64) NOT NULL DEFAULT '',
@@ -64,11 +64,11 @@ CREATE TABLE audit_logs (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_audit_logs_user_id ON audit_logs (user_id);
-CREATE INDEX idx_audit_logs_created_at ON audit_logs (created_at DESC);
-CREATE INDEX idx_audit_logs_module_action ON audit_logs (module, action);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON audit_logs (user_id);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_module_action ON audit_logs (module, action);
 
-CREATE TABLE system_settings (
+CREATE TABLE IF NOT EXISTS system_settings (
     id BIGSERIAL PRIMARY KEY,
     key VARCHAR(128) NOT NULL UNIQUE,
     value TEXT NOT NULL,
@@ -80,7 +80,7 @@ CREATE TABLE system_settings (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE hosts (
+CREATE TABLE IF NOT EXISTS hosts (
     id BIGSERIAL PRIMARY KEY,
     name VARCHAR(128) NOT NULL,
     address VARCHAR(255) NOT NULL,
@@ -93,10 +93,10 @@ CREATE TABLE hosts (
     UNIQUE (address, port)
 );
 
-CREATE INDEX idx_hosts_status ON hosts (status);
-CREATE INDEX idx_hosts_last_seen_at ON hosts (last_seen_at);
+CREATE INDEX IF NOT EXISTS idx_hosts_status ON hosts (status);
+CREATE INDEX IF NOT EXISTS idx_hosts_last_seen_at ON hosts (last_seen_at);
 
-CREATE TABLE tasks (
+CREATE TABLE IF NOT EXISTS tasks (
     id BIGSERIAL PRIMARY KEY,
     type VARCHAR(64) NOT NULL,
     status VARCHAR(16) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'running', 'success', 'failed', 'canceled')),
@@ -112,12 +112,12 @@ CREATE TABLE tasks (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_tasks_status ON tasks (status);
-CREATE INDEX idx_tasks_created_at ON tasks (created_at DESC);
-CREATE INDEX idx_tasks_triggered_by ON tasks (triggered_by);
-CREATE INDEX idx_tasks_host_id ON tasks (host_id);
+CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks (status);
+CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_tasks_triggered_by ON tasks (triggered_by);
+CREATE INDEX IF NOT EXISTS idx_tasks_host_id ON tasks (host_id);
 
-CREATE TABLE task_logs (
+CREATE TABLE IF NOT EXISTS task_logs (
     id BIGSERIAL PRIMARY KEY,
     task_id BIGINT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
     level VARCHAR(16) NOT NULL DEFAULT 'info',
@@ -126,9 +126,9 @@ CREATE TABLE task_logs (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_task_logs_task_created ON task_logs (task_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_task_logs_task_created ON task_logs (task_id, created_at);
 
-CREATE TABLE websites (
+CREATE TABLE IF NOT EXISTS websites (
     id BIGSERIAL PRIMARY KEY,
     name VARCHAR(128) NOT NULL UNIQUE,
     root_path TEXT NOT NULL,
@@ -139,10 +139,10 @@ CREATE TABLE websites (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_websites_host_id ON websites (host_id);
-CREATE INDEX idx_websites_status ON websites (status);
+CREATE INDEX IF NOT EXISTS idx_websites_host_id ON websites (host_id);
+CREATE INDEX IF NOT EXISTS idx_websites_status ON websites (status);
 
-CREATE TABLE website_domains (
+CREATE TABLE IF NOT EXISTS website_domains (
     id BIGSERIAL PRIMARY KEY,
     website_id BIGINT NOT NULL REFERENCES websites(id) ON DELETE CASCADE,
     domain VARCHAR(255) NOT NULL UNIQUE,
@@ -151,9 +151,9 @@ CREATE TABLE website_domains (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_website_domains_website_id ON website_domains (website_id);
+CREATE INDEX IF NOT EXISTS idx_website_domains_website_id ON website_domains (website_id);
 
-CREATE TABLE database_instances (
+CREATE TABLE IF NOT EXISTS database_instances (
     id BIGSERIAL PRIMARY KEY,
     name VARCHAR(128) NOT NULL UNIQUE,
     engine VARCHAR(32) NOT NULL,
@@ -167,9 +167,9 @@ CREATE TABLE database_instances (
     UNIQUE (host, port, engine)
 );
 
-CREATE INDEX idx_database_instances_status ON database_instances (status);
+CREATE INDEX IF NOT EXISTS idx_database_instances_status ON database_instances (status);
 
-CREATE TABLE databases (
+CREATE TABLE IF NOT EXISTS databases (
     id BIGSERIAL PRIMARY KEY,
     instance_id BIGINT NOT NULL REFERENCES database_instances(id) ON DELETE CASCADE,
     name VARCHAR(128) NOT NULL,
@@ -181,9 +181,9 @@ CREATE TABLE databases (
     UNIQUE (instance_id, name)
 );
 
-CREATE INDEX idx_databases_instance_id ON databases (instance_id);
+CREATE INDEX IF NOT EXISTS idx_databases_instance_id ON databases (instance_id);
 
-CREATE TABLE plugins (
+CREATE TABLE IF NOT EXISTS plugins (
     id BIGSERIAL PRIMARY KEY,
     name VARCHAR(128) NOT NULL,
     slug VARCHAR(128) NOT NULL UNIQUE,
@@ -195,9 +195,9 @@ CREATE TABLE plugins (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_plugins_enabled ON plugins (enabled);
+CREATE INDEX IF NOT EXISTS idx_plugins_enabled ON plugins (enabled);
 
-CREATE TABLE backups (
+CREATE TABLE IF NOT EXISTS backups (
     id BIGSERIAL PRIMARY KEY,
     resource_type VARCHAR(32) NOT NULL,
     resource_id VARCHAR(128) NOT NULL,
@@ -211,5 +211,5 @@ CREATE TABLE backups (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_backups_resource ON backups (resource_type, resource_id);
-CREATE INDEX idx_backups_status ON backups (status);
+CREATE INDEX IF NOT EXISTS idx_backups_resource ON backups (resource_type, resource_id);
+CREATE INDEX IF NOT EXISTS idx_backups_status ON backups (status);

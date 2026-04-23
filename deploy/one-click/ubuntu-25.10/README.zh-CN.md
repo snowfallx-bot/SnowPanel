@@ -55,6 +55,8 @@ sudo bash install.sh --postgres-image postgres:16 --redis-image redis:7
 
 脚本还包含自动兜底：当主镜像和回退镜像都拉取失败，且 Docker 配置了 `registry-mirrors` 时，会临时移除 mirror 并再重试一次拉取。
 
+每次安装时，脚本还会在 `postgres` healthy 之后以幂等方式重新执行一次基线 schema，方便重复安装和已经保留 `postgres_data` 数据卷的主机继续完成部署。
+
 ## 输出结果
 
 脚本会将生成的凭据写入：
@@ -66,9 +68,12 @@ sudo bash install.sh --postgres-image postgres:16 --redis-image redis:7
 - Frontend：`http://127.0.0.1:<FRONTEND_PORT>`
 - Backend 健康检查：`http://127.0.0.1:<BACKEND_PORT>/health`
 
+安装器默认会把 frontend 配置为同源 API 模式，并由 Vite 容器将 `/api`、`/health`、`/ready` 代理到 backend 服务，这样可避免远程浏览器访问时把 `127.0.0.1` 错指到用户自己电脑而导致登录失败。
+
 ## 注意事项
 
 - 进入正式生产前，请复核并收紧：
   - `/etc/snowpanel/core-agent.env`
   - `${INSTALL_DIR}/.env`
+- 如果 backend 健康检查失败，脚本退出前会自动输出 `docker compose ps`、backend 日志以及 `core-agent` 的状态与日志，便于直接定位原因。
 - 对外开放前请先限制 backend/core-agent 端口访问范围。

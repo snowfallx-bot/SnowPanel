@@ -14,4 +14,5 @@ React + TypeScript + Vite admin UI with:
 2. `npm run dev`
 
 Optional env:
-- `VITE_API_BASE_URL` (default `http://127.0.0.1:8080`)
+- `VITE_API_BASE_URL` (default empty, meaning same-origin requests such as `/api/v1/...`)
+- `VITE_API_PROXY_TARGET` (default `http://127.0.0.1:8080` for local Vite proxy)
