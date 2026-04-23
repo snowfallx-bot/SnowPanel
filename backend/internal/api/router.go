@@ -43,7 +43,7 @@ func NewRouter(deps RouterDeps) *gin.Engine {
 	fileHandler := handler.NewFileHandler(deps.FileService, deps.AuditService)
 	serviceHandler := handler.NewServiceHandler(deps.ServiceManager, deps.AuditService)
 	dockerHandler := handler.NewDockerHandler(deps.DockerService, deps.AuditService)
-	cronHandler := handler.NewCronHandler(deps.CronService)
+	cronHandler := handler.NewCronHandler(deps.CronService, deps.AuditService)
 	auditHandler := handler.NewAuditHandler(deps.AuditService)
 	taskHandler := handler.NewTaskHandler(deps.TaskService, deps.AuditService)
 

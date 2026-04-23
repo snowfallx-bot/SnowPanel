@@ -46,7 +46,7 @@ Language: **English** | [简体中文](security.zh-CN.md)
 ## Auditability
 
 - Audit records include user id, username, IP, module, action, target, request summary, and result.
-- File/service/docker/task creation paths are instrumented with audit writes.
+- File/service/docker/cron/task operation paths are instrumented with audit writes.
 
 ## Error Handling
 

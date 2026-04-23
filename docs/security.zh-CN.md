@@ -45,7 +45,7 @@
 ## 可审计性
 
 - 审计记录包含 user id、username、IP、module、action、target、请求摘要与结果。
-- 文件/服务/docker/任务创建路径都已接入审计写入。
+- 文件/服务/docker/cron/任务操作路径都已接入审计写入。
 
 ## 错误处理
 
