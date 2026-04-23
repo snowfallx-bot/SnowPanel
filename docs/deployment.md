@@ -2,7 +2,14 @@
 
 Language: **English** | [简体中文](deployment.zh-CN.md)
 
-## Docker Compose Deployment (Prototype)
+## Runtime Modes
+
+| Mode | Description | Recommended For |
+| --- | --- | --- |
+| Compose Prototype | `core-agent` runs as a container in the same compose stack. | Local development and demos. |
+| Host-Agent (Recommended) | `core-agent` runs as a host systemd service; backend connects over private network gRPC. | Production and real host operations (docker/systemd/cron). |
+
+## Mode A: Compose Prototype
 
 This project ships with a development-oriented compose stack including:
 - `postgres`
@@ -24,7 +31,20 @@ This project ships with a development-oriented compose stack including:
 4. Stop:
    - `docker compose down`
 
-## Port Defaults
+## Mode B: Host-Agent (Recommended)
+
+1. Prepare host `core-agent` service from deployment assets:
+   - [Systemd deployment template](../deploy/core-agent/systemd/README.md)
+2. Prepare app environment:
+   - `cp .env.example .env`
+   - set `AGENT_TARGET` to host-accessible address (for example `host.docker.internal:50051` when backend runs in Docker)
+3. Start backend/frontend + dependencies with host-agent override:
+   - `docker compose -f docker-compose.yml -f docker-compose.host-agent.yml up -d --build`
+4. Verify:
+   - `curl http://127.0.0.1:8080/health`
+   - `curl http://127.0.0.1:8080/ready`
+
+## Port Defaults (Prototype Compose)
 
 - Frontend: `5173`
 - Backend: `8080`
@@ -52,8 +72,9 @@ Key settings in `.env`:
 
 ## Production Considerations
 
+- Prefer host-agent mode for real host control paths.
 - Set `APP_ENV=production` and provide a strong explicit `JWT_SECRET`.
 - If bootstrap admin is enabled, provide a strong explicit `DEFAULT_ADMIN_PASSWORD`.
 - Use persistent backup strategy for Postgres volumes.
 - Place backend/frontend behind HTTPS reverse proxy.
-- Restrict core-agent exposure to trusted network only.
+- Restrict core-agent (`50051`) exposure to trusted network only.

@@ -2,7 +2,14 @@
 
 语言: [English](deployment.md) | **简体中文**
 
-## Docker Compose 部署（原型）
+## 运行模式
+
+| 模式 | 描述 | 推荐场景 |
+| --- | --- | --- |
+| Compose 原型模式 | `core-agent` 与其他服务一起跑在 compose 内。 | 本地开发与演示环境。 |
+| 宿主机 Agent 模式（推荐） | `core-agent` 以宿主机 systemd 服务运行，backend 通过内网 gRPC 连接。 | 生产环境与真实宿主机运维场景（docker/systemd/cron）。 |
+
+## 模式 A：Compose 原型模式
 
 项目提供了面向开发阶段的 compose 服务栈，包括：
 - `postgres`
@@ -24,7 +31,20 @@
 4. 停止服务：
    - `docker compose down`
 
-## 默认端口
+## 模式 B：宿主机 Agent 模式（推荐）
+
+1. 先在宿主机部署 `core-agent`：
+   - [systemd 部署模板](../deploy/core-agent/systemd/README.zh-CN.md)
+2. 准备应用环境变量：
+   - `cp .env.example .env`
+   - 将 `AGENT_TARGET` 指向宿主机可访问地址（例如 backend 在 Docker 中时可用 `host.docker.internal:50051`）
+3. 使用宿主机 agent 覆盖配置启动 backend/frontend 与依赖：
+   - `docker compose -f docker-compose.yml -f docker-compose.host-agent.yml up -d --build`
+4. 验证：
+   - `curl http://127.0.0.1:8080/health`
+   - `curl http://127.0.0.1:8080/ready`
+
+## 默认端口（Compose 原型）
 
 - Frontend：`5173`
 - Backend：`8080`
@@ -52,8 +72,9 @@ PostgreSQL 首次初始化时，会加载以下 schema SQL：
 
 ## 生产环境建议
 
+- 真实宿主机控制链路优先使用“宿主机 Agent 模式”。
 - 设置 `APP_ENV=production` 并显式提供强 `JWT_SECRET`。
 - 若启用管理员初始化（`BOOTSTRAP_ADMIN=true`），显式提供强 `DEFAULT_ADMIN_PASSWORD`。
 - 为 Postgres 数据卷配置持久化备份策略。
 - 在 backend/frontend 前加 HTTPS 反向代理。
-- 仅在可信网络暴露 core-agent。
+- 仅在可信网络暴露 core-agent（`50051`）。

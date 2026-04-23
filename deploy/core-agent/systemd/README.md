@@ -1,0 +1,41 @@
+# Core-Agent Systemd Deployment
+
+Language: **English** | [简体中文](README.zh-CN.md)
+
+This folder provides a baseline host deployment template for running `core-agent` as a native systemd service.
+
+## Files
+
+- `core-agent.service`: systemd unit template.
+- `core-agent.env.example`: environment variable template loaded by systemd.
+
+## Install Steps (Linux host)
+
+1. Build binary on target host:
+   - `cd core-agent`
+   - `cargo build --release`
+2. Install binary and config:
+   - `sudo install -Dm755 target/release/core-agent /usr/local/bin/core-agent`
+   - `sudo install -d -m 750 /etc/snowpanel`
+   - `sudo install -Dm640 deploy/core-agent/systemd/core-agent.env.example /etc/snowpanel/core-agent.env`
+3. Install and start systemd unit:
+   - `sudo install -Dm644 deploy/core-agent/systemd/core-agent.service /etc/systemd/system/core-agent.service`
+   - `sudo systemctl daemon-reload`
+   - `sudo systemctl enable --now core-agent`
+4. Verify:
+   - `sudo systemctl status core-agent --no-pager`
+   - `ss -lntp | grep 50051`
+
+## Backend Compose with Host Agent
+
+When backend runs in Docker but `core-agent` runs on host, use:
+
+- `docker compose -f docker-compose.yml -f docker-compose.host-agent.yml up -d --build`
+
+This override points backend to `host.docker.internal:50051` and disables the containerized `core-agent` service by default.
+
+## Security Notes
+
+- Restrict network access to port `50051` (firewall / private network only).
+- Keep `CORE_AGENT_ALLOWED_ROOTS`, service whitelist, and cron allowlist minimal.
+- If you can, bind `CORE_AGENT_HOST` to private interfaces instead of public `0.0.0.0`.

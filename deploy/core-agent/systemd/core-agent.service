@@ -1,0 +1,24 @@
+[Unit]
+Description=SnowPanel Core Agent
+Documentation=https://github.com/snowfallx-bot/SnowPanel
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+EnvironmentFile=-/etc/snowpanel/core-agent.env
+ExecStart=/usr/local/bin/core-agent
+Restart=on-failure
+RestartSec=3s
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target

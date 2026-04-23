@@ -1,0 +1,14 @@
+services:
+  backend:
+    environment:
+      AGENT_TARGET: ${AGENT_TARGET:-host.docker.internal:50051}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  core-agent:
+    profiles: ["container-agent"]

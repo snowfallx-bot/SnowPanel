@@ -30,12 +30,9 @@
    - `docker compose up -d postgres redis`
    - 若 backend 以本机二进制运行，需要按需暴露依赖端口：
      `docker compose -f docker-compose.yml -f docker-compose.local.yml up -d postgres redis`
-2. 运行 core-agent：
-   - `make agent`
-3. 运行 backend：
-   - `make backend`
-4. 运行 frontend：
-   - `make frontend`
+2. 选择一种运行方式：
+   - 全本地二进制：`make agent`、`make backend`、`make frontend`
+   - backend 容器 + 宿主机 core-agent：`docker compose -f docker-compose.yml -f docker-compose.host-agent.yml up -d --build`
 
 ## 常用命令
 
