@@ -43,7 +43,15 @@ Important options:
 - `--jwt-secret`: set JWT secret explicitly
 - `--docker-registry-mirror`: configure Docker daemon mirror (useful in regions with unstable Docker Hub access)
 - `--docker-pull-retries`: retry count for image pull and compose up
+- `--postgres-image` / `--redis-image`: override primary runtime images
+- `--postgres-image-fallback` / `--redis-image-fallback`: override fallback images when primary pull fails
 - `--force-unsupported`: allow non-Ubuntu-25.10 hosts (not recommended)
+
+If `*-alpine` image pull keeps failing in your region, you can switch to non-alpine tags directly:
+
+```bash
+sudo bash install.sh --postgres-image postgres:16 --redis-image redis:7
+```
 
 ## Output
 

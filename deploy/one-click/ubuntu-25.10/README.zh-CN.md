@@ -43,7 +43,15 @@ sudo bash install.sh \
 - `--jwt-secret`：显式指定 JWT 密钥
 - `--docker-registry-mirror`：配置 Docker 镜像加速地址（Docker Hub 不稳定地区建议使用）
 - `--docker-pull-retries`：镜像拉取与 compose 启动的重试次数
+- `--postgres-image` / `--redis-image`：覆盖主运行镜像
+- `--postgres-image-fallback` / `--redis-image-fallback`：主镜像拉取失败时使用的回退镜像
 - `--force-unsupported`：允许在非 Ubuntu 25.10 上继续（不推荐）
+
+如果你所在区域持续拉取 `*-alpine` 失败，可直接改为非 alpine 标签：
+
+```bash
+sudo bash install.sh --postgres-image postgres:16 --redis-image redis:7
+```
 
 ## 输出结果
 

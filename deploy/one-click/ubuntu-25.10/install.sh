@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_VERSION="0.3.0"
+SCRIPT_VERSION="0.4.0"
 SUPPORTED_OS_ID="ubuntu"
 SUPPORTED_VERSION_ID="25.10"
 
@@ -19,6 +19,10 @@ ADMIN_PASSWORD=""
 FORCE_UNSUPPORTED="false"
 DOCKER_REGISTRY_MIRROR=""
 DOCKER_PULL_RETRIES="3"
+POSTGRES_IMAGE="postgres:16-alpine"
+REDIS_IMAGE="redis:7-alpine"
+POSTGRES_IMAGE_FALLBACK="postgres:16"
+REDIS_IMAGE_FALLBACK="redis:7"
 
 GENERATED_JWT_SECRET="false"
 GENERATED_ADMIN_PASSWORD="false"
@@ -56,6 +60,10 @@ Options:
   --jwt-secret <secret>      JWT secret (auto-generate if omitted)
   --docker-registry-mirror <url>  Docker registry mirror URL
   --docker-pull-retries <n>  Retry count for docker pull/compose up (default: 3)
+  --postgres-image <image>   Primary PostgreSQL image (default: postgres:16-alpine)
+  --redis-image <image>      Primary Redis image (default: redis:7-alpine)
+  --postgres-image-fallback <image>  Fallback PostgreSQL image (default: postgres:16)
+  --redis-image-fallback <image>     Fallback Redis image (default: redis:7)
   --force-unsupported        Allow non-Ubuntu-25.10 systems
   -h, --help                 Show this help
 
@@ -157,6 +165,26 @@ while [[ $# -gt 0 ]]; do
       DOCKER_PULL_RETRIES="${2:-}"
       shift 2
       ;;
+    --postgres-image)
+      require_option_value "$1" "${2:-}"
+      POSTGRES_IMAGE="${2:-}"
+      shift 2
+      ;;
+    --redis-image)
+      require_option_value "$1" "${2:-}"
+      REDIS_IMAGE="${2:-}"
+      shift 2
+      ;;
+    --postgres-image-fallback)
+      require_option_value "$1" "${2:-}"
+      POSTGRES_IMAGE_FALLBACK="${2:-}"
+      shift 2
+      ;;
+    --redis-image-fallback)
+      require_option_value "$1" "${2:-}"
+      REDIS_IMAGE_FALLBACK="${2:-}"
+      shift 2
+      ;;
     --force-unsupported)
       FORCE_UNSUPPORTED="true"
       shift 1
@@ -183,6 +211,9 @@ validate_port "FRONTEND_PORT" "${FRONTEND_PORT}"
 validate_positive_int "DOCKER_PULL_RETRIES" "${DOCKER_PULL_RETRIES}"
 if [[ -n "${DOCKER_REGISTRY_MIRROR}" ]] && ! [[ "${DOCKER_REGISTRY_MIRROR}" =~ ^https?:// ]]; then
   die "DOCKER_REGISTRY_MIRROR must start with http:// or https://"
+fi
+if [[ -z "${POSTGRES_IMAGE}" || -z "${REDIS_IMAGE}" ]]; then
+  die "POSTGRES_IMAGE and REDIS_IMAGE must not be empty"
 fi
 
 if [[ "${EUID}" -ne 0 ]]; then
@@ -265,6 +296,35 @@ run_with_retry() {
     attempt=$((attempt + 1))
   done
 
+  return 1
+}
+
+pull_image_with_fallback() {
+  local role="$1"
+  local primary="$2"
+  local fallback="$3"
+
+  if run_with_retry "${DOCKER_PULL_RETRIES}" "docker pull ${primary}" docker pull "${primary}"; then
+    printf '%s' "${primary}"
+    return 0
+  fi
+
+  warn "${role} primary image pull failed: ${primary}"
+  warn "removing possibly broken local reference: ${primary}"
+  docker image rm -f "${primary}" >/dev/null 2>&1 || true
+
+  if [[ -z "${fallback}" ]]; then
+    return 1
+  fi
+
+  warn "trying ${role} fallback image: ${fallback}"
+  if run_with_retry "${DOCKER_PULL_RETRIES}" "docker pull ${fallback}" docker pull "${fallback}"; then
+    printf '%s' "${fallback}"
+    return 0
+  fi
+
+  warn "${role} fallback image pull failed: ${fallback}"
+  docker image rm -f "${fallback}" >/dev/null 2>&1 || true
   return 1
 }
 
@@ -407,11 +467,15 @@ systemctl is-active --quiet core-agent || die "core-agent service is not active"
 
 log "starting docker compose stack (host-agent mode)"
 pushd "${INSTALL_DIR}" >/dev/null
-log "pre-pulling runtime images (with retries)"
-run_with_retry "${DOCKER_PULL_RETRIES}" "docker pull postgres:16-alpine" docker pull postgres:16-alpine \
-  || die "failed to pull postgres:16-alpine after ${DOCKER_PULL_RETRIES} attempts"
-run_with_retry "${DOCKER_PULL_RETRIES}" "docker pull redis:7-alpine" docker pull redis:7-alpine \
-  || die "failed to pull redis:7-alpine after ${DOCKER_PULL_RETRIES} attempts"
+log "pre-pulling runtime images (with retries and fallback)"
+POSTGRES_IMAGE="$(pull_image_with_fallback "postgres" "${POSTGRES_IMAGE}" "${POSTGRES_IMAGE_FALLBACK}")" \
+  || die "failed to pull postgres image (primary: ${POSTGRES_IMAGE}, fallback: ${POSTGRES_IMAGE_FALLBACK})"
+REDIS_IMAGE="$(pull_image_with_fallback "redis" "${REDIS_IMAGE}" "${REDIS_IMAGE_FALLBACK}")" \
+  || die "failed to pull redis image (primary: ${REDIS_IMAGE}, fallback: ${REDIS_IMAGE_FALLBACK})"
+
+set_env_file_value "${ENV_FILE}" "POSTGRES_IMAGE" "${POSTGRES_IMAGE}"
+set_env_file_value "${ENV_FILE}" "REDIS_IMAGE" "${REDIS_IMAGE}"
+log "selected runtime images: POSTGRES_IMAGE=${POSTGRES_IMAGE}, REDIS_IMAGE=${REDIS_IMAGE}"
 
 run_with_retry "${DOCKER_PULL_RETRIES}" "docker compose up" \
   docker compose -f docker-compose.yml -f docker-compose.host-agent.yml up -d --build \
