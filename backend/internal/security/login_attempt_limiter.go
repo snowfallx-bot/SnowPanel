@@ -22,6 +22,12 @@ type LoginAttemptLimiterOptions struct {
 	Now           func() time.Time
 }
 
+type LoginAttemptGuard interface {
+	Allow(key string) error
+	RecordFailure(key string)
+	RecordSuccess(key string)
+}
+
 type LoginAttemptLimiter struct {
 	mu            sync.Mutex
 	maxFailures   int

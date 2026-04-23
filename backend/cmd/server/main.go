@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/redis/go-redis/v9"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/api"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/config"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/database"
@@ -51,11 +52,46 @@ func main() {
 	dockerService := service.NewDockerService(agentClient)
 	cronService := service.NewCronService(agentClient)
 	taskService := service.NewTaskService(taskRepo, dockerService, serviceManager)
-	loginAttempts := security.NewLoginAttemptLimiter(security.LoginAttemptLimiterOptions{
+	var loginAttempts security.LoginAttemptGuard = security.NewLoginAttemptLimiter(security.LoginAttemptLimiterOptions{
 		MaxFailures:   cfg.Auth.LoginMaxFailures,
 		FailureWindow: cfg.Auth.LoginFailureWindow,
 		LockDuration:  cfg.Auth.LoginLockDuration,
 	})
+	var redisClient *redis.Client
+	if cfg.Auth.LoginAttemptStore == "redis" {
+		redisClient = redis.NewClient(&redis.Options{
+			Addr:     cfg.Redis.Address(),
+			Password: cfg.Redis.Password,
+			DB:       cfg.Redis.DB,
+		})
+		pingCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		err = redisClient.Ping(pingCtx).Err()
+		cancel()
+		if err != nil {
+			zapLogger.Warn(
+				"redis login limiter unavailable, fallback to in-memory limiter",
+				logger.Err(err),
+			)
+			_ = redisClient.Close()
+			redisClient = nil
+		} else {
+			zapLogger.Info("redis-backed login limiter enabled")
+			loginAttempts = security.NewRedisLoginAttemptLimiter(
+				redisClient,
+				security.RedisLoginAttemptLimiterOptions{
+					MaxFailures:   cfg.Auth.LoginMaxFailures,
+					FailureWindow: cfg.Auth.LoginFailureWindow,
+					LockDuration:  cfg.Auth.LoginLockDuration,
+					KeyPrefix:     cfg.Auth.LoginAttemptPrefix,
+				},
+			)
+		}
+	}
+	defer func() {
+		if redisClient != nil {
+			_ = redisClient.Close()
+		}
+	}()
 
 	server := &http.Server{
 		Addr: cfg.Server.Address(),

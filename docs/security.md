@@ -25,7 +25,8 @@ Language: **English** | [简体中文](security.zh-CN.md)
 - Password change returns a refreshed token with `must_change_password=false`.
 - Backend validates token session state against DB user status and `last_login_at`.
 - Old tokens are revoked after re-login/password change, and disabled users lose active sessions.
-- Login endpoint has in-memory brute-force protection keyed by `username + client IP`.
+- Login endpoint has brute-force protection keyed by `username + client IP`.
+- Default mode is in-memory (`LOGIN_ATTEMPT_STORE=memory`); distributed mode can be enabled with Redis (`LOGIN_ATTEMPT_STORE=redis` + shared `REDIS_*` config).
 - Repeated failures within `LOGIN_FAILURE_WINDOW` trigger temporary lockout (`429`) for `LOGIN_LOCK_DURATION`.
 
 ## File Safety
@@ -57,4 +58,4 @@ Language: **English** | [简体中文](security.zh-CN.md)
 
 - Add refresh tokens and session revocation.
 - Encrypt sensitive settings/secrets at rest.
-- Expand rate-limiting and lockout from single-process memory mode to distributed/shared state.
+- For multi-region deployments, evaluate cross-region shared rate-limit state and failover behavior.

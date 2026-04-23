@@ -64,8 +64,9 @@ It is mounted to:
 
 Key settings in `.env`:
 - backend host/port/JWT/admin bootstrap variables
+- login attempt limiter mode and thresholds (`LOGIN_ATTEMPT_STORE`, `LOGIN_ATTEMPT_REDIS_PREFIX`, `LOGIN_*`)
 - core-agent safe-root and read/write limits
-- PostgreSQL + Redis connection info
+- PostgreSQL + Redis connection info (`REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`, `REDIS_DB`)
 - frontend API base URL (`VITE_API_BASE_URL`)
 - when `APP_ENV=production`, startup fails fast if `JWT_SECRET` is weak/empty
 - when `APP_ENV=production` and `BOOTSTRAP_ADMIN=true`, `DEFAULT_ADMIN_PASSWORD` must be strong

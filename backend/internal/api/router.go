@@ -25,7 +25,7 @@ type RouterDeps struct {
 	CronService      service.CronService
 	AuditService     service.AuditService
 	TaskService      service.TaskService
-	LoginAttempts    *security.LoginAttemptLimiter
+	LoginAttempts    security.LoginAttemptGuard
 }
 
 func NewRouter(deps RouterDeps) *gin.Engine {

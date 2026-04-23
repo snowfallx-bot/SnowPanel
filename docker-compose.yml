@@ -72,6 +72,8 @@ services:
       JWT_SECRET: ${JWT_SECRET:-}
       JWT_ISSUER: ${JWT_ISSUER:-snowpanel-backend}
       JWT_EXPIRE: ${JWT_EXPIRE:-24h}
+      LOGIN_ATTEMPT_STORE: ${LOGIN_ATTEMPT_STORE:-memory}
+      LOGIN_ATTEMPT_REDIS_PREFIX: ${LOGIN_ATTEMPT_REDIS_PREFIX:-snowpanel:auth:attempt}
       LOGIN_MAX_FAILURES: ${LOGIN_MAX_FAILURES:-5}
       LOGIN_FAILURE_WINDOW: ${LOGIN_FAILURE_WINDOW:-15m}
       LOGIN_LOCK_DURATION: ${LOGIN_LOCK_DURATION:-15m}
@@ -92,6 +94,7 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_DB: ${REDIS_DB:-0}
     ports:
       - "${BACKEND_PORT:-8080}:8080"
     depends_on:

@@ -15,13 +15,13 @@ import (
 type AuthHandler struct {
 	authService   service.AuthService
 	auditService  service.AuditService
-	loginAttempts *security.LoginAttemptLimiter
+	loginAttempts security.LoginAttemptGuard
 }
 
 func NewAuthHandler(
 	authService service.AuthService,
 	auditService service.AuditService,
-	loginAttempts *security.LoginAttemptLimiter,
+	loginAttempts security.LoginAttemptGuard,
 ) *AuthHandler {
 	if loginAttempts == nil {
 		loginAttempts = security.NewLoginAttemptLimiter(security.LoginAttemptLimiterOptions{})

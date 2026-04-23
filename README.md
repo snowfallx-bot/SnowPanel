@@ -50,6 +50,7 @@ SnowPanel is a Linux server ops panel built with Vibe Coding.
    - macOS/Linux: `cp .env.example .env`
    - PowerShell: `Copy-Item .env.example .env`
    - Production note: set `APP_ENV=production`, then provide strong `JWT_SECRET` and `DEFAULT_ADMIN_PASSWORD`
+   - Multi-instance note: set `LOGIN_ATTEMPT_STORE=redis` to share login lockout state across backend instances
 2. Start all services:
    - `make up`
 3. Open:

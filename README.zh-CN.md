@@ -52,6 +52,7 @@ SnowPanel 是一个 Linux 服务器运维面板，采用 Vibe Coding 而成。
    - macOS/Linux: `cp .env.example .env`
    - PowerShell: `Copy-Item .env.example .env`
    - 生产环境提示：设置 `APP_ENV=production`，并显式提供强 `JWT_SECRET` 与 `DEFAULT_ADMIN_PASSWORD`
+   - 多实例提示：设置 `LOGIN_ATTEMPT_STORE=redis` 以在 backend 多副本间共享登录锁定状态
 2. 启动全部服务：
    - `make up`
 3. 访问地址：

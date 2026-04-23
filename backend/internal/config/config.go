@@ -15,6 +15,7 @@ type Config struct {
 	AppEnv       string
 	Server       ServerConfig
 	Database     DatabaseConfig
+	Redis        RedisConfig
 	Auth         AuthConfig
 	AgentTarget  string
 	AgentTimeout time.Duration
@@ -40,11 +41,20 @@ type DatabaseConfig struct {
 	MaxLifetime  time.Duration
 }
 
+type RedisConfig struct {
+	Host     string
+	Port     int
+	Password string
+	DB       int
+}
+
 type AuthConfig struct {
 	AppEnv               string
 	JWTSecret            string
 	JWTIssuer            string
 	JWTExpire            time.Duration
+	LoginAttemptStore    string
+	LoginAttemptPrefix   string
 	LoginMaxFailures     int
 	LoginFailureWindow   time.Duration
 	LoginLockDuration    time.Duration
@@ -75,6 +85,8 @@ func Load() Config {
 	v.SetDefault("JWT_SECRET", "")
 	v.SetDefault("JWT_ISSUER", "snowpanel-backend")
 	v.SetDefault("JWT_EXPIRE", "24h")
+	v.SetDefault("LOGIN_ATTEMPT_STORE", "memory")
+	v.SetDefault("LOGIN_ATTEMPT_REDIS_PREFIX", "snowpanel:auth:attempt")
 	v.SetDefault("LOGIN_MAX_FAILURES", 5)
 	v.SetDefault("LOGIN_FAILURE_WINDOW", "15m")
 	v.SetDefault("LOGIN_LOCK_DURATION", "15m")
@@ -93,6 +105,11 @@ func Load() Config {
 	v.SetDefault("POSTGRES_MAX_OPEN_CONNS", 20)
 	v.SetDefault("POSTGRES_MAX_IDLE_CONNS", 5)
 	v.SetDefault("POSTGRES_CONN_MAX_LIFETIME", "30m")
+
+	v.SetDefault("REDIS_HOST", "127.0.0.1")
+	v.SetDefault("REDIS_PORT", 6379)
+	v.SetDefault("REDIS_PASSWORD", "")
+	v.SetDefault("REDIS_DB", 0)
 
 	appEnv := normalizeEnv(v.GetString("APP_ENV"))
 	jwtSecret := strings.TrimSpace(v.GetString("JWT_SECRET"))
@@ -131,11 +148,19 @@ func Load() Config {
 				30*time.Minute,
 			),
 		},
+		Redis: RedisConfig{
+			Host:     v.GetString("REDIS_HOST"),
+			Port:     v.GetInt("REDIS_PORT"),
+			Password: v.GetString("REDIS_PASSWORD"),
+			DB:       v.GetInt("REDIS_DB"),
+		},
 		Auth: AuthConfig{
 			AppEnv:               appEnv,
 			JWTSecret:            jwtSecret,
 			JWTIssuer:            v.GetString("JWT_ISSUER"),
 			JWTExpire:            mustDuration(v.GetString("JWT_EXPIRE"), 24*time.Hour),
+			LoginAttemptStore:    normalizeLoginAttemptStore(v.GetString("LOGIN_ATTEMPT_STORE")),
+			LoginAttemptPrefix:   strings.TrimSpace(v.GetString("LOGIN_ATTEMPT_REDIS_PREFIX")),
 			LoginMaxFailures:     v.GetInt("LOGIN_MAX_FAILURES"),
 			LoginFailureWindow:   mustDuration(v.GetString("LOGIN_FAILURE_WINDOW"), 15*time.Minute),
 			LoginLockDuration:    mustDuration(v.GetString("LOGIN_LOCK_DURATION"), 15*time.Minute),
@@ -164,6 +189,11 @@ func (c Config) Validate() error {
 		if isProductionEnv(c.AppEnv) && !isStrongPassword(c.Auth.DefaultAdminPassword) {
 			return errors.New("DEFAULT_ADMIN_PASSWORD must be strong in production when BOOTSTRAP_ADMIN=true")
 		}
+	}
+
+	rawStore := strings.TrimSpace(strings.ToLower(c.Auth.LoginAttemptStore))
+	if rawStore != "" && rawStore != "memory" && rawStore != "redis" {
+		return errors.New("LOGIN_ATTEMPT_STORE must be one of: memory, redis")
 	}
 
 	return nil
@@ -198,12 +228,24 @@ func (c DatabaseConfig) DSN() string {
 	)
 }
 
+func (c RedisConfig) Address() string {
+	return fmt.Sprintf("%s:%d", c.Host, c.Port)
+}
+
 func normalizeEnv(raw string) string {
 	normalized := strings.TrimSpace(strings.ToLower(raw))
 	if normalized == "" {
 		return "development"
 	}
 	return normalized
+}
+
+func normalizeLoginAttemptStore(raw string) string {
+	normalized := strings.TrimSpace(strings.ToLower(raw))
+	if normalized == "redis" {
+		return "redis"
+	}
+	return "memory"
 }
 
 func isProductionEnv(raw string) bool {
