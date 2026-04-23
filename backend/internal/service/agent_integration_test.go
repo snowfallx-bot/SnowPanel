@@ -54,25 +54,34 @@ func TestFileService_ListFilesViaGRPC(t *testing.T) {
 	}
 }
 
-func TestFileService_DownloadTextFileViaGRPC(t *testing.T) {
+func TestFileService_DownloadFileViaGRPC(t *testing.T) {
 	target := startFakeAgentServer(t)
 	client := grpcclient.New(target, 2*time.Second)
 	service := NewFileService(client)
 
-	result, err := service.DownloadTextFile(context.Background(), dto.DownloadFileQuery{
-		Path: "/tmp/demo.txt",
-	})
+	downloaded := make([]byte, 0, 64)
+	result, err := service.DownloadFile(
+		context.Background(),
+		dto.DownloadFileQuery{Path: "/tmp/demo.txt"},
+		func(chunk []byte) error {
+			downloaded = append(downloaded, chunk...)
+			return nil
+		},
+	)
 	if err != nil {
-		t.Fatalf("DownloadTextFile() error = %v", err)
+		t.Fatalf("DownloadFile() error = %v", err)
 	}
 	if result.Path != "/tmp/demo.txt" {
 		t.Fatalf("unexpected path: %s", result.Path)
 	}
-	if result.Content != "hello from fake agent" {
-		t.Fatalf("unexpected content: %s", result.Content)
+	if result.TotalSize != 21 {
+		t.Fatalf("unexpected total size: %d", result.TotalSize)
 	}
-	if result.Encoding != "utf-8" {
-		t.Fatalf("unexpected encoding: %s", result.Encoding)
+	if result.DownloadedBytes != 21 {
+		t.Fatalf("unexpected downloaded bytes: %d", result.DownloadedBytes)
+	}
+	if string(downloaded) != "hello from fake agent" {
+		t.Fatalf("unexpected content: %s", string(downloaded))
 	}
 }
 
@@ -253,6 +262,36 @@ func (s *fakeFileService) ReadTextFile(
 		Size:      21,
 		Truncated: false,
 		Encoding:  "utf-8",
+	}, nil
+}
+
+func (s *fakeFileService) ReadFileChunk(
+	_ context.Context,
+	req *agentv1.ReadFileChunkRequest,
+) (*agentv1.ReadFileChunkResponse, error) {
+	content := []byte("hello from fake agent")
+	offset := req.GetOffset()
+	if offset > uint64(len(content)) {
+		offset = uint64(len(content))
+	}
+	chunkSize := int(req.GetLimit())
+	if chunkSize <= 0 {
+		chunkSize = 8
+	}
+	end := int(offset) + chunkSize
+	if end > len(content) {
+		end = len(content)
+	}
+	chunk := append([]byte(nil), content[offset:end]...)
+	eof := end >= len(content)
+
+	return &agentv1.ReadFileChunkResponse{
+		Error:     okError(),
+		Path:      "/tmp/demo.txt",
+		Offset:    offset,
+		Chunk:     chunk,
+		TotalSize: uint64(len(content)),
+		Eof:       eof,
 	}, nil
 }
 

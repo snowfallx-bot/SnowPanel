@@ -108,6 +108,20 @@ type ReadTextFileResult struct {
 	Encoding  string
 }
 
+type ReadFileChunkRequest struct {
+	Path   string
+	Offset uint64
+	Limit  uint32
+}
+
+type ReadFileChunkResult struct {
+	Path      string
+	Offset    uint64
+	Chunk     []byte
+	TotalSize uint64
+	EOF       bool
+}
+
 type WriteTextFileRequest struct {
 	Path              string
 	Content           string
@@ -248,6 +262,7 @@ type AgentClient interface {
 	GetRealtimeResource(ctx context.Context) (RealtimeResource, error)
 	ListFiles(ctx context.Context, req ListFilesRequest) (ListFilesResult, error)
 	ReadTextFile(ctx context.Context, req ReadTextFileRequest) (ReadTextFileResult, error)
+	ReadFileChunk(ctx context.Context, req ReadFileChunkRequest) (ReadFileChunkResult, error)
 	WriteTextFile(ctx context.Context, req WriteTextFileRequest) (WriteTextFileResult, error)
 	CreateDirectory(ctx context.Context, req CreateDirectoryRequest) (CreateDirectoryResult, error)
 	DeleteFile(ctx context.Context, req DeleteFileRequest) (DeleteFileResult, error)
@@ -424,6 +439,34 @@ func (c *Client) ReadTextFile(ctx context.Context, req ReadTextFileRequest) (Rea
 			Size:      resp.GetSize(),
 			Truncated: resp.GetTruncated(),
 			Encoding:  resp.GetEncoding(),
+		}
+		return nil
+	})
+	return result, err
+}
+
+func (c *Client) ReadFileChunk(ctx context.Context, req ReadFileChunkRequest) (ReadFileChunkResult, error) {
+	result := ReadFileChunkResult{}
+	err := c.invoke(ctx, func(callCtx context.Context, conn *grpc.ClientConn) error {
+		client := agentv1.NewFileServiceClient(conn)
+		resp, err := client.ReadFileChunk(callCtx, &agentv1.ReadFileChunkRequest{
+			Path:   req.Path,
+			Offset: req.Offset,
+			Limit:  req.Limit,
+		})
+		if err != nil {
+			return err
+		}
+		if err := responseError(resp.GetError()); err != nil {
+			return err
+		}
+
+		result = ReadFileChunkResult{
+			Path:      resp.GetPath(),
+			Offset:    resp.GetOffset(),
+			Chunk:     append([]byte(nil), resp.GetChunk()...),
+			TotalSize: resp.GetTotalSize(),
+			EOF:       resp.GetEof(),
 		}
 		return nil
 	})

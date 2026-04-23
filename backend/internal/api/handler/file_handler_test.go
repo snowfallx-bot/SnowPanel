@@ -15,7 +15,8 @@ import (
 
 type fileHandlerServiceStub struct {
 	downloadQuery  dto.DownloadFileQuery
-	downloadResult dto.ReadTextFileResult
+	downloadChunks [][]byte
+	downloadResult dto.DownloadFileResult
 	downloadErr    error
 }
 
@@ -58,11 +59,20 @@ func (s *fileHandlerServiceStub) RenameFile(
 	return dto.RenameFileResult{}, errors.New("not implemented")
 }
 
-func (s *fileHandlerServiceStub) DownloadTextFile(
+func (s *fileHandlerServiceStub) DownloadFile(
 	_ context.Context,
 	query dto.DownloadFileQuery,
-) (dto.ReadTextFileResult, error) {
+	writeChunk func([]byte) error,
+) (dto.DownloadFileResult, error) {
 	s.downloadQuery = query
+	if s.downloadErr != nil {
+		return dto.DownloadFileResult{}, s.downloadErr
+	}
+	for _, chunk := range s.downloadChunks {
+		if err := writeChunk(chunk); err != nil {
+			return dto.DownloadFileResult{}, err
+		}
+	}
 	return s.downloadResult, s.downloadErr
 }
 
@@ -85,9 +95,14 @@ func TestFileHandlerDownloadFileSuccess(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	fileSvc := &fileHandlerServiceStub{
-		downloadResult: dto.ReadTextFileResult{
-			Path:    "/tmp/sample.log",
-			Content: "hello from file",
+		downloadChunks: [][]byte{
+			[]byte("hello "),
+			[]byte("from file"),
+		},
+		downloadResult: dto.DownloadFileResult{
+			Path:            "/tmp/sample.log",
+			TotalSize:       15,
+			DownloadedBytes: 15,
 		},
 	}
 	auditSvc := &fileAuditRecorder{}

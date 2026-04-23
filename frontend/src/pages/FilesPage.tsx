@@ -274,8 +274,9 @@ export function FilesPage() {
       return;
     }
     try {
-      const name = fileNameFromPath(selectedPath) || "download.txt";
-      const blob = await downloadFile(selectedPath);
+      const fallbackName = fileNameFromPath(selectedPath) || "download.bin";
+      const { blob, fileName } = await downloadFile(selectedPath);
+      const name = fileName || fallbackName;
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = url;

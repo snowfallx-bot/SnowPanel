@@ -56,9 +56,9 @@
 
 当前行为说明：
 - 文件读写 API 为文本导向（`utf-8`），超出最大预览字节数时返回 `truncated`。
-- `GET /files/download` 当前通过文本读取链路代理下载（UTF-8，最大 `8MB`），并返回 `text/plain` 附件。
+- `GET /files/download` 通过 core-agent 分块读取 RPC（`ReadFileChunk`）流式下载，支持文本与二进制文件。
 - 二进制或非 UTF-8 文件会给出明确提示，并禁用内联编辑。
-- 预览大小可选（`256KB` 到 `8MB`）；尚未提供独立的 offset/chunk 分页读取 API。
+- 预览大小可选（`256KB` 到 `8MB`，仅 `/files/read`）；offset/chunk 目前作为下载链路内部能力使用。
 - 当前 core-agent 文件相关错误码语义：
   - `4001`：unsafe path（路径越界）
   - `4002`：path not found（路径不存在）

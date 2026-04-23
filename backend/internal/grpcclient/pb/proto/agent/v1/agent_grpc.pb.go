@@ -60,14 +60,15 @@ func (c *systemServiceClient) GetRealtimeResource(ctx context.Context, in *GetRe
 }
 
 // SystemServiceServer is the server API for SystemService service.
-// All implementations should embed UnimplementedSystemServiceServer
+// All implementations must embed UnimplementedSystemServiceServer
 // for forward compatibility.
 type SystemServiceServer interface {
 	GetSystemOverview(context.Context, *GetSystemOverviewRequest) (*GetSystemOverviewResponse, error)
 	GetRealtimeResource(context.Context, *GetRealtimeResourceRequest) (*GetRealtimeResourceResponse, error)
+	mustEmbedUnimplementedSystemServiceServer()
 }
 
-// UnimplementedSystemServiceServer should be embedded to have
+// UnimplementedSystemServiceServer must be embedded to have
 // forward compatible implementations.
 //
 // NOTE: this should be embedded by value instead of pointer to avoid a nil
@@ -80,7 +81,8 @@ func (UnimplementedSystemServiceServer) GetSystemOverview(context.Context, *GetS
 func (UnimplementedSystemServiceServer) GetRealtimeResource(context.Context, *GetRealtimeResourceRequest) (*GetRealtimeResourceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetRealtimeResource not implemented")
 }
-func (UnimplementedSystemServiceServer) testEmbeddedByValue() {}
+func (UnimplementedSystemServiceServer) mustEmbedUnimplementedSystemServiceServer() {}
+func (UnimplementedSystemServiceServer) testEmbeddedByValue()                       {}
 
 // UnsafeSystemServiceServer may be embedded to opt out of forward compatibility for this service.
 // Use of this interface is not recommended, as added methods to SystemServiceServer will
@@ -186,13 +188,14 @@ func (c *healthServiceClient) Check(ctx context.Context, in *HealthCheckRequest,
 }
 
 // HealthServiceServer is the server API for HealthService service.
-// All implementations should embed UnimplementedHealthServiceServer
+// All implementations must embed UnimplementedHealthServiceServer
 // for forward compatibility.
 type HealthServiceServer interface {
 	Check(context.Context, *HealthCheckRequest) (*HealthCheckResponse, error)
+	mustEmbedUnimplementedHealthServiceServer()
 }
 
-// UnimplementedHealthServiceServer should be embedded to have
+// UnimplementedHealthServiceServer must be embedded to have
 // forward compatible implementations.
 //
 // NOTE: this should be embedded by value instead of pointer to avoid a nil
@@ -202,7 +205,8 @@ type UnimplementedHealthServiceServer struct{}
 func (UnimplementedHealthServiceServer) Check(context.Context, *HealthCheckRequest) (*HealthCheckResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Check not implemented")
 }
-func (UnimplementedHealthServiceServer) testEmbeddedByValue() {}
+func (UnimplementedHealthServiceServer) mustEmbedUnimplementedHealthServiceServer() {}
+func (UnimplementedHealthServiceServer) testEmbeddedByValue()                       {}
 
 // UnsafeHealthServiceServer may be embedded to opt out of forward compatibility for this service.
 // Use of this interface is not recommended, as added methods to HealthServiceServer will
@@ -259,6 +263,7 @@ var HealthService_ServiceDesc = grpc.ServiceDesc{
 const (
 	FileService_ListFiles_FullMethodName       = "/snowpanel.agent.v1.FileService/ListFiles"
 	FileService_ReadTextFile_FullMethodName    = "/snowpanel.agent.v1.FileService/ReadTextFile"
+	FileService_ReadFileChunk_FullMethodName   = "/snowpanel.agent.v1.FileService/ReadFileChunk"
 	FileService_WriteTextFile_FullMethodName   = "/snowpanel.agent.v1.FileService/WriteTextFile"
 	FileService_CreateDirectory_FullMethodName = "/snowpanel.agent.v1.FileService/CreateDirectory"
 	FileService_DeleteFile_FullMethodName      = "/snowpanel.agent.v1.FileService/DeleteFile"
@@ -270,6 +275,7 @@ const (
 type FileServiceClient interface {
 	ListFiles(ctx context.Context, in *ListFilesRequest, opts ...grpc.CallOption) (*ListFilesResponse, error)
 	ReadTextFile(ctx context.Context, in *ReadTextFileRequest, opts ...grpc.CallOption) (*ReadTextFileResponse, error)
+	ReadFileChunk(ctx context.Context, in *ReadFileChunkRequest, opts ...grpc.CallOption) (*ReadFileChunkResponse, error)
 	WriteTextFile(ctx context.Context, in *WriteTextFileRequest, opts ...grpc.CallOption) (*WriteTextFileResponse, error)
 	CreateDirectory(ctx context.Context, in *CreateDirectoryRequest, opts ...grpc.CallOption) (*CreateDirectoryResponse, error)
 	DeleteFile(ctx context.Context, in *DeleteFileRequest, opts ...grpc.CallOption) (*DeleteFileResponse, error)
@@ -297,6 +303,16 @@ func (c *fileServiceClient) ReadTextFile(ctx context.Context, in *ReadTextFileRe
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ReadTextFileResponse)
 	err := c.cc.Invoke(ctx, FileService_ReadTextFile_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *fileServiceClient) ReadFileChunk(ctx context.Context, in *ReadFileChunkRequest, opts ...grpc.CallOption) (*ReadFileChunkResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReadFileChunkResponse)
+	err := c.cc.Invoke(ctx, FileService_ReadFileChunk_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -334,17 +350,19 @@ func (c *fileServiceClient) DeleteFile(ctx context.Context, in *DeleteFileReques
 }
 
 // FileServiceServer is the server API for FileService service.
-// All implementations should embed UnimplementedFileServiceServer
+// All implementations must embed UnimplementedFileServiceServer
 // for forward compatibility.
 type FileServiceServer interface {
 	ListFiles(context.Context, *ListFilesRequest) (*ListFilesResponse, error)
 	ReadTextFile(context.Context, *ReadTextFileRequest) (*ReadTextFileResponse, error)
+	ReadFileChunk(context.Context, *ReadFileChunkRequest) (*ReadFileChunkResponse, error)
 	WriteTextFile(context.Context, *WriteTextFileRequest) (*WriteTextFileResponse, error)
 	CreateDirectory(context.Context, *CreateDirectoryRequest) (*CreateDirectoryResponse, error)
 	DeleteFile(context.Context, *DeleteFileRequest) (*DeleteFileResponse, error)
+	mustEmbedUnimplementedFileServiceServer()
 }
 
-// UnimplementedFileServiceServer should be embedded to have
+// UnimplementedFileServiceServer must be embedded to have
 // forward compatible implementations.
 //
 // NOTE: this should be embedded by value instead of pointer to avoid a nil
@@ -357,6 +375,9 @@ func (UnimplementedFileServiceServer) ListFiles(context.Context, *ListFilesReque
 func (UnimplementedFileServiceServer) ReadTextFile(context.Context, *ReadTextFileRequest) (*ReadTextFileResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ReadTextFile not implemented")
 }
+func (UnimplementedFileServiceServer) ReadFileChunk(context.Context, *ReadFileChunkRequest) (*ReadFileChunkResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReadFileChunk not implemented")
+}
 func (UnimplementedFileServiceServer) WriteTextFile(context.Context, *WriteTextFileRequest) (*WriteTextFileResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method WriteTextFile not implemented")
 }
@@ -366,7 +387,8 @@ func (UnimplementedFileServiceServer) CreateDirectory(context.Context, *CreateDi
 func (UnimplementedFileServiceServer) DeleteFile(context.Context, *DeleteFileRequest) (*DeleteFileResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteFile not implemented")
 }
-func (UnimplementedFileServiceServer) testEmbeddedByValue() {}
+func (UnimplementedFileServiceServer) mustEmbedUnimplementedFileServiceServer() {}
+func (UnimplementedFileServiceServer) testEmbeddedByValue()                     {}
 
 // UnsafeFileServiceServer may be embedded to opt out of forward compatibility for this service.
 // Use of this interface is not recommended, as added methods to FileServiceServer will
@@ -418,6 +440,24 @@ func _FileService_ReadTextFile_Handler(srv interface{}, ctx context.Context, dec
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(FileServiceServer).ReadTextFile(ctx, req.(*ReadTextFileRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FileService_ReadFileChunk_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReadFileChunkRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FileServiceServer).ReadFileChunk(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: FileService_ReadFileChunk_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FileServiceServer).ReadFileChunk(ctx, req.(*ReadFileChunkRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -490,6 +530,10 @@ var FileService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ReadTextFile",
 			Handler:    _FileService_ReadTextFile_Handler,
+		},
+		{
+			MethodName: "ReadFileChunk",
+			Handler:    _FileService_ReadFileChunk_Handler,
 		},
 		{
 			MethodName: "WriteTextFile",
@@ -574,16 +618,17 @@ func (c *serviceManagerServiceClient) RestartService(ctx context.Context, in *Se
 }
 
 // ServiceManagerServiceServer is the server API for ServiceManagerService service.
-// All implementations should embed UnimplementedServiceManagerServiceServer
+// All implementations must embed UnimplementedServiceManagerServiceServer
 // for forward compatibility.
 type ServiceManagerServiceServer interface {
 	ListServices(context.Context, *ListServicesRequest) (*ListServicesResponse, error)
 	StartService(context.Context, *ServiceActionRequest) (*ServiceActionResponse, error)
 	StopService(context.Context, *ServiceActionRequest) (*ServiceActionResponse, error)
 	RestartService(context.Context, *ServiceActionRequest) (*ServiceActionResponse, error)
+	mustEmbedUnimplementedServiceManagerServiceServer()
 }
 
-// UnimplementedServiceManagerServiceServer should be embedded to have
+// UnimplementedServiceManagerServiceServer must be embedded to have
 // forward compatible implementations.
 //
 // NOTE: this should be embedded by value instead of pointer to avoid a nil
@@ -602,7 +647,8 @@ func (UnimplementedServiceManagerServiceServer) StopService(context.Context, *Se
 func (UnimplementedServiceManagerServiceServer) RestartService(context.Context, *ServiceActionRequest) (*ServiceActionResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RestartService not implemented")
 }
-func (UnimplementedServiceManagerServiceServer) testEmbeddedByValue() {}
+func (UnimplementedServiceManagerServiceServer) mustEmbedUnimplementedServiceManagerServiceServer() {}
+func (UnimplementedServiceManagerServiceServer) testEmbeddedByValue()                               {}
 
 // UnsafeServiceManagerServiceServer may be embedded to opt out of forward compatibility for this service.
 // Use of this interface is not recommended, as added methods to ServiceManagerServiceServer will
@@ -800,7 +846,7 @@ func (c *dockerServiceClient) ListImages(ctx context.Context, in *ListDockerImag
 }
 
 // DockerServiceServer is the server API for DockerService service.
-// All implementations should embed UnimplementedDockerServiceServer
+// All implementations must embed UnimplementedDockerServiceServer
 // for forward compatibility.
 type DockerServiceServer interface {
 	ListContainers(context.Context, *ListDockerContainersRequest) (*ListDockerContainersResponse, error)
@@ -808,9 +854,10 @@ type DockerServiceServer interface {
 	StopContainer(context.Context, *DockerContainerActionRequest) (*DockerContainerActionResponse, error)
 	RestartContainer(context.Context, *DockerContainerActionRequest) (*DockerContainerActionResponse, error)
 	ListImages(context.Context, *ListDockerImagesRequest) (*ListDockerImagesResponse, error)
+	mustEmbedUnimplementedDockerServiceServer()
 }
 
-// UnimplementedDockerServiceServer should be embedded to have
+// UnimplementedDockerServiceServer must be embedded to have
 // forward compatible implementations.
 //
 // NOTE: this should be embedded by value instead of pointer to avoid a nil
@@ -832,7 +879,8 @@ func (UnimplementedDockerServiceServer) RestartContainer(context.Context, *Docke
 func (UnimplementedDockerServiceServer) ListImages(context.Context, *ListDockerImagesRequest) (*ListDockerImagesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListImages not implemented")
 }
-func (UnimplementedDockerServiceServer) testEmbeddedByValue() {}
+func (UnimplementedDockerServiceServer) mustEmbedUnimplementedDockerServiceServer() {}
+func (UnimplementedDockerServiceServer) testEmbeddedByValue()                       {}
 
 // UnsafeDockerServiceServer may be embedded to opt out of forward compatibility for this service.
 // Use of this interface is not recommended, as added methods to DockerServiceServer will
@@ -1052,7 +1100,7 @@ func (c *cronServiceClient) SetCronTaskEnabled(ctx context.Context, in *SetCronT
 }
 
 // CronServiceServer is the server API for CronService service.
-// All implementations should embed UnimplementedCronServiceServer
+// All implementations must embed UnimplementedCronServiceServer
 // for forward compatibility.
 type CronServiceServer interface {
 	ListCronTasks(context.Context, *ListCronTasksRequest) (*ListCronTasksResponse, error)
@@ -1060,9 +1108,10 @@ type CronServiceServer interface {
 	UpdateCronTask(context.Context, *UpdateCronTaskRequest) (*UpdateCronTaskResponse, error)
 	DeleteCronTask(context.Context, *DeleteCronTaskRequest) (*DeleteCronTaskResponse, error)
 	SetCronTaskEnabled(context.Context, *SetCronTaskEnabledRequest) (*SetCronTaskEnabledResponse, error)
+	mustEmbedUnimplementedCronServiceServer()
 }
 
-// UnimplementedCronServiceServer should be embedded to have
+// UnimplementedCronServiceServer must be embedded to have
 // forward compatible implementations.
 //
 // NOTE: this should be embedded by value instead of pointer to avoid a nil
@@ -1084,7 +1133,8 @@ func (UnimplementedCronServiceServer) DeleteCronTask(context.Context, *DeleteCro
 func (UnimplementedCronServiceServer) SetCronTaskEnabled(context.Context, *SetCronTaskEnabledRequest) (*SetCronTaskEnabledResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SetCronTaskEnabled not implemented")
 }
-func (UnimplementedCronServiceServer) testEmbeddedByValue() {}
+func (UnimplementedCronServiceServer) mustEmbedUnimplementedCronServiceServer() {}
+func (UnimplementedCronServiceServer) testEmbeddedByValue()                     {}
 
 // UnsafeCronServiceServer may be embedded to opt out of forward compatibility for this service.
 // Use of this interface is not recommended, as added methods to CronServiceServer will

@@ -25,3 +25,6 @@ frontend/dist/
 
 # Coverage and reports
 coverage/
+
+# Local agent settings
+.claude/settings.local.json

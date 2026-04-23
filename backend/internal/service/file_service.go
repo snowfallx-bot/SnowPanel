@@ -18,12 +18,18 @@ type FileService interface {
 	CreateDirectory(ctx context.Context, req dto.CreateDirectoryRequest) (dto.CreateDirectoryResult, error)
 	DeleteFile(ctx context.Context, req dto.DeleteFileRequest) (dto.DeleteFileResult, error)
 	RenameFile(ctx context.Context, req dto.RenameFileRequest) (dto.RenameFileResult, error)
-	DownloadTextFile(ctx context.Context, query dto.DownloadFileQuery) (dto.ReadTextFileResult, error)
+	DownloadFile(
+		ctx context.Context,
+		query dto.DownloadFileQuery,
+		writeChunk func([]byte) error,
+	) (dto.DownloadFileResult, error)
 }
 
 type fileService struct {
 	agentClient grpcclient.AgentClient
 }
+
+const downloadChunkSize uint32 = 256 * 1024
 
 func NewFileService(agentClient grpcclient.AgentClient) FileService {
 	return &fileService{agentClient: agentClient}
@@ -115,43 +121,99 @@ func (s *fileService) DeleteFile(ctx context.Context, req dto.DeleteFileRequest)
 	return dto.DeleteFileResult{Path: result.Path}, nil
 }
 
-func (s *fileService) DownloadTextFile(
+func (s *fileService) DownloadFile(
 	ctx context.Context,
 	query dto.DownloadFileQuery,
-) (dto.ReadTextFileResult, error) {
+	writeChunk func([]byte) error,
+) (dto.DownloadFileResult, error) {
 	path := strings.TrimSpace(query.Path)
 	if path == "" {
-		return dto.ReadTextFileResult{}, apperror.Wrap(
+		return dto.DownloadFileResult{}, apperror.Wrap(
 			apperror.ErrBadRequest.Code,
 			apperror.ErrBadRequest.HTTPStatus,
 			apperror.ErrBadRequest.Message,
 			fmt.Errorf("path is required"),
 		)
 	}
-
-	result, err := s.agentClient.ReadTextFile(ctx, grpcclient.ReadTextFileRequest{
-		Path:     path,
-		MaxBytes: 8 * 1024 * 1024,
-		Encoding: "utf-8",
-	})
-	if err != nil {
-		return dto.ReadTextFileResult{}, mapAgentError(err)
-	}
-	if result.Truncated {
-		return dto.ReadTextFileResult{}, apperror.Wrap(
-			apperror.ErrBadRequest.Code,
-			apperror.ErrBadRequest.HTTPStatus,
-			apperror.ErrBadRequest.Message,
-			fmt.Errorf("download only supports text files up to 8 MB"),
+	if writeChunk == nil {
+		return dto.DownloadFileResult{}, apperror.Wrap(
+			apperror.ErrInternal.Code,
+			apperror.ErrInternal.HTTPStatus,
+			apperror.ErrInternal.Message,
+			fmt.Errorf("download writer is required"),
 		)
 	}
 
-	return dto.ReadTextFileResult{
-		Path:      result.Path,
-		Content:   result.Content,
-		Size:      result.Size,
-		Truncated: result.Truncated,
-		Encoding:  result.Encoding,
+	var (
+		offset          uint64
+		normalizedPath  string
+		downloadedBytes uint64
+		totalSize       uint64
+	)
+
+	for {
+		chunk, err := s.agentClient.ReadFileChunk(ctx, grpcclient.ReadFileChunkRequest{
+			Path:   path,
+			Offset: offset,
+			Limit:  downloadChunkSize,
+		})
+		if err != nil {
+			return dto.DownloadFileResult{}, mapAgentError(err)
+		}
+
+		if normalizedPath == "" {
+			normalizedPath = strings.TrimSpace(chunk.Path)
+			if normalizedPath == "" {
+				normalizedPath = path
+			}
+		}
+		if chunk.TotalSize > 0 {
+			totalSize = chunk.TotalSize
+		}
+
+		if chunk.Offset != offset {
+			return dto.DownloadFileResult{}, apperror.Wrap(
+				apperror.ErrInternal.Code,
+				apperror.ErrInternal.HTTPStatus,
+				apperror.ErrInternal.Message,
+				fmt.Errorf("unexpected chunk offset: got %d, want %d", chunk.Offset, offset),
+			)
+		}
+
+		if len(chunk.Chunk) > 0 {
+			if err := writeChunk(chunk.Chunk); err != nil {
+				return dto.DownloadFileResult{}, apperror.Wrap(
+					apperror.ErrInternal.Code,
+					apperror.ErrInternal.HTTPStatus,
+					"stream write failed",
+					err,
+				)
+			}
+			offset += uint64(len(chunk.Chunk))
+			downloadedBytes += uint64(len(chunk.Chunk))
+		}
+
+		if chunk.EOF {
+			break
+		}
+		if len(chunk.Chunk) == 0 {
+			return dto.DownloadFileResult{}, apperror.Wrap(
+				apperror.ErrInternal.Code,
+				apperror.ErrInternal.HTTPStatus,
+				apperror.ErrInternal.Message,
+				fmt.Errorf("core-agent returned empty chunk before EOF"),
+			)
+		}
+	}
+
+	if totalSize == 0 {
+		totalSize = downloadedBytes
+	}
+
+	return dto.DownloadFileResult{
+		Path:            normalizedPath,
+		TotalSize:       totalSize,
+		DownloadedBytes: downloadedBytes,
 	}, nil
 }
 

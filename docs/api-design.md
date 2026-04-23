@@ -56,9 +56,9 @@ All file paths are validated by the agent safe-root policy.
 
 Current behavior notes:
 - File read/write APIs are text-oriented (`utf-8`) and return `truncated` when max preview bytes are exceeded.
-- `GET /files/download` currently proxies text reads (UTF-8, max `8MB`) and returns a `text/plain` attachment.
+- `GET /files/download` streams file bytes from core-agent chunk RPC (`ReadFileChunk`) and supports both text and binary files.
 - Binary or non-UTF-8 files are shown with a clear hint and inline editing is disabled.
-- Preview size is selectable (`256KB` to `8MB`); offset/chunk pagination is not yet exposed as a dedicated API.
+- Preview size is selectable (`256KB` to `8MB`) for `/files/read`; chunked offset reads are currently internal to the download pipeline.
 - File-related error codes currently used by the core-agent:
   - `4001`: unsafe path
   - `4002`: path not found

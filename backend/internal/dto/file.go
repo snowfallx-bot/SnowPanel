@@ -37,6 +37,12 @@ type DownloadFileQuery struct {
 	Path string `form:"path" binding:"required"`
 }
 
+type DownloadFileResult struct {
+	Path            string `json:"path"`
+	TotalSize       uint64 `json:"total_size"`
+	DownloadedBytes uint64 `json:"downloaded_bytes"`
+}
+
 type FileEntry struct {
 	Name       string `json:"name"`
 	Path       string `json:"path"`

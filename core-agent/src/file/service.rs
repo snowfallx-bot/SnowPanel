@@ -1,11 +1,11 @@
-use std::fs::{self, OpenOptions};
-use std::io::Write;
+use std::fs::{self, File, OpenOptions};
+use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::Path;
 use std::time::UNIX_EPOCH;
 
 use crate::api::proto::{
     CreateDirectoryResponse, DeleteFileResponse, Error, FileEntry, ListFilesResponse,
-    PathSafetyContext, ReadTextFileResponse, WriteTextFileResponse,
+    PathSafetyContext, ReadFileChunkResponse, ReadTextFileResponse, WriteTextFileResponse,
 };
 use crate::security::path_validator::{FileOperation, PathValidationError, PathValidator};
 
@@ -199,6 +199,107 @@ impl FileService {
             size: metadata.len(),
             truncated,
             encoding: "utf-8".to_string(),
+        }
+    }
+
+    pub fn read_file_chunk(
+        &self,
+        path: &str,
+        offset: u64,
+        limit: u32,
+        safety: Option<PathSafetyContext>,
+    ) -> ReadFileChunkResponse {
+        let safety = safety.unwrap_or_default();
+        let normalized = match self.path_validator.validate(
+            path,
+            &safety.allowed_roots,
+            true,
+            FileOperation::Read,
+        ) {
+            Ok(value) => value,
+            Err(err) => return ReadFileChunkResponse::from_error(file_error_from_validation(err)),
+        };
+
+        let metadata = match fs::metadata(&normalized) {
+            Ok(value) => value,
+            Err(err) => {
+                return ReadFileChunkResponse::from_error(FileError::io(format!(
+                    "cannot read metadata for '{}': {err}",
+                    normalized.display()
+                )))
+            }
+        };
+
+        if !metadata.is_file() {
+            return ReadFileChunkResponse::from_error(FileError::bad_request(format!(
+                "'{}' is not a file",
+                normalized.display()
+            )));
+        }
+
+        let total_size = metadata.len();
+        if offset > total_size {
+            return ReadFileChunkResponse::from_error(FileError::bad_request(format!(
+                "offset {offset} exceeds file size {total_size}",
+            )));
+        }
+
+        if offset == total_size {
+            return ReadFileChunkResponse {
+                error: Some(Error::ok()),
+                path: normalized.to_string_lossy().into_owned(),
+                offset,
+                chunk: Vec::new(),
+                total_size,
+                eof: true,
+            };
+        }
+
+        let max_read_bytes = self.max_read_bytes.max(1);
+        let max_allowed = if limit > 0 {
+            std::cmp::min(limit as usize, max_read_bytes)
+        } else {
+            max_read_bytes
+        };
+
+        let mut file = match File::open(&normalized) {
+            Ok(value) => value,
+            Err(err) => {
+                return ReadFileChunkResponse::from_error(FileError::io(format!(
+                    "cannot open '{}': {err}",
+                    normalized.display()
+                )))
+            }
+        };
+
+        if let Err(err) = file.seek(SeekFrom::Start(offset)) {
+            return ReadFileChunkResponse::from_error(FileError::io(format!(
+                "cannot seek '{}' to offset {offset}: {err}",
+                normalized.display()
+            )));
+        }
+
+        let mut buffer = vec![0u8; max_allowed];
+        let read_len = match file.read(&mut buffer) {
+            Ok(value) => value,
+            Err(err) => {
+                return ReadFileChunkResponse::from_error(FileError::io(format!(
+                    "cannot read file '{}': {err}",
+                    normalized.display()
+                )))
+            }
+        };
+        buffer.truncate(read_len);
+
+        let eof = offset.saturating_add(read_len as u64) >= total_size;
+
+        ReadFileChunkResponse {
+            error: Some(Error::ok()),
+            path: normalized.to_string_lossy().into_owned(),
+            offset,
+            chunk: buffer,
+            total_size,
+            eof,
         }
     }
 
@@ -539,6 +640,23 @@ impl ReadTextFileResponseExt for ReadTextFileResponse {
             size: 0,
             truncated: false,
             encoding: "utf-8".to_string(),
+        }
+    }
+}
+
+trait ReadFileChunkResponseExt {
+    fn from_error(err: FileError) -> Self;
+}
+
+impl ReadFileChunkResponseExt for ReadFileChunkResponse {
+    fn from_error(err: FileError) -> Self {
+        Self {
+            error: Some(err.into_proto()),
+            path: String::new(),
+            offset: 0,
+            chunk: Vec::new(),
+            total_size: 0,
+            eof: false,
         }
     }
 }

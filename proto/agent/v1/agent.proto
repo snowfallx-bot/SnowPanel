@@ -112,6 +112,22 @@ message ReadTextFileResponse {
   string encoding = 6;
 }
 
+message ReadFileChunkRequest {
+  string path = 1;
+  uint64 offset = 2;
+  uint32 limit = 3;
+  PathSafetyContext safety = 4;
+}
+
+message ReadFileChunkResponse {
+  Error error = 1;
+  string path = 2;
+  uint64 offset = 3;
+  bytes chunk = 4;
+  uint64 total_size = 5;
+  bool eof = 6;
+}
+
 message WriteTextFileRequest {
   string path = 1;
   string content = 2;
@@ -282,6 +298,7 @@ service HealthService {
 service FileService {
   rpc ListFiles(ListFilesRequest) returns (ListFilesResponse);
   rpc ReadTextFile(ReadTextFileRequest) returns (ReadTextFileResponse);
+  rpc ReadFileChunk(ReadFileChunkRequest) returns (ReadFileChunkResponse);
   rpc WriteTextFile(WriteTextFileRequest) returns (WriteTextFileResponse);
   rpc CreateDirectory(CreateDirectoryRequest) returns (CreateDirectoryResponse);
   rpc DeleteFile(DeleteFileRequest) returns (DeleteFileResponse);

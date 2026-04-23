@@ -14,6 +14,7 @@ type fakeFileServiceAgentClient struct {
 
 	listFilesFn    func(context.Context, grpcclient.ListFilesRequest) (grpcclient.ListFilesResult, error)
 	readTextFileFn func(context.Context, grpcclient.ReadTextFileRequest) (grpcclient.ReadTextFileResult, error)
+	readChunkFn    func(context.Context, grpcclient.ReadFileChunkRequest) (grpcclient.ReadFileChunkResult, error)
 	writeTextFn    func(context.Context, grpcclient.WriteTextFileRequest) (grpcclient.WriteTextFileResult, error)
 	deleteFileFn   func(context.Context, grpcclient.DeleteFileRequest) (grpcclient.DeleteFileResult, error)
 }
@@ -36,6 +37,16 @@ func (f *fakeFileServiceAgentClient) ReadTextFile(
 		return f.readTextFileFn(ctx, req)
 	}
 	return grpcclient.ReadTextFileResult{}, nil
+}
+
+func (f *fakeFileServiceAgentClient) ReadFileChunk(
+	ctx context.Context,
+	req grpcclient.ReadFileChunkRequest,
+) (grpcclient.ReadFileChunkResult, error) {
+	if f.readChunkFn != nil {
+		return f.readChunkFn(ctx, req)
+	}
+	return grpcclient.ReadFileChunkResult{}, nil
 }
 
 func (f *fakeFileServiceAgentClient) WriteTextFile(
@@ -219,61 +230,95 @@ func TestFileServiceRenameFileRejectsTruncatedSource(t *testing.T) {
 	}
 }
 
-func TestFileServiceDownloadTextFileSuccess(t *testing.T) {
-	var captured grpcclient.ReadTextFileRequest
+func TestFileServiceDownloadFileSuccess(t *testing.T) {
+	requests := make([]grpcclient.ReadFileChunkRequest, 0, 2)
 	client := &fakeFileServiceAgentClient{
-		readTextFileFn: func(
+		readChunkFn: func(
 			_ context.Context,
-			req grpcclient.ReadTextFileRequest,
-		) (grpcclient.ReadTextFileResult, error) {
-			captured = req
-			return grpcclient.ReadTextFileResult{
-				Path:      "/tmp/sample.log",
-				Content:   "hello world",
-				Size:      11,
-				Truncated: false,
-				Encoding:  "utf-8",
-			}, nil
+			req grpcclient.ReadFileChunkRequest,
+		) (grpcclient.ReadFileChunkResult, error) {
+			requests = append(requests, req)
+			switch req.Offset {
+			case 0:
+				return grpcclient.ReadFileChunkResult{
+					Path:      "/tmp/sample.bin",
+					Offset:    0,
+					Chunk:     []byte("hello "),
+					TotalSize: 11,
+					EOF:       false,
+				}, nil
+			case 6:
+				return grpcclient.ReadFileChunkResult{
+					Path:      "/tmp/sample.bin",
+					Offset:    6,
+					Chunk:     []byte("world"),
+					TotalSize: 11,
+					EOF:       true,
+				}, nil
+			default:
+				t.Fatalf("unexpected offset %d", req.Offset)
+				return grpcclient.ReadFileChunkResult{}, nil
+			}
 		},
 	}
 
+	chunks := make([][]byte, 0, 2)
 	service := NewFileService(client)
-	result, err := service.DownloadTextFile(context.Background(), dto.DownloadFileQuery{
-		Path: " /tmp/sample.log ",
-	})
+	result, err := service.DownloadFile(
+		context.Background(),
+		dto.DownloadFileQuery{Path: " /tmp/sample.bin "},
+		func(chunk []byte) error {
+			copied := append([]byte(nil), chunk...)
+			chunks = append(chunks, copied)
+			return nil
+		},
+	)
 	if err != nil {
 		t.Fatalf("expected download success, got error: %v", err)
 	}
-	if result.Path != "/tmp/sample.log" {
+	if result.Path != "/tmp/sample.bin" {
 		t.Fatalf("unexpected path: %s", result.Path)
 	}
-	if result.Content != "hello world" {
-		t.Fatalf("unexpected content: %s", result.Content)
+	if result.TotalSize != 11 {
+		t.Fatalf("unexpected total size: %d", result.TotalSize)
 	}
-	if captured.Path != "/tmp/sample.log" {
-		t.Fatalf("expected trimmed path, got %s", captured.Path)
+	if result.DownloadedBytes != 11 {
+		t.Fatalf("unexpected downloaded bytes: %d", result.DownloadedBytes)
 	}
-	if captured.MaxBytes != 8*1024*1024 {
-		t.Fatalf("unexpected max bytes: %d", captured.MaxBytes)
+	if len(requests) != 2 {
+		t.Fatalf("unexpected request count: %d", len(requests))
 	}
-	if captured.Encoding != "utf-8" {
-		t.Fatalf("unexpected encoding: %s", captured.Encoding)
+	if requests[0].Path != "/tmp/sample.bin" || requests[0].Offset != 0 || requests[0].Limit != downloadChunkSize {
+		t.Fatalf("unexpected first request: %+v", requests[0])
+	}
+	if requests[1].Path != "/tmp/sample.bin" || requests[1].Offset != 6 || requests[1].Limit != downloadChunkSize {
+		t.Fatalf("unexpected second request: %+v", requests[1])
+	}
+	if len(chunks) != 2 {
+		t.Fatalf("unexpected chunk count: %d", len(chunks))
+	}
+	if string(chunks[0]) != "hello " || string(chunks[1]) != "world" {
+		t.Fatalf("unexpected chunk payloads: %q %q", string(chunks[0]), string(chunks[1]))
 	}
 }
 
-func TestFileServiceDownloadTextFileRejectsEmptyPath(t *testing.T) {
+func TestFileServiceDownloadFileRejectsEmptyPath(t *testing.T) {
 	client := &fakeFileServiceAgentClient{
-		readTextFileFn: func(
+		readChunkFn: func(
 			_ context.Context,
-			_ grpcclient.ReadTextFileRequest,
-		) (grpcclient.ReadTextFileResult, error) {
-			t.Fatalf("read should not be called for empty path")
-			return grpcclient.ReadTextFileResult{}, nil
+			_ grpcclient.ReadFileChunkRequest,
+		) (grpcclient.ReadFileChunkResult, error) {
+			t.Fatalf("read chunk should not be called for empty path")
+			return grpcclient.ReadFileChunkResult{}, nil
 		},
 	}
 
 	service := NewFileService(client)
-	_, err := service.DownloadTextFile(context.Background(), dto.DownloadFileQuery{Path: "  "})
+	_, err := service.DownloadFile(
+		context.Background(),
+		dto.DownloadFileQuery{Path: "  "},
+		func(_ []byte) error { return nil },
+	)
 	if err == nil {
 		t.Fatalf("expected bad request error")
 	}
@@ -286,34 +331,70 @@ func TestFileServiceDownloadTextFileRejectsEmptyPath(t *testing.T) {
 	}
 }
 
-func TestFileServiceDownloadTextFileRejectsTruncatedResult(t *testing.T) {
+func TestFileServiceDownloadFileRejectsUnexpectedOffset(t *testing.T) {
 	client := &fakeFileServiceAgentClient{
-		readTextFileFn: func(
+		readChunkFn: func(
 			_ context.Context,
-			req grpcclient.ReadTextFileRequest,
-		) (grpcclient.ReadTextFileResult, error) {
-			return grpcclient.ReadTextFileResult{
+			req grpcclient.ReadFileChunkRequest,
+		) (grpcclient.ReadFileChunkResult, error) {
+			return grpcclient.ReadFileChunkResult{
 				Path:      req.Path,
-				Content:   "partial",
-				Size:      20 * 1024 * 1024,
-				Truncated: true,
-				Encoding:  "utf-8",
+				Offset:    7,
+				Chunk:     []byte("chunk"),
+				TotalSize: 32,
+				EOF:       true,
 			}, nil
 		},
 	}
 
 	service := NewFileService(client)
-	_, err := service.DownloadTextFile(context.Background(), dto.DownloadFileQuery{
-		Path: "/tmp/huge.log",
-	})
+	_, err := service.DownloadFile(
+		context.Background(),
+		dto.DownloadFileQuery{Path: "/tmp/sample.bin"},
+		func(_ []byte) error { return nil },
+	)
 	if err == nil {
-		t.Fatalf("expected bad request error for truncated result")
+		t.Fatalf("expected internal error for unexpected chunk offset")
 	}
 	appErr, ok := apperror.As(err)
 	if !ok {
 		t.Fatalf("expected app error, got %T", err)
 	}
-	if appErr.Code != apperror.ErrBadRequest.Code {
-		t.Fatalf("expected bad request code, got %d", appErr.Code)
+	if appErr.Code != apperror.ErrInternal.Code {
+		t.Fatalf("expected internal code, got %d", appErr.Code)
+	}
+}
+
+func TestFileServiceDownloadFileRejectsEmptyNonEOFChunk(t *testing.T) {
+	client := &fakeFileServiceAgentClient{
+		readChunkFn: func(
+			_ context.Context,
+			req grpcclient.ReadFileChunkRequest,
+		) (grpcclient.ReadFileChunkResult, error) {
+			return grpcclient.ReadFileChunkResult{
+				Path:      req.Path,
+				Offset:    req.Offset,
+				Chunk:     []byte{},
+				TotalSize: 12,
+				EOF:       false,
+			}, nil
+		},
+	}
+
+	service := NewFileService(client)
+	_, err := service.DownloadFile(
+		context.Background(),
+		dto.DownloadFileQuery{Path: "/tmp/sample.bin"},
+		func(_ []byte) error { return nil },
+	)
+	if err == nil {
+		t.Fatalf("expected internal error for empty non-EOF chunk")
+	}
+	appErr, ok := apperror.As(err)
+	if !ok {
+		t.Fatalf("expected app error, got %T", err)
+	}
+	if appErr.Code != apperror.ErrInternal.Code {
+		t.Fatalf("expected internal code, got %d", appErr.Code)
 	}
 }

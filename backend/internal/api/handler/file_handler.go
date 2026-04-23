@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"path"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/api/response"
@@ -66,7 +67,32 @@ func (h *FileHandler) DownloadFile(c *gin.Context) {
 		return
 	}
 
-	result, err := h.fileService.DownloadTextFile(c.Request.Context(), query)
+	fileName := path.Base(strings.TrimSpace(query.Path))
+	if fileName == "" || fileName == "." || fileName == "/" {
+		fileName = "download.bin"
+	}
+
+	headersWritten := false
+	writeChunk := func(chunk []byte) error {
+		if !headersWritten {
+			contentType := "application/octet-stream"
+			if len(chunk) > 0 {
+				sample := chunk
+				if len(sample) > 512 {
+					sample = sample[:512]
+				}
+				contentType = http.DetectContentType(sample)
+			}
+			c.Header("Content-Type", contentType)
+			c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%q", fileName))
+			c.Header("X-Content-Type-Options", "nosniff")
+			headersWritten = true
+		}
+		_, err := c.Writer.Write(chunk)
+		return err
+	}
+
+	_, err := h.fileService.DownloadFile(c.Request.Context(), query, writeChunk)
 	if err != nil {
 		recordAudit(c, h.auditService, dto.RecordAuditInput{
 			Module:         "files",
@@ -78,15 +104,20 @@ func (h *FileHandler) DownloadFile(c *gin.Context) {
 			ResultCode:     "failed",
 			ResultMessage:  err.Error(),
 		})
-		response.FromError(c, err)
+		if !headersWritten {
+			response.FromError(c, err)
+		} else {
+			_ = c.Error(err)
+		}
 		return
 	}
 
-	fileName := path.Base(result.Path)
-	c.Header("Content-Type", "text/plain; charset=utf-8")
-	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%q", fileName))
-	c.Header("X-Content-Type-Options", "nosniff")
-	c.String(http.StatusOK, result.Content)
+	if !headersWritten {
+		c.Header("Content-Type", "application/octet-stream")
+		c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%q", fileName))
+		c.Header("X-Content-Type-Options", "nosniff")
+		c.Status(http.StatusOK)
+	}
 
 	recordAudit(c, h.auditService, dto.RecordAuditInput{
 		Module:         "files",
