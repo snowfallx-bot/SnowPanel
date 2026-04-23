@@ -72,3 +72,7 @@ export interface UploadFileResult {
   uploaded_bytes: number;
   total_size: number;
 }
+
+export interface UploadFileOptions {
+  offset?: number;
+}

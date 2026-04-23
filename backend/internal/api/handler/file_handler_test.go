@@ -233,6 +233,9 @@ func TestFileHandlerUploadFileSuccess(t *testing.T) {
 	if err := writer.WriteField("path", "/tmp/demo.bin"); err != nil {
 		t.Fatalf("write field failed: %v", err)
 	}
+	if err := writer.WriteField("offset", "5"); err != nil {
+		t.Fatalf("write offset field failed: %v", err)
+	}
 	part, err := writer.CreateFormFile("file", "demo.bin")
 	if err != nil {
 		t.Fatalf("create form file failed: %v", err)
@@ -256,6 +259,9 @@ func TestFileHandlerUploadFileSuccess(t *testing.T) {
 	}
 	if fileSvc.uploadReq.Path != "/tmp/demo.bin" {
 		t.Fatalf("unexpected upload path: %s", fileSvc.uploadReq.Path)
+	}
+	if fileSvc.uploadReq.Offset != 5 {
+		t.Fatalf("unexpected upload offset: %d", fileSvc.uploadReq.Offset)
 	}
 	if string(fileSvc.uploadData) != "hello world" {
 		t.Fatalf("unexpected uploaded bytes: %q", string(fileSvc.uploadData))

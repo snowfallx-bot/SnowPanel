@@ -46,7 +46,7 @@
 
 - `GET /files/list?path=/abs/path`（`files.read`）
 - `GET /files/download?path=/abs/path`（`files.read`）
-- `POST /files/upload`（`files.write`，`multipart/form-data`，字段：`path`、`file`）
+- `POST /files/upload`（`files.write`，`multipart/form-data`，字段：`path`、`file`、可选 `offset`）
 - `POST /files/read`（`files.read`）
 - `POST /files/write`（`files.write`）
 - `POST /files/rename`（`files.write`）
@@ -59,6 +59,7 @@
 - 文件读写 API 为文本导向（`utf-8`），超出最大预览字节数时返回 `truncated`。
 - `GET /files/download` 通过 core-agent 分块读取 RPC（`ReadFileChunk`）流式下载，支持文本与二进制文件。
 - `POST /files/upload` 通过 core-agent 分块写入 RPC（`WriteFileChunk`）流式上传，支持文本与二进制文件。
+- 上传请求可携带 `offset` 从已落盘字节位置继续续传；前端按分块重试/续传语义处理瞬时失败，避免每次失败都从 `0` 开始重传。
 - `POST /files/rename` 通过 core-agent `RenameFile` RPC 执行原子重命名（不再走读/写/删拷贝链路）。
 - 二进制或非 UTF-8 文件会给出明确提示，并禁用内联编辑。
 - 预览大小可选（`256KB` 到 `8MB`，仅 `/files/read`）；offset/chunk 目前作为下载链路内部能力使用。

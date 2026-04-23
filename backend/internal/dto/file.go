@@ -44,7 +44,8 @@ type DownloadFileResult struct {
 }
 
 type UploadFileRequest struct {
-	Path string `form:"path" binding:"required"`
+	Path   string `form:"path" binding:"required"`
+	Offset uint64 `form:"offset"`
 }
 
 type UploadFileResult struct {

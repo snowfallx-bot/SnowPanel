@@ -12,68 +12,53 @@
 
 ============
 
-本轮继续推进文件模块主链路，完成“重命名从文本拷贝改为 agent 原子 rename RPC”。
+本轮继续推进文件传输链路，完成“上传 offset 续传参数 + 前端分块重试/续传接入”。
 
 本次核心完成项
 
-1. 协议层：
-   - 在 `proto/agent/v1/agent.proto` 新增：
-     - `RenameFileRequest(source_path, target_path, safety)`
-     - `RenameFileResponse(error, source_path, target_path, moved_bytes)`
-     - `FileService.RenameFile` RPC
-2. core-agent（Rust）：
-   - `core-agent/src/file/service.rs` 新增 `rename_file`：
-     - 路径安全校验（source/target 都走 safe-root）
-     - same-path 拒绝
-     - 仅允许 source 为文件
-     - target 已存在拒绝
-     - target 父目录不存在拒绝
-     - 使用 `fs::rename` 执行原子重命名
-   - `core-agent/src/api/grpc_server.rs` 增加 `rename_file` gRPC handler
-   - `core-agent/src/security/path_validator.rs` 增加 `FileOperation::Move`，并纳入危险路径拦截集合
-3. backend（Go）：
-   - `backend/internal/grpcclient/agent_client.go` 新增 `RenameFile` request/result 与 client 调用
-   - `backend/internal/service/file_service.go` 删除旧的“list+read+write+delete”重命名流程，改为直连 `agentClient.RenameFile`
-4. 测试：
-   - `backend/internal/service/file_service_test.go` 重写 rename 用例断言（改为 RPC 调用语义）
-   - `backend/internal/service/agent_integration_test.go` 增加 rename 集成测试，并扩展 fake gRPC service
-5. 文档：
-   - `docs/api-design.md`、`docs/api-design.zh-CN.md` 更新 `/files/rename` 为原子 rename 说明
-6. 代码生成：
-   - 重新生成：
-     - `backend/internal/grpcclient/pb/proto/agent/v1/agent.pb.go`
-     - `backend/internal/grpcclient/pb/proto/agent/v1/agent_grpc.pb.go`
+1. backend（Go）：
+   - `backend/internal/dto/file.go` 为 `UploadFileRequest` 增加 `offset`
+   - `backend/internal/api/handler/file_handler.go`：`/files/upload` 解析 multipart 中的 `offset`，并把 offset 写入审计摘要
+   - `backend/internal/service/file_service.go`：上传从 `req.Offset` 开始写入；仅在 offset=0 的首块执行 truncate，避免续传时错误清空已落盘内容
+2. frontend（React/TS）：
+   - `frontend/src/api/files.ts`：
+     - `uploadFile` 支持可选 `offset`
+     - 新增 `uploadFileWithRetry`，按 1MB 分块上传
+     - 每块最多重试 3 次，失败后从最近成功 offset 继续，而不是整体从 0 重传
+   - `frontend/src/pages/FilesPage.tsx`：上传入口改为使用 `uploadFileWithRetry`
+   - `frontend/src/types/file.ts`：新增上传选项类型
+3. 测试：
+   - `backend/internal/api/handler/file_handler_test.go`：上传用例补充 `offset` 字段断言
+4. 文档：
+   - `docs/api-design.md`、`docs/api-design.zh-CN.md`：补充 `/files/upload` 可选 `offset` 字段，以及前端分块重试/续传语义说明
 
 本轮修改文件
 
-- `proto/agent/v1/agent.proto`
-- `core-agent/src/file/service.rs`
-- `core-agent/src/api/grpc_server.rs`
-- `core-agent/src/security/path_validator.rs`
-- `backend/internal/grpcclient/agent_client.go`
-- `backend/internal/grpcclient/pb/proto/agent/v1/agent.pb.go`
-- `backend/internal/grpcclient/pb/proto/agent/v1/agent_grpc.pb.go`
+- `backend/internal/api/handler/file_handler.go`
+- `backend/internal/api/handler/file_handler_test.go`
+- `backend/internal/dto/file.go`
 - `backend/internal/service/file_service.go`
-- `backend/internal/service/file_service_test.go`
-- `backend/internal/service/agent_integration_test.go`
 - `docs/api-design.md`
 - `docs/api-design.zh-CN.md`
+- `frontend/src/api/files.ts`
+- `frontend/src/pages/FilesPage.tsx`
+- `frontend/src/types/file.ts`
 
 本地验证
 
-- `cd backend && go test ./...` ✅
-- `cd frontend && npm run build` ✅
-- 本机无 `cargo`，未执行 Rust 本地编译/测试；Rust 侧由 CI 继续校验。
+- `npm --prefix frontend run build` ✅
+- backend 定向测试命令仍需在正确模块目录执行；本轮两次从仓库根触发 `go test`，Go 因未命中 module root 失败，需下轮在 `backend/` 内继续确认
+- 本机未执行 Rust 编译/测试
 
 commit摘要
 
 待提交：
-- `feat(files): switch rename to atomic grpc rpc`
+- `feat(files): add upload resume offset and frontend retry`
 
 希望接下来的 AI 做什么
 
-1. 文件链路下一优先级：下载断点续传/重试策略（后端与前端联动）。
-2. 上传链路补断点续传（offset 校验 + 前端 retry 设计）。
-3. 文档补充 upload/download/rename 的错误语义与示例响应。
+1. 在 `backend/` 模块目录内补跑 `go test ./internal/service ./internal/api/handler`，确认本轮 Go 改动通过。
+2. 继续做下载链路的断点续传能力，优先评估是否补 `Range`/`Content-Range` HTTP 语义。
+3. 如需继续增强文件模块，可补上传/下载错误响应示例到 API 文档。
 
-by: gpt-5.4
+by: claude-sonnet-4-6

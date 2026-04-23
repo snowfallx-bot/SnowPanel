@@ -248,9 +248,10 @@ func (s *fileService) UploadFile(
 
 	buffer := make([]byte, uploadChunkSize)
 	var (
-		offset         uint64
+		offset         = req.Offset
 		normalizedPath string
 		totalSize      uint64
+		wroteChunk     bool
 	)
 
 	for {
@@ -280,7 +281,7 @@ func (s *fileService) UploadFile(
 				Offset:            offset,
 				Chunk:             chunk,
 				CreateIfNotExists: true,
-				Truncate:          offset == 0,
+				Truncate:          offset == 0 && !wroteChunk,
 			})
 			if err != nil {
 				return dto.UploadFileResult{}, mapAgentError(err)
@@ -306,6 +307,7 @@ func (s *fileService) UploadFile(
 
 			offset += uint64(readLen)
 			totalSize = result.TotalSize
+			wroteChunk = true
 			if normalizedPath == "" {
 				normalizedPath = strings.TrimSpace(result.Path)
 			}
@@ -316,7 +318,7 @@ func (s *fileService) UploadFile(
 		}
 	}
 
-	if offset == 0 {
+	if !wroteChunk && req.Offset == 0 {
 		result, err := s.agentClient.WriteFileChunk(ctx, grpcclient.WriteFileChunkRequest{
 			Path:              path,
 			Offset:            0,

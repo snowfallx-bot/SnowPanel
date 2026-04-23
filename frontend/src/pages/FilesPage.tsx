@@ -7,7 +7,7 @@ import {
   listFiles,
   readTextFile,
   renameFile,
-  uploadFile,
+  uploadFileWithRetry,
   writeTextFile
 } from "@/api/files";
 import { FileEditorPanel } from "@/components/files/FileEditorPanel";
@@ -294,7 +294,7 @@ export function FilesPage() {
 
     try {
       const targetPath = joinPath(currentPath, file.name);
-      const result = await uploadFile(file, targetPath);
+      const result = await uploadFileWithRetry(file, targetPath);
       setFeedback(`Uploaded ${file.name} (${result.uploaded_bytes} bytes) to ${result.path}`);
       queryClient.invalidateQueries({ queryKey: ["files", path] });
     } catch (error) {

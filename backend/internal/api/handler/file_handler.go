@@ -141,6 +141,13 @@ func (h *FileHandler) UploadFile(c *gin.Context) {
 		return
 	}
 
+	var req dto.UploadFileRequest
+	req.Path = targetPath
+	if err := c.ShouldBind(&req); err != nil {
+		response.Fail(c, http.StatusBadRequest, apperror.ErrBadRequest.Code, "invalid upload params")
+		return
+	}
+
 	fileHeader, err := c.FormFile("file")
 	if err != nil {
 		response.Fail(c, http.StatusBadRequest, apperror.ErrBadRequest.Code, "file is required")
@@ -156,7 +163,7 @@ func (h *FileHandler) UploadFile(c *gin.Context) {
 
 	result, err := h.fileService.UploadFile(
 		c.Request.Context(),
-		dto.UploadFileRequest{Path: targetPath},
+		req,
 		file.Read,
 	)
 	if err != nil {
@@ -165,7 +172,7 @@ func (h *FileHandler) UploadFile(c *gin.Context) {
 			Action:         "upload",
 			TargetType:     "path",
 			TargetID:       targetPath,
-			RequestSummary: fmt.Sprintf(`{"op":"upload","filename":%q}`, fileHeader.Filename),
+			RequestSummary: fmt.Sprintf(`{"op":"upload","filename":%q,"offset":%d}`, fileHeader.Filename, req.Offset),
 			Success:        false,
 			ResultCode:     "failed",
 			ResultMessage:  err.Error(),
@@ -179,7 +186,7 @@ func (h *FileHandler) UploadFile(c *gin.Context) {
 		Action:         "upload",
 		TargetType:     "path",
 		TargetID:       targetPath,
-		RequestSummary: fmt.Sprintf(`{"op":"upload","filename":%q}`, fileHeader.Filename),
+		RequestSummary: fmt.Sprintf(`{"op":"upload","filename":%q,"offset":%d}`, fileHeader.Filename, req.Offset),
 		Success:        true,
 		ResultCode:     "ok",
 		ResultMessage:  "upload success",

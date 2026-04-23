@@ -10,6 +10,7 @@ import {
   RenameFileResult,
   ReadTextFilePayload,
   ReadTextFileResult,
+  UploadFileOptions,
   UploadFileResult,
   WriteTextFilePayload,
   WriteTextFileResult
@@ -20,6 +21,9 @@ export interface DownloadFilePayload {
   blob: Blob;
   fileName: string | null;
 }
+
+const uploadChunkSize = 1024 * 1024;
+const uploadRetryLimit = 3;
 
 export function listFiles(path: string) {
   return unwrap<ListFilesResult>(http.get("/api/v1/files/list", { params: { path } }));
@@ -49,11 +53,62 @@ export function renameFile(payload: RenameFilePayload) {
   return unwrap<RenameFileResult>(http.post("/api/v1/files/rename", payload));
 }
 
-export function uploadFile(file: File, path: string) {
+export function uploadFile(file: Blob, path: string, options: UploadFileOptions = {}) {
   const formData = new FormData();
   formData.append("file", file);
   formData.append("path", path);
+  if (typeof options.offset === "number" && Number.isFinite(options.offset) && options.offset > 0) {
+    formData.append("offset", String(options.offset));
+  }
   return unwrap<UploadFileResult>(http.post("/api/v1/files/upload", formData));
+}
+
+export async function uploadFileWithRetry(file: File, path: string) {
+  let offset = 0;
+  let lastResult: UploadFileResult | null = null;
+
+  while (offset < file.size || (file.size === 0 && offset === 0)) {
+    const chunk = file.slice(offset, offset + uploadChunkSize);
+    let success = false;
+    let lastError: unknown = null;
+
+    for (let attempt = 0; attempt < uploadRetryLimit; attempt += 1) {
+      try {
+        const result = await uploadFile(chunk, path, { offset });
+        const advancedBytes = result.uploaded_bytes - offset;
+        if (advancedBytes < 0) {
+          throw new ApiError("Upload offset moved backwards", { cause: result });
+        }
+        if (chunk.size > 0 && advancedBytes === 0) {
+          throw new ApiError("Upload did not advance", { cause: result });
+        }
+        offset = result.uploaded_bytes;
+        lastResult = result;
+        success = true;
+        break;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+
+    if (!success) {
+      throw lastError;
+    }
+
+    if (file.size === 0) {
+      break;
+    }
+  }
+
+  if (!lastResult) {
+    return {
+      path,
+      uploaded_bytes: 0,
+      total_size: 0
+    } satisfies UploadFileResult;
+  }
+
+  return lastResult;
 }
 
 function parseDownloadFileName(contentDisposition: string | null | undefined) {
