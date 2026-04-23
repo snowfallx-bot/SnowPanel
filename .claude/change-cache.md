@@ -12,24 +12,23 @@
 
 ============
 
-本轮继续推进文件模块交互体验，完成“目录重命名 UI 放开”。
+本轮继续推进文件模块交互体验，完成“批量下载（文件项）”。
 
 本次核心完成项
 
 1. frontend（React/TS）：
    - `frontend/src/pages/FilesPage.tsx`：
-     - 去掉目录不支持重命名的前端拦截
-     - 重命名提示文案同时适用于文件和目录
-     - 保留“只能输入单个名称，不能输入路径”的校验
-   - `frontend/src/components/files/FileTable.tsx`：
-     - 去掉目录重命名按钮禁用态
+     - 增加 `Download Selected`
+     - 对已选中的文件逐个下载
+     - 自动跳过目录
+     - 批量下载过程中复用现有下载进度展示
+     - 单文件下载也统一复用浏览器下载函数
 2. 本地验证：
    - `npm --prefix frontend run build` ✅
 
 本轮修改文件
 
 - `frontend/src/pages/FilesPage.tsx`
-- `frontend/src/components/files/FileTable.tsx`
 
 本地验证
 
@@ -46,14 +45,15 @@ commit摘要
 - `c4a9771` `docs(files): add file API error response examples`
 - `eded13d` `feat(files): add drag and drop upload`
 - `0885dfd` `feat(files): add bulk selection and delete`
+- `c43d872` `feat(files): enable directory rename in ui`
 
 待提交：
-- `feat(files): enable directory rename in ui`
+- `feat(files): add bulk file downloads`
 
 希望接下来的 AI 做什么
 
-1. 提交并推送本轮目录重命名 UI 改动。
-2. 如继续增强文件页，可做批量下载。
+1. 提交并推送本轮批量下载改动。
+2. 如继续增强文件页，可考虑批量压缩下载或目录下载体验。
 3. 若切回主链任务，可继续服务管理、Docker、Cron 或测试补强。
 
 by: claude-sonnet-4-6

@@ -91,6 +91,15 @@ function formatProgress(current: number, total: number | null) {
   return `${current} bytes`;
 }
 
+function triggerBrowserDownload(blob: Blob, fileName: string) {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = fileName;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
 export function FilesPage() {
   const queryClient = useQueryClient();
   const [path, setPath] = useState("/tmp");
@@ -298,6 +307,39 @@ export function FilesPage() {
     setFeedback(`Deleted ${selectedItems.length} item(s).`);
   }
 
+  async function handleBulkDownload() {
+    if (!hasBulkSelection || downloading) {
+      return;
+    }
+
+    const selectedFiles = currentEntries.filter((entry) => selectedEntries.includes(entry.path) && !entry.is_dir);
+    if (selectedFiles.length === 0) {
+      setFeedback("Bulk download only supports files. Selected directories were skipped.");
+      return;
+    }
+
+    setDownloading(true);
+    try {
+      for (let index = 0; index < selectedFiles.length; index += 1) {
+        const entry = selectedFiles[index];
+        setDownloadProgressText(`Downloading ${index + 1}/${selectedFiles.length}: ${entry.name}`);
+        const fallbackName = fileNameFromPath(entry.path) || `download-${index + 1}.bin`;
+        const { blob, fileName } = await downloadFile(entry.path, (downloadedBytes, totalBytes) => {
+          setDownloadProgressText(
+            `Downloading ${index + 1}/${selectedFiles.length}: ${entry.name} — ${formatProgress(downloadedBytes, totalBytes)}`
+          );
+        });
+        triggerBrowserDownload(blob, fileName || fallbackName);
+      }
+      setFeedback(`Downloaded ${selectedFiles.length} file(s).`);
+    } catch (error) {
+      setFeedback(describeFileApiError(error, "Bulk download failed"));
+    } finally {
+      setDownloading(false);
+      setDownloadProgressText("");
+    }
+  }
+
   async function handleRename(entry: FileEntry) {
     const nextName = window.prompt(`Rename ${entry.is_dir ? "directory" : "file"} to:`, entry.name);
     if (!nextName) {
@@ -331,12 +373,7 @@ export function FilesPage() {
         setDownloadProgressText(`Downloading: ${formatProgress(downloadedBytes, totalBytes)}`);
       });
       const name = fileName || fallbackName;
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = name;
-      anchor.click();
-      URL.revokeObjectURL(url);
+      triggerBrowserDownload(blob, name);
       setFeedback(`Downloaded ${name}`);
     } catch (error) {
       setFeedback(describeFileApiError(error, "Download failed"));
@@ -464,6 +501,9 @@ export function FilesPage() {
                   <input className="hidden" disabled={uploading} onChange={handleUpload} type="file" />
                   {uploading ? "Uploading..." : "Upload File"}
                 </label>
+                <Button disabled={!hasBulkSelection || downloading} onClick={handleBulkDownload} type="button" variant="ghost">
+                  Download Selected
+                </Button>
                 <Button disabled={!hasBulkSelection || deleteMutation.isPending} onClick={handleBulkDelete} type="button" variant="ghost">
                   Delete Selected
                 </Button>
