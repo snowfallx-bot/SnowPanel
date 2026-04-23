@@ -49,6 +49,16 @@ const imagesFixture = [
   }
 ];
 
+function createDeferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
 function LocationProbe() {
   const location = useLocation();
   return <div data-testid="location-search">{location.search}</div>;
@@ -229,5 +239,44 @@ describe("DockerPage", () => {
     expect(startDockerContainer).not.toHaveBeenCalled();
     expect(screen.queryByText(/start requested:/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/start success:/i)).not.toBeInTheDocument();
+  });
+
+  it("shows pending action labels while docker actions are running", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    renderDockerPage("/docker");
+    await screen.findByText("Showing 2 / 2 containers");
+
+    const startDeferred = createDeferred<{ id: string; state: string }>();
+    vi.mocked(startDockerContainer).mockImplementationOnce(() => startDeferred.promise);
+    fireEvent.click(screen.getAllByRole("button", { name: "Start" })[0]);
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Starting..." })).toBeDisabled();
+    });
+    startDeferred.resolve({ id: "container-web", state: "running" });
+    await waitFor(() => {
+      expect(screen.getAllByRole("button", { name: "Start" })[0]).toBeEnabled();
+    });
+
+    const stopDeferred = createDeferred<{ id: string; state: string }>();
+    vi.mocked(stopDockerContainer).mockImplementationOnce(() => stopDeferred.promise);
+    fireEvent.click(screen.getAllByRole("button", { name: "Stop" })[0]);
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Stopping..." })).toBeDisabled();
+    });
+    stopDeferred.resolve({ id: "container-web", state: "stopped" });
+    await waitFor(() => {
+      expect(screen.getAllByRole("button", { name: "Stop" })[0]).toBeEnabled();
+    });
+
+    const restartDeferred = createDeferred<{ id: string; state: string }>();
+    vi.mocked(restartDockerContainer).mockImplementationOnce(() => restartDeferred.promise);
+    fireEvent.click(screen.getAllByRole("button", { name: "Restart" })[0]);
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Restarting..." })).toBeDisabled();
+    });
+    restartDeferred.resolve({ id: "container-web", state: "running" });
+    await waitFor(() => {
+      expect(screen.getAllByRole("button", { name: "Restart" })[0]).toBeEnabled();
+    });
   });
 });
