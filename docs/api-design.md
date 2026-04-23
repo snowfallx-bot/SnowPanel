@@ -46,6 +46,7 @@ Language: **English** | [简体中文](api-design.zh-CN.md)
 
 - `GET /files/list?path=/abs/path` (`files.read`)
 - `GET /files/download?path=/abs/path` (`files.read`)
+- `POST /files/upload` (`files.write`, `multipart/form-data`, fields: `path`, `file`)
 - `POST /files/read` (`files.read`)
 - `POST /files/write` (`files.write`)
 - `POST /files/rename` (`files.write`)
@@ -57,6 +58,7 @@ All file paths are validated by the agent safe-root policy.
 Current behavior notes:
 - File read/write APIs are text-oriented (`utf-8`) and return `truncated` when max preview bytes are exceeded.
 - `GET /files/download` streams file bytes from core-agent chunk RPC (`ReadFileChunk`) and supports both text and binary files.
+- `POST /files/upload` streams raw file bytes from backend to core-agent chunk RPC (`WriteFileChunk`) and supports both text and binary files.
 - Binary or non-UTF-8 files are shown with a clear hint and inline editing is disabled.
 - Preview size is selectable (`256KB` to `8MB`) for `/files/read`; chunked offset reads are currently internal to the download pipeline.
 - File-related error codes currently used by the core-agent:

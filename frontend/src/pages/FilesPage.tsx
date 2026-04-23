@@ -7,6 +7,7 @@ import {
   listFiles,
   readTextFile,
   renameFile,
+  uploadFile,
   writeTextFile
 } from "@/api/files";
 import { FileEditorPanel } from "@/components/files/FileEditorPanel";
@@ -48,11 +49,6 @@ function fileNameFromPath(path: string) {
     return normalized;
   }
   return normalized.slice(index + 1);
-}
-
-function decodeUtf8OrThrow(bytes: ArrayBuffer) {
-  const decoder = new TextDecoder("utf-8", { fatal: true });
-  return decoder.decode(bytes);
 }
 
 function describeFileApiError(error: unknown, fallback: string) {
@@ -297,22 +293,11 @@ export function FilesPage() {
     }
 
     try {
-      const content = decodeUtf8OrThrow(await file.arrayBuffer());
       const targetPath = joinPath(currentPath, file.name);
-      await writeMutation.mutateAsync({
-        path: targetPath,
-        content,
-        create_if_not_exists: true,
-        truncate: true,
-        encoding: "utf-8"
-      });
-      setFeedback(`Uploaded text file to ${targetPath}`);
+      const result = await uploadFile(file, targetPath);
+      setFeedback(`Uploaded ${file.name} (${result.uploaded_bytes} bytes) to ${result.path}`);
       queryClient.invalidateQueries({ queryKey: ["files", path] });
     } catch (error) {
-      if (error instanceof TypeError) {
-        setFeedback("Upload currently supports UTF-8 text files only.");
-        return;
-      }
       setFeedback(describeFileApiError(error, "Upload failed"));
     }
   }
@@ -335,7 +320,7 @@ export function FilesPage() {
       <div>
         <h2 className="text-2xl font-semibold text-slate-900">Files</h2>
         <p className="text-sm text-slate-500">
-          Browse, upload, rename, download and edit UTF-8 text files via the Rust core-agent.
+          Browse, upload, rename, download and edit files via the Rust core-agent.
         </p>
       </div>
 
@@ -366,7 +351,7 @@ export function FilesPage() {
               <div className="flex items-center gap-2">
                 <label className="rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-700">
                   <input className="hidden" onChange={handleUpload} type="file" />
-                  Upload UTF-8 Text File
+                  Upload File
                 </label>
                 <label className="text-sm text-slate-500">Preview limit</label>
                 <select

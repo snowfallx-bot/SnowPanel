@@ -28,7 +28,7 @@ use crate::api::proto::{
     ReadFileChunkRequest, ReadFileChunkResponse, ReadTextFileRequest, ReadTextFileResponse,
     ServiceActionRequest, ServiceActionResponse, ServiceInfo, SetCronTaskEnabledRequest,
     SetCronTaskEnabledResponse, UpdateCronTaskRequest, UpdateCronTaskResponse,
-    WriteTextFileRequest, WriteTextFileResponse,
+    WriteFileChunkRequest, WriteFileChunkResponse, WriteTextFileRequest, WriteTextFileResponse,
 };
 use crate::cron::service::{CronError, CronService};
 use crate::docker::service::{DockerAction, DockerError, DockerService};
@@ -208,6 +208,21 @@ impl FileService for FileServiceImpl {
             payload.create_if_not_exists,
             payload.truncate,
             &payload.encoding,
+            payload.safety,
+        )))
+    }
+
+    async fn write_file_chunk(
+        &self,
+        request: Request<WriteFileChunkRequest>,
+    ) -> Result<Response<WriteFileChunkResponse>, Status> {
+        let payload = request.into_inner();
+        Ok(Response::new(self.file_service.write_file_chunk(
+            &payload.path,
+            payload.offset,
+            &payload.chunk,
+            payload.create_if_not_exists,
+            payload.truncate,
             payload.safety,
         )))
     }

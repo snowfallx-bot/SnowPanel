@@ -46,6 +46,7 @@
 
 - `GET /files/list?path=/abs/path`（`files.read`）
 - `GET /files/download?path=/abs/path`（`files.read`）
+- `POST /files/upload`（`files.write`，`multipart/form-data`，字段：`path`、`file`）
 - `POST /files/read`（`files.read`）
 - `POST /files/write`（`files.write`）
 - `POST /files/rename`（`files.write`）
@@ -57,6 +58,7 @@
 当前行为说明：
 - 文件读写 API 为文本导向（`utf-8`），超出最大预览字节数时返回 `truncated`。
 - `GET /files/download` 通过 core-agent 分块读取 RPC（`ReadFileChunk`）流式下载，支持文本与二进制文件。
+- `POST /files/upload` 通过 core-agent 分块写入 RPC（`WriteFileChunk`）流式上传，支持文本与二进制文件。
 - 二进制或非 UTF-8 文件会给出明确提示，并禁用内联编辑。
 - 预览大小可选（`256KB` 到 `8MB`，仅 `/files/read`）；offset/chunk 目前作为下载链路内部能力使用。
 - 当前 core-agent 文件相关错误码语义：

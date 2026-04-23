@@ -1,8 +1,11 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -18,6 +21,10 @@ type fileHandlerServiceStub struct {
 	downloadChunks [][]byte
 	downloadResult dto.DownloadFileResult
 	downloadErr    error
+	uploadReq      dto.UploadFileRequest
+	uploadData     []byte
+	uploadResult   dto.UploadFileResult
+	uploadErr      error
 }
 
 func (s *fileHandlerServiceStub) ListFiles(context.Context, dto.ListFilesQuery) (dto.ListFilesResult, error) {
@@ -74,6 +81,33 @@ func (s *fileHandlerServiceStub) DownloadFile(
 		}
 	}
 	return s.downloadResult, s.downloadErr
+}
+
+func (s *fileHandlerServiceStub) UploadFile(
+	_ context.Context,
+	req dto.UploadFileRequest,
+	readChunk func([]byte) (int, error),
+) (dto.UploadFileResult, error) {
+	s.uploadReq = req
+	s.uploadData = nil
+	if s.uploadErr != nil {
+		return dto.UploadFileResult{}, s.uploadErr
+	}
+
+	buffer := make([]byte, 8)
+	for {
+		n, err := readChunk(buffer)
+		if n > 0 {
+			s.uploadData = append(s.uploadData, buffer[:n]...)
+		}
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return dto.UploadFileResult{}, err
+		}
+	}
+	return s.uploadResult, nil
 }
 
 type fileAuditRecorder struct {
@@ -178,5 +212,90 @@ func TestFileHandlerDownloadFileFailure(t *testing.T) {
 	}
 	if record.TargetID != "/tmp/binary.bin" {
 		t.Fatalf("unexpected target id: %s", record.TargetID)
+	}
+}
+
+func TestFileHandlerUploadFileSuccess(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	fileSvc := &fileHandlerServiceStub{
+		uploadResult: dto.UploadFileResult{
+			Path:          "/tmp/demo.bin",
+			UploadedBytes: 11,
+			TotalSize:     11,
+		},
+	}
+	auditSvc := &fileAuditRecorder{}
+	handler := NewFileHandler(fileSvc, auditSvc)
+
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	if err := writer.WriteField("path", "/tmp/demo.bin"); err != nil {
+		t.Fatalf("write field failed: %v", err)
+	}
+	part, err := writer.CreateFormFile("file", "demo.bin")
+	if err != nil {
+		t.Fatalf("create form file failed: %v", err)
+	}
+	if _, err := part.Write([]byte("hello world")); err != nil {
+		t.Fatalf("write file part failed: %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("close writer failed: %v", err)
+	}
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/api/v1/files/upload", &body)
+	c.Request.Header.Set("Content-Type", writer.FormDataContentType())
+
+	handler.UploadFile(c)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if fileSvc.uploadReq.Path != "/tmp/demo.bin" {
+		t.Fatalf("unexpected upload path: %s", fileSvc.uploadReq.Path)
+	}
+	if string(fileSvc.uploadData) != "hello world" {
+		t.Fatalf("unexpected uploaded bytes: %q", string(fileSvc.uploadData))
+	}
+	if len(auditSvc.records) != 1 {
+		t.Fatalf("expected one audit record, got %d", len(auditSvc.records))
+	}
+	record := auditSvc.records[0]
+	if !record.Success || record.Action != "upload" || record.Module != "files" {
+		t.Fatalf("unexpected upload audit record: %+v", record)
+	}
+}
+
+func TestFileHandlerUploadFileRequiresFile(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	fileSvc := &fileHandlerServiceStub{}
+	auditSvc := &fileAuditRecorder{}
+	handler := NewFileHandler(fileSvc, auditSvc)
+
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	if err := writer.WriteField("path", "/tmp/demo.bin"); err != nil {
+		t.Fatalf("write field failed: %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("close writer failed: %v", err)
+	}
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/api/v1/files/upload", &body)
+	c.Request.Header.Set("Content-Type", writer.FormDataContentType())
+
+	handler.UploadFile(c)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", w.Code)
+	}
+	if len(auditSvc.records) != 0 {
+		t.Fatalf("expected no audit record for validation failure, got %d", len(auditSvc.records))
 	}
 }

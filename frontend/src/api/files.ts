@@ -10,6 +10,7 @@ import {
   RenameFileResult,
   ReadTextFilePayload,
   ReadTextFileResult,
+  UploadFileResult,
   WriteTextFilePayload,
   WriteTextFileResult
 } from "@/types/file";
@@ -46,6 +47,13 @@ export function deleteFile(payload: DeleteFilePayload) {
 
 export function renameFile(payload: RenameFilePayload) {
   return unwrap<RenameFileResult>(http.post("/api/v1/files/rename", payload));
+}
+
+export function uploadFile(file: File, path: string) {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("path", path);
+  return unwrap<UploadFileResult>(http.post("/api/v1/files/upload", formData));
 }
 
 function parseDownloadFileName(contentDisposition: string | null | undefined) {

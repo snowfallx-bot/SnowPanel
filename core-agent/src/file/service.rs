@@ -5,7 +5,8 @@ use std::time::UNIX_EPOCH;
 
 use crate::api::proto::{
     CreateDirectoryResponse, DeleteFileResponse, Error, FileEntry, ListFilesResponse,
-    PathSafetyContext, ReadFileChunkResponse, ReadTextFileResponse, WriteTextFileResponse,
+    PathSafetyContext, ReadFileChunkResponse, ReadTextFileResponse, WriteFileChunkResponse,
+    WriteTextFileResponse,
 };
 use crate::security::path_validator::{FileOperation, PathValidationError, PathValidator};
 
@@ -300,6 +301,122 @@ impl FileService {
             chunk: buffer,
             total_size,
             eof,
+        }
+    }
+
+    pub fn write_file_chunk(
+        &self,
+        path: &str,
+        offset: u64,
+        chunk: &[u8],
+        create_if_not_exists: bool,
+        truncate: bool,
+        safety: Option<PathSafetyContext>,
+    ) -> WriteFileChunkResponse {
+        let safety = safety.unwrap_or_default();
+        let normalized = match self.path_validator.validate(
+            path,
+            &safety.allowed_roots,
+            true,
+            FileOperation::Write,
+        ) {
+            Ok(value) => value,
+            Err(err) => return WriteFileChunkResponse::from_error(file_error_from_validation(err)),
+        };
+
+        if chunk.len() > self.max_write_bytes {
+            return WriteFileChunkResponse::from_error(FileError::file_too_large(format!(
+                "chunk size exceeds max_write_bytes={}",
+                self.max_write_bytes
+            )));
+        }
+
+        if truncate && offset > 0 {
+            return WriteFileChunkResponse::from_error(FileError::bad_request(
+                "truncate upload chunk requires offset=0".to_string(),
+            ));
+        }
+
+        if let Some(parent) = normalized.parent() {
+            if !parent.exists() {
+                return WriteFileChunkResponse::from_error(FileError::bad_request(format!(
+                    "parent path '{}' does not exist",
+                    parent.display()
+                )));
+            }
+        }
+
+        if !normalized.exists() && !create_if_not_exists {
+            return WriteFileChunkResponse::from_error(FileError::not_found(format!(
+                "target '{}' does not exist",
+                normalized.display()
+            )));
+        }
+
+        let mut options = OpenOptions::new();
+        options
+            .write(true)
+            .create(create_if_not_exists)
+            .truncate(truncate);
+
+        let mut file = match options.open(&normalized) {
+            Ok(value) => value,
+            Err(err) => {
+                return WriteFileChunkResponse::from_error(FileError::io(format!(
+                    "cannot open '{}': {err}",
+                    normalized.display()
+                )))
+            }
+        };
+
+        let current_size = match file.metadata() {
+            Ok(value) => value.len(),
+            Err(err) => {
+                return WriteFileChunkResponse::from_error(FileError::io(format!(
+                    "cannot read metadata for '{}': {err}",
+                    normalized.display()
+                )))
+            }
+        };
+
+        if offset > current_size {
+            return WriteFileChunkResponse::from_error(FileError::bad_request(format!(
+                "offset {offset} exceeds file size {current_size}",
+            )));
+        }
+
+        if let Err(err) = file.seek(SeekFrom::Start(offset)) {
+            return WriteFileChunkResponse::from_error(FileError::io(format!(
+                "cannot seek '{}' to offset {offset}: {err}",
+                normalized.display()
+            )));
+        }
+
+        if !chunk.is_empty() {
+            if let Err(err) = file.write_all(chunk) {
+                return WriteFileChunkResponse::from_error(FileError::io(format!(
+                    "cannot write '{}': {err}",
+                    normalized.display()
+                )));
+            }
+        }
+
+        let total_size = match fs::metadata(&normalized) {
+            Ok(value) => value.len(),
+            Err(err) => {
+                return WriteFileChunkResponse::from_error(FileError::io(format!(
+                    "cannot read metadata for '{}': {err}",
+                    normalized.display()
+                )))
+            }
+        };
+
+        WriteFileChunkResponse {
+            error: Some(Error::ok()),
+            path: normalized.to_string_lossy().into_owned(),
+            offset,
+            written_bytes: chunk.len() as u64,
+            total_size,
         }
     }
 
@@ -663,6 +780,22 @@ impl ReadFileChunkResponseExt for ReadFileChunkResponse {
 
 trait WriteTextFileResponseExt {
     fn from_error(err: FileError) -> Self;
+}
+
+trait WriteFileChunkResponseExt {
+    fn from_error(err: FileError) -> Self;
+}
+
+impl WriteFileChunkResponseExt for WriteFileChunkResponse {
+    fn from_error(err: FileError) -> Self {
+        Self {
+            error: Some(err.into_proto()),
+            path: String::new(),
+            offset: 0,
+            written_bytes: 0,
+            total_size: 0,
+        }
+    }
 }
 
 impl WriteTextFileResponseExt for WriteTextFileResponse {

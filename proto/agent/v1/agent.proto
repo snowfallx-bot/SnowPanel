@@ -128,6 +128,23 @@ message ReadFileChunkResponse {
   bool eof = 6;
 }
 
+message WriteFileChunkRequest {
+  string path = 1;
+  uint64 offset = 2;
+  bytes chunk = 3;
+  bool create_if_not_exists = 4;
+  bool truncate = 5;
+  PathSafetyContext safety = 6;
+}
+
+message WriteFileChunkResponse {
+  Error error = 1;
+  string path = 2;
+  uint64 offset = 3;
+  uint64 written_bytes = 4;
+  uint64 total_size = 5;
+}
+
 message WriteTextFileRequest {
   string path = 1;
   string content = 2;
@@ -299,6 +316,7 @@ service FileService {
   rpc ListFiles(ListFilesRequest) returns (ListFilesResponse);
   rpc ReadTextFile(ReadTextFileRequest) returns (ReadTextFileResponse);
   rpc ReadFileChunk(ReadFileChunkRequest) returns (ReadFileChunkResponse);
+  rpc WriteFileChunk(WriteFileChunkRequest) returns (WriteFileChunkResponse);
   rpc WriteTextFile(WriteTextFileRequest) returns (WriteTextFileResponse);
   rpc CreateDirectory(CreateDirectoryRequest) returns (CreateDirectoryResponse);
   rpc DeleteFile(DeleteFileRequest) returns (DeleteFileResponse);

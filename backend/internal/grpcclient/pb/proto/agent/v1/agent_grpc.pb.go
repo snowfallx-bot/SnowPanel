@@ -264,6 +264,7 @@ const (
 	FileService_ListFiles_FullMethodName       = "/snowpanel.agent.v1.FileService/ListFiles"
 	FileService_ReadTextFile_FullMethodName    = "/snowpanel.agent.v1.FileService/ReadTextFile"
 	FileService_ReadFileChunk_FullMethodName   = "/snowpanel.agent.v1.FileService/ReadFileChunk"
+	FileService_WriteFileChunk_FullMethodName  = "/snowpanel.agent.v1.FileService/WriteFileChunk"
 	FileService_WriteTextFile_FullMethodName   = "/snowpanel.agent.v1.FileService/WriteTextFile"
 	FileService_CreateDirectory_FullMethodName = "/snowpanel.agent.v1.FileService/CreateDirectory"
 	FileService_DeleteFile_FullMethodName      = "/snowpanel.agent.v1.FileService/DeleteFile"
@@ -276,6 +277,7 @@ type FileServiceClient interface {
 	ListFiles(ctx context.Context, in *ListFilesRequest, opts ...grpc.CallOption) (*ListFilesResponse, error)
 	ReadTextFile(ctx context.Context, in *ReadTextFileRequest, opts ...grpc.CallOption) (*ReadTextFileResponse, error)
 	ReadFileChunk(ctx context.Context, in *ReadFileChunkRequest, opts ...grpc.CallOption) (*ReadFileChunkResponse, error)
+	WriteFileChunk(ctx context.Context, in *WriteFileChunkRequest, opts ...grpc.CallOption) (*WriteFileChunkResponse, error)
 	WriteTextFile(ctx context.Context, in *WriteTextFileRequest, opts ...grpc.CallOption) (*WriteTextFileResponse, error)
 	CreateDirectory(ctx context.Context, in *CreateDirectoryRequest, opts ...grpc.CallOption) (*CreateDirectoryResponse, error)
 	DeleteFile(ctx context.Context, in *DeleteFileRequest, opts ...grpc.CallOption) (*DeleteFileResponse, error)
@@ -319,6 +321,16 @@ func (c *fileServiceClient) ReadFileChunk(ctx context.Context, in *ReadFileChunk
 	return out, nil
 }
 
+func (c *fileServiceClient) WriteFileChunk(ctx context.Context, in *WriteFileChunkRequest, opts ...grpc.CallOption) (*WriteFileChunkResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(WriteFileChunkResponse)
+	err := c.cc.Invoke(ctx, FileService_WriteFileChunk_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *fileServiceClient) WriteTextFile(ctx context.Context, in *WriteTextFileRequest, opts ...grpc.CallOption) (*WriteTextFileResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(WriteTextFileResponse)
@@ -356,6 +368,7 @@ type FileServiceServer interface {
 	ListFiles(context.Context, *ListFilesRequest) (*ListFilesResponse, error)
 	ReadTextFile(context.Context, *ReadTextFileRequest) (*ReadTextFileResponse, error)
 	ReadFileChunk(context.Context, *ReadFileChunkRequest) (*ReadFileChunkResponse, error)
+	WriteFileChunk(context.Context, *WriteFileChunkRequest) (*WriteFileChunkResponse, error)
 	WriteTextFile(context.Context, *WriteTextFileRequest) (*WriteTextFileResponse, error)
 	CreateDirectory(context.Context, *CreateDirectoryRequest) (*CreateDirectoryResponse, error)
 	DeleteFile(context.Context, *DeleteFileRequest) (*DeleteFileResponse, error)
@@ -377,6 +390,9 @@ func (UnimplementedFileServiceServer) ReadTextFile(context.Context, *ReadTextFil
 }
 func (UnimplementedFileServiceServer) ReadFileChunk(context.Context, *ReadFileChunkRequest) (*ReadFileChunkResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ReadFileChunk not implemented")
+}
+func (UnimplementedFileServiceServer) WriteFileChunk(context.Context, *WriteFileChunkRequest) (*WriteFileChunkResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method WriteFileChunk not implemented")
 }
 func (UnimplementedFileServiceServer) WriteTextFile(context.Context, *WriteTextFileRequest) (*WriteTextFileResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method WriteTextFile not implemented")
@@ -462,6 +478,24 @@ func _FileService_ReadFileChunk_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _FileService_WriteFileChunk_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(WriteFileChunkRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FileServiceServer).WriteFileChunk(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: FileService_WriteFileChunk_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FileServiceServer).WriteFileChunk(ctx, req.(*WriteFileChunkRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _FileService_WriteTextFile_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(WriteTextFileRequest)
 	if err := dec(in); err != nil {
@@ -534,6 +568,10 @@ var FileService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ReadFileChunk",
 			Handler:    _FileService_ReadFileChunk_Handler,
+		},
+		{
+			MethodName: "WriteFileChunk",
+			Handler:    _FileService_WriteFileChunk_Handler,
 		},
 		{
 			MethodName: "WriteTextFile",

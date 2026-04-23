@@ -66,3 +66,9 @@ export interface RenameFileResult {
   target_path: string;
   written_bytes: number;
 }
+
+export interface UploadFileResult {
+  path: string;
+  uploaded_bytes: number;
+  total_size: number;
+}

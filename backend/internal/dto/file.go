@@ -43,6 +43,16 @@ type DownloadFileResult struct {
 	DownloadedBytes uint64 `json:"downloaded_bytes"`
 }
 
+type UploadFileRequest struct {
+	Path string `form:"path" binding:"required"`
+}
+
+type UploadFileResult struct {
+	Path          string `json:"path"`
+	UploadedBytes uint64 `json:"uploaded_bytes"`
+	TotalSize     uint64 `json:"total_size"`
+}
+
 type FileEntry struct {
 	Name       string `json:"name"`
 	Path       string `json:"path"`

@@ -135,6 +135,21 @@ type WriteTextFileResult struct {
 	WrittenBytes uint64
 }
 
+type WriteFileChunkRequest struct {
+	Path              string
+	Offset            uint64
+	Chunk             []byte
+	CreateIfNotExists bool
+	Truncate          bool
+}
+
+type WriteFileChunkResult struct {
+	Path         string
+	Offset       uint64
+	WrittenBytes uint64
+	TotalSize    uint64
+}
+
 type CreateDirectoryRequest struct {
 	Path          string
 	CreateParents bool
@@ -263,6 +278,7 @@ type AgentClient interface {
 	ListFiles(ctx context.Context, req ListFilesRequest) (ListFilesResult, error)
 	ReadTextFile(ctx context.Context, req ReadTextFileRequest) (ReadTextFileResult, error)
 	ReadFileChunk(ctx context.Context, req ReadFileChunkRequest) (ReadFileChunkResult, error)
+	WriteFileChunk(ctx context.Context, req WriteFileChunkRequest) (WriteFileChunkResult, error)
 	WriteTextFile(ctx context.Context, req WriteTextFileRequest) (WriteTextFileResult, error)
 	CreateDirectory(ctx context.Context, req CreateDirectoryRequest) (CreateDirectoryResult, error)
 	DeleteFile(ctx context.Context, req DeleteFileRequest) (DeleteFileResult, error)
@@ -467,6 +483,35 @@ func (c *Client) ReadFileChunk(ctx context.Context, req ReadFileChunkRequest) (R
 			Chunk:     append([]byte(nil), resp.GetChunk()...),
 			TotalSize: resp.GetTotalSize(),
 			EOF:       resp.GetEof(),
+		}
+		return nil
+	})
+	return result, err
+}
+
+func (c *Client) WriteFileChunk(ctx context.Context, req WriteFileChunkRequest) (WriteFileChunkResult, error) {
+	result := WriteFileChunkResult{}
+	err := c.invoke(ctx, func(callCtx context.Context, conn *grpc.ClientConn) error {
+		client := agentv1.NewFileServiceClient(conn)
+		resp, err := client.WriteFileChunk(callCtx, &agentv1.WriteFileChunkRequest{
+			Path:              req.Path,
+			Offset:            req.Offset,
+			Chunk:             req.Chunk,
+			CreateIfNotExists: req.CreateIfNotExists,
+			Truncate:          req.Truncate,
+		})
+		if err != nil {
+			return err
+		}
+		if err := responseError(resp.GetError()); err != nil {
+			return err
+		}
+
+		result = WriteFileChunkResult{
+			Path:         resp.GetPath(),
+			Offset:       resp.GetOffset(),
+			WrittenBytes: resp.GetWrittenBytes(),
+			TotalSize:    resp.GetTotalSize(),
 		}
 		return nil
 	})

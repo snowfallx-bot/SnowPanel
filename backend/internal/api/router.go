@@ -67,6 +67,7 @@ func NewRouter(deps RouterDeps) *gin.Engine {
 			{
 				files.GET("/list", middleware.RequirePermission("files.read"), fileHandler.ListFiles)
 				files.GET("/download", middleware.RequirePermission("files.read"), fileHandler.DownloadFile)
+				files.POST("/upload", middleware.RequirePermission("files.write"), fileHandler.UploadFile)
 				files.POST("/read", middleware.RequirePermission("files.read"), fileHandler.ReadTextFile)
 				files.POST("/write", middleware.RequirePermission("files.write"), fileHandler.WriteTextFile)
 				files.POST("/rename", middleware.RequirePermission("files.write"), fileHandler.RenameFile)

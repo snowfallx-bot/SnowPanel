@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"net"
 	"testing"
@@ -82,6 +83,31 @@ func TestFileService_DownloadFileViaGRPC(t *testing.T) {
 	}
 	if string(downloaded) != "hello from fake agent" {
 		t.Fatalf("unexpected content: %s", string(downloaded))
+	}
+}
+
+func TestFileService_UploadFileViaGRPC(t *testing.T) {
+	target := startFakeAgentServer(t)
+	client := grpcclient.New(target, 2*time.Second)
+	service := NewFileService(client)
+
+	reader := bytes.NewBufferString("upload-data")
+	result, err := service.UploadFile(
+		context.Background(),
+		dto.UploadFileRequest{Path: "/tmp/upload.bin"},
+		reader.Read,
+	)
+	if err != nil {
+		t.Fatalf("UploadFile() error = %v", err)
+	}
+	if result.Path != "/tmp/upload.bin" {
+		t.Fatalf("unexpected path: %s", result.Path)
+	}
+	if result.UploadedBytes != 11 {
+		t.Fatalf("unexpected uploaded bytes: %d", result.UploadedBytes)
+	}
+	if result.TotalSize != 11 {
+		t.Fatalf("unexpected total size: %d", result.TotalSize)
 	}
 }
 
@@ -292,6 +318,19 @@ func (s *fakeFileService) ReadFileChunk(
 		Chunk:     chunk,
 		TotalSize: uint64(len(content)),
 		Eof:       eof,
+	}, nil
+}
+
+func (s *fakeFileService) WriteFileChunk(
+	_ context.Context,
+	req *agentv1.WriteFileChunkRequest,
+) (*agentv1.WriteFileChunkResponse, error) {
+	return &agentv1.WriteFileChunkResponse{
+		Error:        okError(),
+		Path:         req.GetPath(),
+		Offset:       req.GetOffset(),
+		WrittenBytes: uint64(len(req.GetChunk())),
+		TotalSize:    req.GetOffset() + uint64(len(req.GetChunk())),
 	}, nil
 }
 

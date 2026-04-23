@@ -131,6 +131,62 @@ func (h *FileHandler) DownloadFile(c *gin.Context) {
 	})
 }
 
+func (h *FileHandler) UploadFile(c *gin.Context) {
+	targetPath := strings.TrimSpace(c.PostForm("path"))
+	if targetPath == "" {
+		targetPath = strings.TrimSpace(c.Query("path"))
+	}
+	if targetPath == "" {
+		response.Fail(c, http.StatusBadRequest, apperror.ErrBadRequest.Code, "path is required")
+		return
+	}
+
+	fileHeader, err := c.FormFile("file")
+	if err != nil {
+		response.Fail(c, http.StatusBadRequest, apperror.ErrBadRequest.Code, "file is required")
+		return
+	}
+
+	file, err := fileHeader.Open()
+	if err != nil {
+		response.Fail(c, http.StatusBadRequest, apperror.ErrBadRequest.Code, "unable to open uploaded file")
+		return
+	}
+	defer file.Close()
+
+	result, err := h.fileService.UploadFile(
+		c.Request.Context(),
+		dto.UploadFileRequest{Path: targetPath},
+		file.Read,
+	)
+	if err != nil {
+		recordAudit(c, h.auditService, dto.RecordAuditInput{
+			Module:         "files",
+			Action:         "upload",
+			TargetType:     "path",
+			TargetID:       targetPath,
+			RequestSummary: fmt.Sprintf(`{"op":"upload","filename":%q}`, fileHeader.Filename),
+			Success:        false,
+			ResultCode:     "failed",
+			ResultMessage:  err.Error(),
+		})
+		response.FromError(c, err)
+		return
+	}
+
+	recordAudit(c, h.auditService, dto.RecordAuditInput{
+		Module:         "files",
+		Action:         "upload",
+		TargetType:     "path",
+		TargetID:       targetPath,
+		RequestSummary: fmt.Sprintf(`{"op":"upload","filename":%q}`, fileHeader.Filename),
+		Success:        true,
+		ResultCode:     "ok",
+		ResultMessage:  "upload success",
+	})
+	response.OK(c, result)
+}
+
 func (h *FileHandler) ReadTextFile(c *gin.Context) {
 	var req dto.ReadTextFileRequest
 	if err := c.ShouldBindJSON(&req); err != nil {

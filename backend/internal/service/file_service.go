@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"io"
 	"path"
 	"strings"
 
@@ -23,6 +24,11 @@ type FileService interface {
 		query dto.DownloadFileQuery,
 		writeChunk func([]byte) error,
 	) (dto.DownloadFileResult, error)
+	UploadFile(
+		ctx context.Context,
+		req dto.UploadFileRequest,
+		readChunk func([]byte) (int, error),
+	) (dto.UploadFileResult, error)
 }
 
 type fileService struct {
@@ -30,6 +36,7 @@ type fileService struct {
 }
 
 const downloadChunkSize uint32 = 256 * 1024
+const uploadChunkSize = 256 * 1024
 
 func NewFileService(agentClient grpcclient.AgentClient) FileService {
 	return &fileService{agentClient: agentClient}
@@ -214,6 +221,130 @@ func (s *fileService) DownloadFile(
 		Path:            normalizedPath,
 		TotalSize:       totalSize,
 		DownloadedBytes: downloadedBytes,
+	}, nil
+}
+
+func (s *fileService) UploadFile(
+	ctx context.Context,
+	req dto.UploadFileRequest,
+	readChunk func([]byte) (int, error),
+) (dto.UploadFileResult, error) {
+	path := strings.TrimSpace(req.Path)
+	if path == "" {
+		return dto.UploadFileResult{}, apperror.Wrap(
+			apperror.ErrBadRequest.Code,
+			apperror.ErrBadRequest.HTTPStatus,
+			apperror.ErrBadRequest.Message,
+			fmt.Errorf("path is required"),
+		)
+	}
+	if readChunk == nil {
+		return dto.UploadFileResult{}, apperror.Wrap(
+			apperror.ErrInternal.Code,
+			apperror.ErrInternal.HTTPStatus,
+			apperror.ErrInternal.Message,
+			fmt.Errorf("upload reader is required"),
+		)
+	}
+
+	buffer := make([]byte, uploadChunkSize)
+	var (
+		offset         uint64
+		normalizedPath string
+		totalSize      uint64
+	)
+
+	for {
+		readLen, readErr := readChunk(buffer)
+		if readErr != nil && readErr != io.EOF {
+			return dto.UploadFileResult{}, apperror.Wrap(
+				apperror.ErrInternal.Code,
+				apperror.ErrInternal.HTTPStatus,
+				"stream read failed",
+				readErr,
+			)
+		}
+
+		if readLen < 0 || readLen > len(buffer) {
+			return dto.UploadFileResult{}, apperror.Wrap(
+				apperror.ErrInternal.Code,
+				apperror.ErrInternal.HTTPStatus,
+				apperror.ErrInternal.Message,
+				fmt.Errorf("invalid stream chunk length: %d", readLen),
+			)
+		}
+
+		if readLen > 0 {
+			chunk := append([]byte(nil), buffer[:readLen]...)
+			result, err := s.agentClient.WriteFileChunk(ctx, grpcclient.WriteFileChunkRequest{
+				Path:              path,
+				Offset:            offset,
+				Chunk:             chunk,
+				CreateIfNotExists: true,
+				Truncate:          offset == 0,
+			})
+			if err != nil {
+				return dto.UploadFileResult{}, mapAgentError(err)
+			}
+
+			if result.Offset != offset {
+				return dto.UploadFileResult{}, apperror.Wrap(
+					apperror.ErrInternal.Code,
+					apperror.ErrInternal.HTTPStatus,
+					apperror.ErrInternal.Message,
+					fmt.Errorf("unexpected write offset: got %d, want %d", result.Offset, offset),
+				)
+			}
+
+			if result.WrittenBytes != uint64(readLen) {
+				return dto.UploadFileResult{}, apperror.Wrap(
+					apperror.ErrInternal.Code,
+					apperror.ErrInternal.HTTPStatus,
+					apperror.ErrInternal.Message,
+					fmt.Errorf("unexpected written bytes: got %d, want %d", result.WrittenBytes, readLen),
+				)
+			}
+
+			offset += uint64(readLen)
+			totalSize = result.TotalSize
+			if normalizedPath == "" {
+				normalizedPath = strings.TrimSpace(result.Path)
+			}
+		}
+
+		if readErr == io.EOF {
+			break
+		}
+	}
+
+	if offset == 0 {
+		result, err := s.agentClient.WriteFileChunk(ctx, grpcclient.WriteFileChunkRequest{
+			Path:              path,
+			Offset:            0,
+			Chunk:             nil,
+			CreateIfNotExists: true,
+			Truncate:          true,
+		})
+		if err != nil {
+			return dto.UploadFileResult{}, mapAgentError(err)
+		}
+		totalSize = result.TotalSize
+		if normalizedPath == "" {
+			normalizedPath = strings.TrimSpace(result.Path)
+		}
+	}
+
+	if normalizedPath == "" {
+		normalizedPath = path
+	}
+	if totalSize == 0 {
+		totalSize = offset
+	}
+
+	return dto.UploadFileResult{
+		Path:          normalizedPath,
+		UploadedBytes: offset,
+		TotalSize:     totalSize,
 	}, nil
 }
 
