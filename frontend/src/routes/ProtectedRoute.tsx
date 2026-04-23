@@ -26,6 +26,7 @@ function requiredPermissionForPath(pathname: string): string | null {
 export function ProtectedRoute() {
   const hydrated = useAuthStore((state) => state.hydrated);
   const token = useAuthStore((state) => state.token);
+  const refreshToken = useAuthStore((state) => state.refreshToken);
   const user = useAuthStore((state) => state.user);
   const setAuth = useAuthStore((state) => state.setAuth);
   const clearAuth = useAuthStore((state) => state.clearAuth);
@@ -47,7 +48,7 @@ export function ProtectedRoute() {
         if (!alive) {
           return;
         }
-        setAuth(token, profile);
+        setAuth(token, profile, refreshToken);
       })
       .catch((error: unknown) => {
         if (!alive) {
@@ -67,7 +68,7 @@ export function ProtectedRoute() {
     return () => {
       alive = false;
     };
-  }, [hydrated, token, setAuth, clearAuth]);
+  }, [hydrated, token, refreshToken, setAuth, clearAuth]);
 
   const requiredPermission = useMemo(
     () => requiredPermissionForPath(location.pathname),

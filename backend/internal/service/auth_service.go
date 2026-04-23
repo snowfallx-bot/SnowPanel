@@ -22,6 +22,8 @@ import (
 type AuthService interface {
 	EnsureDefaultAdmin(ctx context.Context) error
 	Login(ctx context.Context, req dto.LoginRequest) (dto.LoginResponse, error)
+	Refresh(ctx context.Context, refreshToken string) (dto.LoginResponse, error)
+	RevokeSession(ctx context.Context, userID int64) error
 	ChangePassword(ctx context.Context, userID int64, req dto.ChangePasswordRequest) (dto.LoginResponse, error)
 	Me(ctx context.Context, userID int64) (dto.UserProfile, error)
 	ParseToken(token string) (TokenClaims, error)
@@ -35,6 +37,7 @@ type TokenClaims struct {
 	Permissions        []string
 	MustChangePassword bool
 	SessionIssuedAt    int64
+	TokenUse           string
 }
 
 type jwtClaims struct {
@@ -44,6 +47,7 @@ type jwtClaims struct {
 	Permissions        []string `json:"permissions"`
 	MustChangePassword bool     `json:"must_change_password"`
 	SessionIssuedAt    int64    `json:"session_issued_at"`
+	TokenUse           string   `json:"token_use"`
 	jwt.RegisteredClaims
 }
 
@@ -53,11 +57,19 @@ type authService struct {
 }
 
 const (
-	roleSuperAdmin = "super_admin"
-	roleOperator   = "operator"
+	roleSuperAdmin  = "super_admin"
+	roleOperator    = "operator"
+	tokenUseAccess  = "access"
+	tokenUseRefresh = "refresh"
 )
 
 func NewAuthService(userRepo repository.UserRepository, cfg config.AuthConfig) AuthService {
+	if cfg.JWTExpire <= 0 {
+		cfg.JWTExpire = 24 * time.Hour
+	}
+	if cfg.JWTRefreshExpire <= 0 {
+		cfg.JWTRefreshExpire = 7 * 24 * time.Hour
+	}
 	return &authService{
 		userRepo: userRepo,
 		cfg:      cfg,
@@ -184,9 +196,9 @@ func (s *authService) Login(ctx context.Context, req dto.LoginRequest) (dto.Logi
 	}
 
 	mustChangePassword := s.mustChangePassword(*user)
+	sessionIssuedAt := nextSessionTime(user.LastLoginAt)
 	if !mustChangePassword {
-		now := time.Now()
-		if err := s.userRepo.UpdateLastLoginAt(ctx, user.ID, now); err != nil {
+		if err := s.userRepo.UpdateLastLoginAt(ctx, user.ID, sessionIssuedAt); err != nil {
 			return dto.LoginResponse{}, apperror.Wrap(
 				apperror.ErrInternal.Code,
 				apperror.ErrInternal.HTTPStatus,
@@ -194,10 +206,16 @@ func (s *authService) Login(ctx context.Context, req dto.LoginRequest) (dto.Logi
 				err,
 			)
 		}
-		user.LastLoginAt = &now
+		user.LastLoginAt = &sessionIssuedAt
 	}
 
-	token, expiresIn, err := s.generateToken(*user, roles, permissions, mustChangePassword)
+	accessToken, accessExpiresIn, refreshToken, refreshExpiresIn, err := s.generateTokenPair(
+		*user,
+		roles,
+		permissions,
+		mustChangePassword,
+		sessionIssuedAt.UnixNano(),
+	)
 	if err != nil {
 		return dto.LoginResponse{}, apperror.Wrap(
 			apperror.ErrTokenGenerate.Code,
@@ -208,11 +226,120 @@ func (s *authService) Login(ctx context.Context, req dto.LoginRequest) (dto.Logi
 	}
 
 	return dto.LoginResponse{
-		AccessToken: token,
-		TokenType:   "Bearer",
-		ExpiresIn:   expiresIn,
-		User:        toProfile(*user, roles, permissions, mustChangePassword),
+		AccessToken:      accessToken,
+		RefreshToken:     refreshToken,
+		TokenType:        "Bearer",
+		ExpiresIn:        accessExpiresIn,
+		RefreshExpiresIn: refreshExpiresIn,
+		User:             toProfile(*user, roles, permissions, mustChangePassword),
 	}, nil
+}
+
+func (s *authService) Refresh(ctx context.Context, refreshToken string) (dto.LoginResponse, error) {
+	claims, err := s.parseTokenWithUse(refreshToken, tokenUseRefresh)
+	if err != nil {
+		return dto.LoginResponse{}, err
+	}
+	if claims.MustChangePassword {
+		return dto.LoginResponse{}, apperror.ErrPasswordChangeNeed
+	}
+	if err := s.ValidateSession(ctx, claims); err != nil {
+		return dto.LoginResponse{}, err
+	}
+
+	user, err := s.userRepo.GetByID(ctx, claims.UserID)
+	if err != nil {
+		return dto.LoginResponse{}, apperror.Wrap(
+			apperror.ErrInternal.Code,
+			apperror.ErrInternal.HTTPStatus,
+			apperror.ErrInternal.Message,
+			err,
+		)
+	}
+	if user == nil {
+		return dto.LoginResponse{}, apperror.ErrSessionExpired
+	}
+	if user.Status != 1 {
+		return dto.LoginResponse{}, apperror.ErrSessionExpired
+	}
+
+	roles, permissions, err := s.resolveUserRBAC(ctx, *user)
+	if err != nil {
+		return dto.LoginResponse{}, apperror.Wrap(
+			apperror.ErrInternal.Code,
+			apperror.ErrInternal.HTTPStatus,
+			apperror.ErrInternal.Message,
+			err,
+		)
+	}
+
+	now := nextSessionTime(user.LastLoginAt)
+	if err := s.userRepo.UpdateLastLoginAt(ctx, user.ID, now); err != nil {
+		return dto.LoginResponse{}, apperror.Wrap(
+			apperror.ErrInternal.Code,
+			apperror.ErrInternal.HTTPStatus,
+			apperror.ErrInternal.Message,
+			err,
+		)
+	}
+	user.LastLoginAt = &now
+
+	accessToken, accessExpiresIn, nextRefreshToken, refreshExpiresIn, err := s.generateTokenPair(
+		*user,
+		roles,
+		permissions,
+		false,
+		now.UnixNano(),
+	)
+	if err != nil {
+		return dto.LoginResponse{}, apperror.Wrap(
+			apperror.ErrTokenGenerate.Code,
+			apperror.ErrTokenGenerate.HTTPStatus,
+			apperror.ErrTokenGenerate.Message,
+			err,
+		)
+	}
+
+	return dto.LoginResponse{
+		AccessToken:      accessToken,
+		RefreshToken:     nextRefreshToken,
+		TokenType:        "Bearer",
+		ExpiresIn:        accessExpiresIn,
+		RefreshExpiresIn: refreshExpiresIn,
+		User:             toProfile(*user, roles, permissions, false),
+	}, nil
+}
+
+func (s *authService) RevokeSession(ctx context.Context, userID int64) error {
+	user, err := s.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		return apperror.Wrap(
+			apperror.ErrInternal.Code,
+			apperror.ErrInternal.HTTPStatus,
+			apperror.ErrInternal.Message,
+			err,
+		)
+	}
+	if user == nil {
+		return apperror.ErrUserNotFound
+	}
+
+	// Keep bootstrap admin password-rotation semantics stable:
+	// if first-login flag is represented by nil last_login_at, do not clear it here.
+	if s.mustChangePassword(*user) {
+		return nil
+	}
+
+	now := nextSessionTime(user.LastLoginAt)
+	if err := s.userRepo.UpdateLastLoginAt(ctx, user.ID, now); err != nil {
+		return apperror.Wrap(
+			apperror.ErrInternal.Code,
+			apperror.ErrInternal.HTTPStatus,
+			apperror.ErrInternal.Message,
+			err,
+		)
+	}
+	return nil
 }
 
 func (s *authService) ChangePassword(
@@ -280,7 +407,7 @@ func (s *authService) ChangePassword(
 		)
 	}
 
-	now := time.Now()
+	now := nextSessionTime(user.LastLoginAt)
 	if err := s.userRepo.UpdateLastLoginAt(ctx, user.ID, now); err != nil {
 		return dto.LoginResponse{}, apperror.Wrap(
 			apperror.ErrInternal.Code,
@@ -303,7 +430,13 @@ func (s *authService) ChangePassword(
 		)
 	}
 
-	token, expiresIn, err := s.generateToken(*user, roles, permissions, false)
+	accessToken, accessExpiresIn, refreshToken, refreshExpiresIn, err := s.generateTokenPair(
+		*user,
+		roles,
+		permissions,
+		false,
+		now.UnixNano(),
+	)
 	if err != nil {
 		return dto.LoginResponse{}, apperror.Wrap(
 			apperror.ErrTokenGenerate.Code,
@@ -314,10 +447,12 @@ func (s *authService) ChangePassword(
 	}
 
 	return dto.LoginResponse{
-		AccessToken: token,
-		TokenType:   "Bearer",
-		ExpiresIn:   expiresIn,
-		User:        toProfile(*user, roles, permissions, false),
+		AccessToken:      accessToken,
+		RefreshToken:     refreshToken,
+		TokenType:        "Bearer",
+		ExpiresIn:        accessExpiresIn,
+		RefreshExpiresIn: refreshExpiresIn,
+		User:             toProfile(*user, roles, permissions, false),
 	}, nil
 }
 
@@ -348,6 +483,10 @@ func (s *authService) Me(ctx context.Context, userID int64) (dto.UserProfile, er
 }
 
 func (s *authService) ParseToken(rawToken string) (TokenClaims, error) {
+	return s.parseTokenWithUse(rawToken, tokenUseAccess)
+}
+
+func (s *authService) parseTokenWithUse(rawToken string, expectedUse string) (TokenClaims, error) {
 	claims := &jwtClaims{}
 	parsed, err := jwt.ParseWithClaims(rawToken, claims, func(token *jwt.Token) (interface{}, error) {
 		return []byte(s.cfg.JWTSecret), nil
@@ -355,6 +494,15 @@ func (s *authService) ParseToken(rawToken string) (TokenClaims, error) {
 	if err != nil || !parsed.Valid {
 		return TokenClaims{}, apperror.ErrTokenParse
 	}
+
+	tokenUse := strings.TrimSpace(strings.ToLower(claims.TokenUse))
+	if tokenUse == "" {
+		tokenUse = tokenUseAccess
+	}
+	if expectedUse != "" && tokenUse != expectedUse {
+		return TokenClaims{}, apperror.ErrTokenParse
+	}
+
 	return TokenClaims{
 		UserID:             claims.UserID,
 		Username:           claims.Username,
@@ -362,6 +510,7 @@ func (s *authService) ParseToken(rawToken string) (TokenClaims, error) {
 		Permissions:        claims.Permissions,
 		MustChangePassword: claims.MustChangePassword,
 		SessionIssuedAt:    claims.SessionIssuedAt,
+		TokenUse:           tokenUse,
 	}, nil
 }
 
@@ -395,21 +544,30 @@ func (s *authService) generateToken(
 	roles []string,
 	permissions []string,
 	mustChangePassword bool,
+	tokenUse string,
+	expireAfter time.Duration,
+	sessionIssuedAt int64,
 ) (string, int64, error) {
 	issuedAt := time.Now().UTC()
-	expireAt := issuedAt.Add(s.cfg.JWTExpire)
+	expireAt := issuedAt.Add(expireAfter)
+	tokenID, err := generateTokenID(16)
+	if err != nil {
+		return "", 0, err
+	}
 	claims := &jwtClaims{
 		UserID:             user.ID,
 		Username:           user.Username,
 		Roles:              roles,
 		Permissions:        permissions,
 		MustChangePassword: mustChangePassword,
-		SessionIssuedAt:    issuedAt.UnixNano(),
+		SessionIssuedAt:    sessionIssuedAt,
+		TokenUse:           tokenUse,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expireAt),
 			IssuedAt:  jwt.NewNumericDate(issuedAt),
 			Issuer:    s.cfg.JWTIssuer,
 			Subject:   user.Username,
+			ID:        tokenID,
 		},
 	}
 
@@ -418,7 +576,58 @@ func (s *authService) generateToken(
 	if err != nil {
 		return "", 0, err
 	}
-	return signed, int64(s.cfg.JWTExpire.Seconds()), nil
+	return signed, int64(expireAfter.Seconds()), nil
+}
+
+func (s *authService) generateTokenPair(
+	user model.User,
+	roles []string,
+	permissions []string,
+	mustChangePassword bool,
+	sessionIssuedAt int64,
+) (string, int64, string, int64, error) {
+	if sessionIssuedAt <= 0 {
+		sessionIssuedAt = time.Now().UTC().UnixNano()
+	}
+
+	accessToken, accessExpiresIn, err := s.generateToken(
+		user,
+		roles,
+		permissions,
+		mustChangePassword,
+		tokenUseAccess,
+		s.cfg.JWTExpire,
+		sessionIssuedAt,
+	)
+	if err != nil {
+		return "", 0, "", 0, err
+	}
+
+	refreshToken, refreshExpiresIn, err := s.generateToken(
+		user,
+		roles,
+		permissions,
+		mustChangePassword,
+		tokenUseRefresh,
+		s.cfg.JWTRefreshExpire,
+		sessionIssuedAt,
+	)
+	if err != nil {
+		return "", 0, "", 0, err
+	}
+
+	return accessToken, accessExpiresIn, refreshToken, refreshExpiresIn, nil
+}
+
+func nextSessionTime(previous *time.Time) time.Time {
+	now := time.Now().UTC()
+	if previous == nil {
+		return now
+	}
+	if !now.After(*previous) {
+		return previous.Add(time.Nanosecond)
+	}
+	return now
 }
 
 func toProfile(
@@ -539,6 +748,14 @@ func isStrongPassword(raw string) bool {
 }
 
 func generateBootstrapPassword(byteLen int) (string, error) {
+	buffer := make([]byte, byteLen)
+	if _, err := rand.Read(buffer); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(buffer), nil
+}
+
+func generateTokenID(byteLen int) (string, error) {
 	buffer := make([]byte, byteLen)
 	if _, err := rand.Read(buffer); err != nil {
 		return "", err

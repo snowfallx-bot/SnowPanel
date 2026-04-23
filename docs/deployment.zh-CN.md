@@ -64,6 +64,7 @@ PostgreSQL 首次初始化时，会加载以下 schema SQL：
 
 `.env` 中关键配置包括：
 - backend host/port/JWT/管理员初始化变量
+- 令牌有效期配置（`JWT_EXPIRE`、`JWT_REFRESH_EXPIRE`）
 - 登录防爆破模式与阈值（`LOGIN_ATTEMPT_STORE`、`LOGIN_ATTEMPT_REDIS_PREFIX`、`LOGIN_*`）
 - core-agent 安全根目录与读写大小限制
 - PostgreSQL + Redis 连接参数（`REDIS_HOST`、`REDIS_PORT`、`REDIS_PASSWORD`、`REDIS_DB`）

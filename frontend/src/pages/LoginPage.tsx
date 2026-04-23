@@ -41,7 +41,7 @@ export function LoginPage() {
     setLoading(true);
     try {
       const result = await login({ username, password });
-      setAuth(result.access_token, result.user);
+      setAuth(result.access_token, result.user, result.refresh_token ?? null);
       navigate(from, { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");

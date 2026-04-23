@@ -1,6 +1,6 @@
 import { FormEvent, useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
-import { changePassword } from "@/api/auth";
+import { changePassword, logout } from "@/api/auth";
 import { useAuthStore } from "@/store/auth-store";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,6 +29,7 @@ export function AppLayout() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [changingPassword, setChangingPassword] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
   const [passwordError, setPasswordError] = useState("");
   const [passwordSuccess, setPasswordSuccess] = useState("");
 
@@ -56,7 +57,7 @@ export function AppLayout() {
         current_password: currentPassword,
         new_password: newPassword
       });
-      setAuth(result.access_token, result.user);
+      setAuth(result.access_token, result.user, result.refresh_token ?? null);
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
@@ -65,6 +66,20 @@ export function AppLayout() {
       setPasswordError(error instanceof Error ? error.message : "Failed to change password");
     } finally {
       setChangingPassword(false);
+    }
+  }
+
+  async function handleLogout() {
+    setLoggingOut(true);
+    try {
+      if (token) {
+        await logout();
+      }
+    } catch {
+      // Even if backend logout fails, clear local credentials for user safety.
+    } finally {
+      clearAuth();
+      setLoggingOut(false);
     }
   }
 
@@ -95,8 +110,8 @@ export function AppLayout() {
             <p className="text-sm text-slate-500">Linux Panel Prototype</p>
             <p className="text-base font-medium">{user?.username ?? "unknown"}</p>
           </div>
-          <Button variant="ghost" onClick={clearAuth}>
-            Logout
+          <Button variant="ghost" onClick={handleLogout} disabled={loggingOut}>
+            {loggingOut ? "Logging out..." : "Logout"}
           </Button>
         </header>
         <section className="p-6">

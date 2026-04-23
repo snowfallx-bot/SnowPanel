@@ -23,14 +23,19 @@
 
 - `POST /auth/login`
   - 请求：`{ "username": "...", "password": "..." }`
-  - 响应：访问令牌 + 用户信息 + 权限列表
+  - 响应：访问令牌 + 刷新令牌 + 用户信息 + 权限列表
   - 说明：若为 bootstrap 管理员首次登录，可能返回 `user.must_change_password = true`
   - 安全说明：同一 `username + client IP` 连续失败过多会被临时锁定并返回 `429`
+- `POST /auth/refresh`
+  - 请求：`{ "refresh_token": "..." }`
+  - 响应：轮转后的访问令牌 + 轮转后的刷新令牌 + 最新用户信息
+- `POST /auth/logout`（受保护）
+  - 行为：通过会话时间戳轮转撤销当前逻辑会话
 - `GET /auth/me`（受保护）
   - 响应：当前用户信息
 - `POST /auth/change-password`（受保护）
   - 请求：`{ "current_password": "...", "new_password": "..." }`
-  - 响应：刷新后的访问令牌 + 更新后的用户信息
+  - 响应：刷新后的访问令牌 + 刷新后的刷新令牌 + 更新后的用户信息
 
 ## 仪表盘
 

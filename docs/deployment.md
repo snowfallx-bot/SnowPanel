@@ -64,6 +64,7 @@ It is mounted to:
 
 Key settings in `.env`:
 - backend host/port/JWT/admin bootstrap variables
+- token lifetimes (`JWT_EXPIRE`, `JWT_REFRESH_EXPIRE`)
 - login attempt limiter mode and thresholds (`LOGIN_ATTEMPT_STORE`, `LOGIN_ATTEMPT_REDIS_PREFIX`, `LOGIN_*`)
 - core-agent safe-root and read/write limits
 - PostgreSQL + Redis connection info (`REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`, `REDIS_DB`)

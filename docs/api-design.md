@@ -23,14 +23,19 @@ Language: **English** | [简体中文](api-design.zh-CN.md)
 
 - `POST /auth/login`
   - request: `{ "username": "...", "password": "..." }`
-  - response: access token + user profile + permission list
+  - response: access token + refresh token + user profile + permission list
   - note: bootstrap admin first login may return `user.must_change_password = true`
   - security note: too many failed attempts for the same `username + client IP` are temporarily locked with `429`
+- `POST /auth/refresh`
+  - request: `{ "refresh_token": "..." }`
+  - response: rotated access token + rotated refresh token + latest user profile
+- `POST /auth/logout` (protected)
+  - behavior: revokes current logical session by rotating session timestamp
 - `GET /auth/me` (protected)
   - response: current user profile
 - `POST /auth/change-password` (protected)
   - request: `{ "current_password": "...", "new_password": "..." }`
-  - response: refreshed access token + updated user profile
+  - response: refreshed access token + refreshed refresh token + updated user profile
 
 ## Dashboard
 

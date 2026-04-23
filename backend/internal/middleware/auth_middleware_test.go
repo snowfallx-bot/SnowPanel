@@ -28,6 +28,14 @@ func (s authServiceStub) Login(context.Context, dto.LoginRequest) (dto.LoginResp
 	return dto.LoginResponse{}, nil
 }
 
+func (s authServiceStub) Refresh(context.Context, string) (dto.LoginResponse, error) {
+	return dto.LoginResponse{}, nil
+}
+
+func (s authServiceStub) RevokeSession(context.Context, int64) error {
+	return nil
+}
+
 func (s authServiceStub) Me(context.Context, int64) (dto.UserProfile, error) {
 	return dto.UserProfile{}, nil
 }

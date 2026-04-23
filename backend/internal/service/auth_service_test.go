@@ -178,6 +178,7 @@ func testAuthConfig() config.AuthConfig {
 		JWTSecret:            "unit-test-secret",
 		JWTIssuer:            "snowpanel-test",
 		JWTExpire:            2 * time.Hour,
+		JWTRefreshExpire:     7 * 24 * time.Hour,
 		BootstrapAdmin:       true,
 		DefaultAdminUsername: "admin",
 		DefaultAdminEmail:    "admin@example.com",
@@ -331,6 +332,12 @@ func TestLoginSuccessAndParseToken(t *testing.T) {
 	}
 	if result.AccessToken == "" {
 		t.Fatalf("expected non-empty access token")
+	}
+	if result.RefreshToken == "" {
+		t.Fatalf("expected non-empty refresh token")
+	}
+	if result.RefreshExpiresIn <= result.ExpiresIn {
+		t.Fatalf("expected refresh token lifetime to be longer than access token")
 	}
 	if result.User.Username != "admin" {
 		t.Fatalf("unexpected user profile username: %s", result.User.Username)
@@ -654,5 +661,195 @@ func TestValidateSessionAcceptsFreshSession(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("expected session validation success, got %v", err)
+	}
+}
+
+func TestParseTokenRejectsRefreshToken(t *testing.T) {
+	password := "StrongPassword#1"
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		t.Fatalf("failed to generate bcrypt hash: %v", err)
+	}
+
+	repo := &fakeUserRepo{
+		usersByName: map[string]*model.User{
+			"operator": {
+				ID:           9,
+				Username:     "operator",
+				Email:        "operator@example.com",
+				PasswordHash: string(hash),
+				Status:       1,
+			},
+		},
+		usersByID: map[int64]*model.User{
+			9: {
+				ID:           9,
+				Username:     "operator",
+				Email:        "operator@example.com",
+				PasswordHash: string(hash),
+				Status:       1,
+			},
+		},
+		userRoles: map[int64][]string{
+			9: []string{"operator"},
+		},
+	}
+	if err := repo.EnsureRBACDefaults(context.Background()); err != nil {
+		t.Fatalf("failed to seed fake rbac defaults: %v", err)
+	}
+
+	service := NewAuthService(repo, testAuthConfig())
+	result, err := service.Login(context.Background(), dto.LoginRequest{
+		Username: "operator",
+		Password: password,
+	})
+	if err != nil {
+		t.Fatalf("expected login success, got %v", err)
+	}
+
+	_, err = service.ParseToken(result.RefreshToken)
+	if err == nil {
+		t.Fatalf("expected ParseToken to reject refresh token")
+	}
+	appErr, ok := apperror.As(err)
+	if !ok {
+		t.Fatalf("expected app error, got %T", err)
+	}
+	if appErr.Code != apperror.ErrTokenParse.Code {
+		t.Fatalf("unexpected error code: %d", appErr.Code)
+	}
+}
+
+func TestRefreshRotatesSessionAndReturnsNewTokenPair(t *testing.T) {
+	password := "StrongPassword#1"
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		t.Fatalf("failed to generate bcrypt hash: %v", err)
+	}
+
+	repo := &fakeUserRepo{
+		usersByName: map[string]*model.User{
+			"operator": {
+				ID:           9,
+				Username:     "operator",
+				Email:        "operator@example.com",
+				PasswordHash: string(hash),
+				Status:       1,
+			},
+		},
+		usersByID: map[int64]*model.User{
+			9: {
+				ID:           9,
+				Username:     "operator",
+				Email:        "operator@example.com",
+				PasswordHash: string(hash),
+				Status:       1,
+			},
+		},
+		userRoles: map[int64][]string{
+			9: []string{"operator"},
+		},
+	}
+	if err := repo.EnsureRBACDefaults(context.Background()); err != nil {
+		t.Fatalf("failed to seed fake rbac defaults: %v", err)
+	}
+
+	service := NewAuthService(repo, testAuthConfig())
+	loginResp, err := service.Login(context.Background(), dto.LoginRequest{
+		Username: "operator",
+		Password: password,
+	})
+	if err != nil {
+		t.Fatalf("expected login success, got %v", err)
+	}
+
+	refreshResp, err := service.Refresh(context.Background(), loginResp.RefreshToken)
+	if err != nil {
+		t.Fatalf("expected refresh success, got %v", err)
+	}
+	if refreshResp.AccessToken == "" || refreshResp.RefreshToken == "" {
+		t.Fatalf("expected refreshed access+refresh tokens")
+	}
+	if refreshResp.AccessToken == loginResp.AccessToken {
+		t.Fatalf("expected refreshed access token to rotate")
+	}
+	if refreshResp.RefreshToken == loginResp.RefreshToken {
+		t.Fatalf("expected refreshed refresh token to rotate")
+	}
+
+	// Previous refresh token should be revoked by session rotation.
+	_, err = service.Refresh(context.Background(), loginResp.RefreshToken)
+	if err == nil {
+		t.Fatalf("expected old refresh token to be rejected after rotation")
+	}
+	appErr, ok := apperror.As(err)
+	if !ok {
+		t.Fatalf("expected app error, got %T", err)
+	}
+	if appErr.Code != apperror.ErrSessionExpired.Code {
+		t.Fatalf("unexpected error code: %d", appErr.Code)
+	}
+}
+
+func TestRevokeSessionInvalidatesExistingAccessToken(t *testing.T) {
+	password := "StrongPassword#1"
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		t.Fatalf("failed to generate bcrypt hash: %v", err)
+	}
+
+	repo := &fakeUserRepo{
+		usersByName: map[string]*model.User{
+			"operator": {
+				ID:           9,
+				Username:     "operator",
+				Email:        "operator@example.com",
+				PasswordHash: string(hash),
+				Status:       1,
+			},
+		},
+		usersByID: map[int64]*model.User{
+			9: {
+				ID:           9,
+				Username:     "operator",
+				Email:        "operator@example.com",
+				PasswordHash: string(hash),
+				Status:       1,
+			},
+		},
+		userRoles: map[int64][]string{
+			9: []string{"operator"},
+		},
+	}
+	if err := repo.EnsureRBACDefaults(context.Background()); err != nil {
+		t.Fatalf("failed to seed fake rbac defaults: %v", err)
+	}
+
+	service := NewAuthService(repo, testAuthConfig())
+	loginResp, err := service.Login(context.Background(), dto.LoginRequest{
+		Username: "operator",
+		Password: password,
+	})
+	if err != nil {
+		t.Fatalf("expected login success, got %v", err)
+	}
+	claims, err := service.ParseToken(loginResp.AccessToken)
+	if err != nil {
+		t.Fatalf("expected access token parse success, got %v", err)
+	}
+
+	if err := service.RevokeSession(context.Background(), 9); err != nil {
+		t.Fatalf("expected revoke success, got %v", err)
+	}
+	err = service.ValidateSession(context.Background(), claims)
+	if err == nil {
+		t.Fatalf("expected revoked session validation to fail")
+	}
+	appErr, ok := apperror.As(err)
+	if !ok {
+		t.Fatalf("expected app error, got %T", err)
+	}
+	if appErr.Code != apperror.ErrSessionExpired.Code {
+		t.Fatalf("unexpected error code: %d", appErr.Code)
 	}
 }

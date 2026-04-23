@@ -93,6 +93,44 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	response.OK(c, resp)
 }
 
+func (h *AuthHandler) Refresh(c *gin.Context) {
+	var req dto.RefreshTokenRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Fail(c, http.StatusBadRequest, apperror.ErrBadRequest.Code, "invalid refresh payload")
+		return
+	}
+
+	resp, err := h.authService.Refresh(c.Request.Context(), req.RefreshToken)
+	if err != nil {
+		recordAudit(c, h.auditService, dto.RecordAuditInput{
+			Module:         "auth",
+			Action:         "refresh",
+			TargetType:     "token",
+			TargetID:       "refresh",
+			RequestSummary: `{"endpoint":"/api/v1/auth/refresh"}`,
+			Success:        false,
+			ResultCode:     "refresh_failed",
+			ResultMessage:  err.Error(),
+		})
+		response.FromError(c, err)
+		return
+	}
+
+	recordAudit(c, h.auditService, dto.RecordAuditInput{
+		UserID:         &resp.User.ID,
+		Username:       resp.User.Username,
+		Module:         "auth",
+		Action:         "refresh",
+		TargetType:     "user",
+		TargetID:       resp.User.Username,
+		RequestSummary: `{"endpoint":"/api/v1/auth/refresh"}`,
+		Success:        true,
+		ResultCode:     "ok",
+		ResultMessage:  "token refreshed",
+	})
+	response.OK(c, resp)
+}
+
 func (h *AuthHandler) Me(c *gin.Context) {
 	userID, ok := middleware.GetCurrentUserID(c)
 	if !ok {
@@ -107,6 +145,47 @@ func (h *AuthHandler) Me(c *gin.Context) {
 	}
 
 	response.OK(c, profile)
+}
+
+func (h *AuthHandler) Logout(c *gin.Context) {
+	userID, ok := middleware.GetCurrentUserID(c)
+	if !ok {
+		response.Fail(c, http.StatusUnauthorized, apperror.ErrUnauthorized.Code, apperror.ErrUnauthorized.Message)
+		return
+	}
+	username, _ := middleware.GetCurrentUsername(c)
+
+	if err := h.authService.RevokeSession(c.Request.Context(), userID); err != nil {
+		recordAudit(c, h.auditService, dto.RecordAuditInput{
+			UserID:         &userID,
+			Username:       username,
+			Module:         "auth",
+			Action:         "logout",
+			TargetType:     "user",
+			TargetID:       username,
+			RequestSummary: `{"endpoint":"/api/v1/auth/logout"}`,
+			Success:        false,
+			ResultCode:     "logout_failed",
+			ResultMessage:  err.Error(),
+		})
+		response.FromError(c, err)
+		return
+	}
+
+	recordAudit(c, h.auditService, dto.RecordAuditInput{
+		UserID:         &userID,
+		Username:       username,
+		Module:         "auth",
+		Action:         "logout",
+		TargetType:     "user",
+		TargetID:       username,
+		RequestSummary: `{"endpoint":"/api/v1/auth/logout"}`,
+		Success:        true,
+		ResultCode:     "ok",
+		ResultMessage:  "session revoked",
+	})
+
+	response.OK(c, gin.H{"revoked": true})
 }
 
 func (h *AuthHandler) ChangePassword(c *gin.Context) {

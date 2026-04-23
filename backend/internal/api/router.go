@@ -54,11 +54,13 @@ func NewRouter(deps RouterDeps) *gin.Engine {
 	{
 		v1.GET("/ping", systemHandler.Ping)
 		v1.POST("/auth/login", authHandler.Login)
+		v1.POST("/auth/refresh", authHandler.Refresh)
 
 		protected := v1.Group("")
 		protected.Use(middleware.JWTAuth(deps.AuthService))
 		{
 			protected.GET("/auth/me", authHandler.Me)
+			protected.POST("/auth/logout", authHandler.Logout)
 			protected.POST("/auth/change-password", authHandler.ChangePassword)
 			protected.GET("/dashboard/summary", dashboardHandler.Summary)
 			files := protected.Group("/files")

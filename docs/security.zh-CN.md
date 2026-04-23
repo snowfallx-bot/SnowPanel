@@ -25,6 +25,8 @@
 - 改密成功后会签发新的 token，并将 `must_change_password` 置为 `false`。
 - 后端会基于数据库用户状态与 `last_login_at` 校验 token 会话状态。
 - 用户重新登录/改密后旧 token 会失效，被禁用用户的活动会话也会失效。
+- 已支持 access/refresh 双令牌，`/auth/refresh` 会轮转两个令牌并推进会话时间戳。
+- `/auth/logout` 会通过轮转会话时间戳撤销当前逻辑会话。
 - 登录接口已增加基于 `username + client IP` 的防爆破保护。
 - 默认模式为内存（`LOGIN_ATTEMPT_STORE=memory`）；可通过 Redis 开启分布式模式（`LOGIN_ATTEMPT_STORE=redis` 且使用共享 `REDIS_*` 配置）。
 - 在 `LOGIN_FAILURE_WINDOW` 内连续失败达到阈值后，会对该键执行 `LOGIN_LOCK_DURATION` 的临时锁定并返回 `429`。
@@ -55,6 +57,5 @@
 
 ## 加固待办
 
-- 增加 refresh token 与会话吊销机制。
 - 对敏感配置/密钥做静态加密存储。
 - 对多地域部署进一步评估跨地域共享限流状态与故障切换策略。

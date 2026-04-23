@@ -53,6 +53,7 @@ type AuthConfig struct {
 	JWTSecret            string
 	JWTIssuer            string
 	JWTExpire            time.Duration
+	JWTRefreshExpire     time.Duration
 	LoginAttemptStore    string
 	LoginAttemptPrefix   string
 	LoginMaxFailures     int
@@ -85,6 +86,7 @@ func Load() Config {
 	v.SetDefault("JWT_SECRET", "")
 	v.SetDefault("JWT_ISSUER", "snowpanel-backend")
 	v.SetDefault("JWT_EXPIRE", "24h")
+	v.SetDefault("JWT_REFRESH_EXPIRE", "168h")
 	v.SetDefault("LOGIN_ATTEMPT_STORE", "memory")
 	v.SetDefault("LOGIN_ATTEMPT_REDIS_PREFIX", "snowpanel:auth:attempt")
 	v.SetDefault("LOGIN_MAX_FAILURES", 5)
@@ -159,6 +161,7 @@ func Load() Config {
 			JWTSecret:            jwtSecret,
 			JWTIssuer:            v.GetString("JWT_ISSUER"),
 			JWTExpire:            mustDuration(v.GetString("JWT_EXPIRE"), 24*time.Hour),
+			JWTRefreshExpire:     mustDuration(v.GetString("JWT_REFRESH_EXPIRE"), 7*24*time.Hour),
 			LoginAttemptStore:    normalizeLoginAttemptStore(v.GetString("LOGIN_ATTEMPT_STORE")),
 			LoginAttemptPrefix:   strings.TrimSpace(v.GetString("LOGIN_ATTEMPT_REDIS_PREFIX")),
 			LoginMaxFailures:     v.GetInt("LOGIN_MAX_FAILURES"),

@@ -10,6 +10,10 @@ type ChangePasswordRequest struct {
 	NewPassword     string `json:"new_password" binding:"required,min=8,max=128"`
 }
 
+type RefreshTokenRequest struct {
+	RefreshToken string `json:"refresh_token" binding:"required,min=32,max=4096"`
+}
+
 type UserProfile struct {
 	ID                 int64    `json:"id"`
 	Username           string   `json:"username"`
@@ -21,8 +25,10 @@ type UserProfile struct {
 }
 
 type LoginResponse struct {
-	AccessToken string      `json:"access_token"`
-	TokenType   string      `json:"token_type"`
-	ExpiresIn   int64       `json:"expires_in"`
-	User        UserProfile `json:"user"`
+	AccessToken      string      `json:"access_token"`
+	RefreshToken     string      `json:"refresh_token"`
+	TokenType        string      `json:"token_type"`
+	ExpiresIn        int64       `json:"expires_in"`
+	RefreshExpiresIn int64       `json:"refresh_expires_in"`
+	User             UserProfile `json:"user"`
 }

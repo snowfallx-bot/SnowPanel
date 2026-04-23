@@ -80,7 +80,9 @@ func JWTAuth(authService service.AuthService) gin.HandlerFunc {
 }
 
 func isPasswordChangeAllowedPath(path string) bool {
-	return path == "/api/v1/auth/me" || path == "/api/v1/auth/change-password"
+	return path == "/api/v1/auth/me" ||
+		path == "/api/v1/auth/change-password" ||
+		path == "/api/v1/auth/logout"
 }
 
 func GetCurrentUserID(c *gin.Context) (int64, bool) {
