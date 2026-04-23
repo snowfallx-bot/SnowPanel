@@ -111,6 +111,29 @@ func TestFileService_UploadFileViaGRPC(t *testing.T) {
 	}
 }
 
+func TestFileService_RenameFileViaGRPC(t *testing.T) {
+	target := startFakeAgentServer(t)
+	client := grpcclient.New(target, 2*time.Second)
+	service := NewFileService(client)
+
+	result, err := service.RenameFile(context.Background(), dto.RenameFileRequest{
+		SourcePath: "/tmp/demo.txt",
+		TargetPath: "/tmp/demo-renamed.txt",
+	})
+	if err != nil {
+		t.Fatalf("RenameFile() error = %v", err)
+	}
+	if result.SourcePath != "/tmp/demo.txt" {
+		t.Fatalf("unexpected source path: %s", result.SourcePath)
+	}
+	if result.TargetPath != "/tmp/demo-renamed.txt" {
+		t.Fatalf("unexpected target path: %s", result.TargetPath)
+	}
+	if result.WrittenBytes != 21 {
+		t.Fatalf("unexpected moved bytes: %d", result.WrittenBytes)
+	}
+}
+
 func TestServiceManagerService_ListServicesViaGRPC(t *testing.T) {
 	target := startFakeAgentServer(t)
 	client := grpcclient.New(target, 2*time.Second)
@@ -331,6 +354,18 @@ func (s *fakeFileService) WriteFileChunk(
 		Offset:       req.GetOffset(),
 		WrittenBytes: uint64(len(req.GetChunk())),
 		TotalSize:    req.GetOffset() + uint64(len(req.GetChunk())),
+	}, nil
+}
+
+func (s *fakeFileService) RenameFile(
+	_ context.Context,
+	req *agentv1.RenameFileRequest,
+) (*agentv1.RenameFileResponse, error) {
+	return &agentv1.RenameFileResponse{
+		Error:      okError(),
+		SourcePath: req.GetSourcePath(),
+		TargetPath: req.GetTargetPath(),
+		MovedBytes: 21,
 	}, nil
 }
 

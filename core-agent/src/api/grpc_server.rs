@@ -26,7 +26,8 @@ use crate::api::proto::{
     ListDockerContainersResponse, ListDockerImagesRequest, ListDockerImagesResponse,
     ListFilesRequest, ListFilesResponse, ListServicesRequest, ListServicesResponse,
     ReadFileChunkRequest, ReadFileChunkResponse, ReadTextFileRequest, ReadTextFileResponse,
-    ServiceActionRequest, ServiceActionResponse, ServiceInfo, SetCronTaskEnabledRequest,
+    RenameFileRequest, RenameFileResponse, ServiceActionRequest, ServiceActionResponse,
+    ServiceInfo, SetCronTaskEnabledRequest,
     SetCronTaskEnabledResponse, UpdateCronTaskRequest, UpdateCronTaskResponse,
     WriteFileChunkRequest, WriteFileChunkResponse, WriteTextFileRequest, WriteTextFileResponse,
 };
@@ -247,6 +248,18 @@ impl FileService for FileServiceImpl {
         Ok(Response::new(self.file_service.delete_path(
             &payload.path,
             payload.recursive,
+            payload.safety,
+        )))
+    }
+
+    async fn rename_file(
+        &self,
+        request: Request<RenameFileRequest>,
+    ) -> Result<Response<RenameFileResponse>, Status> {
+        let payload = request.into_inner();
+        Ok(Response::new(self.file_service.rename_file(
+            &payload.source_path,
+            &payload.target_path,
             payload.safety,
         )))
     }

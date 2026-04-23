@@ -168,6 +168,17 @@ type DeleteFileResult struct {
 	Path string
 }
 
+type RenameFileRequest struct {
+	SourcePath string
+	TargetPath string
+}
+
+type RenameFileResult struct {
+	SourcePath string
+	TargetPath string
+	MovedBytes uint64
+}
+
 type ServiceInfo struct {
 	Name        string
 	DisplayName string
@@ -282,6 +293,7 @@ type AgentClient interface {
 	WriteTextFile(ctx context.Context, req WriteTextFileRequest) (WriteTextFileResult, error)
 	CreateDirectory(ctx context.Context, req CreateDirectoryRequest) (CreateDirectoryResult, error)
 	DeleteFile(ctx context.Context, req DeleteFileRequest) (DeleteFileResult, error)
+	RenameFile(ctx context.Context, req RenameFileRequest) (RenameFileResult, error)
 	ListServices(ctx context.Context, req ListServicesRequest) (ListServicesResult, error)
 	StartService(ctx context.Context, req ServiceActionRequest) (ServiceActionResult, error)
 	StopService(ctx context.Context, req ServiceActionRequest) (ServiceActionResult, error)
@@ -586,6 +598,30 @@ func (c *Client) DeleteFile(ctx context.Context, req DeleteFileRequest) (DeleteF
 		}
 		result = DeleteFileResult{
 			Path: resp.GetPath(),
+		}
+		return nil
+	})
+	return result, err
+}
+
+func (c *Client) RenameFile(ctx context.Context, req RenameFileRequest) (RenameFileResult, error) {
+	result := RenameFileResult{}
+	err := c.invoke(ctx, func(callCtx context.Context, conn *grpc.ClientConn) error {
+		client := agentv1.NewFileServiceClient(conn)
+		resp, err := client.RenameFile(callCtx, &agentv1.RenameFileRequest{
+			SourcePath: req.SourcePath,
+			TargetPath: req.TargetPath,
+		})
+		if err != nil {
+			return err
+		}
+		if err := responseError(resp.GetError()); err != nil {
+			return err
+		}
+		result = RenameFileResult{
+			SourcePath: resp.GetSourcePath(),
+			TargetPath: resp.GetTargetPath(),
+			MovedBytes: resp.GetMovedBytes(),
 		}
 		return nil
 	})

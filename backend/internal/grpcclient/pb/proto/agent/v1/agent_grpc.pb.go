@@ -268,6 +268,7 @@ const (
 	FileService_WriteTextFile_FullMethodName   = "/snowpanel.agent.v1.FileService/WriteTextFile"
 	FileService_CreateDirectory_FullMethodName = "/snowpanel.agent.v1.FileService/CreateDirectory"
 	FileService_DeleteFile_FullMethodName      = "/snowpanel.agent.v1.FileService/DeleteFile"
+	FileService_RenameFile_FullMethodName      = "/snowpanel.agent.v1.FileService/RenameFile"
 )
 
 // FileServiceClient is the client API for FileService service.
@@ -281,6 +282,7 @@ type FileServiceClient interface {
 	WriteTextFile(ctx context.Context, in *WriteTextFileRequest, opts ...grpc.CallOption) (*WriteTextFileResponse, error)
 	CreateDirectory(ctx context.Context, in *CreateDirectoryRequest, opts ...grpc.CallOption) (*CreateDirectoryResponse, error)
 	DeleteFile(ctx context.Context, in *DeleteFileRequest, opts ...grpc.CallOption) (*DeleteFileResponse, error)
+	RenameFile(ctx context.Context, in *RenameFileRequest, opts ...grpc.CallOption) (*RenameFileResponse, error)
 }
 
 type fileServiceClient struct {
@@ -361,6 +363,16 @@ func (c *fileServiceClient) DeleteFile(ctx context.Context, in *DeleteFileReques
 	return out, nil
 }
 
+func (c *fileServiceClient) RenameFile(ctx context.Context, in *RenameFileRequest, opts ...grpc.CallOption) (*RenameFileResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RenameFileResponse)
+	err := c.cc.Invoke(ctx, FileService_RenameFile_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // FileServiceServer is the server API for FileService service.
 // All implementations must embed UnimplementedFileServiceServer
 // for forward compatibility.
@@ -372,6 +384,7 @@ type FileServiceServer interface {
 	WriteTextFile(context.Context, *WriteTextFileRequest) (*WriteTextFileResponse, error)
 	CreateDirectory(context.Context, *CreateDirectoryRequest) (*CreateDirectoryResponse, error)
 	DeleteFile(context.Context, *DeleteFileRequest) (*DeleteFileResponse, error)
+	RenameFile(context.Context, *RenameFileRequest) (*RenameFileResponse, error)
 	mustEmbedUnimplementedFileServiceServer()
 }
 
@@ -402,6 +415,9 @@ func (UnimplementedFileServiceServer) CreateDirectory(context.Context, *CreateDi
 }
 func (UnimplementedFileServiceServer) DeleteFile(context.Context, *DeleteFileRequest) (*DeleteFileResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteFile not implemented")
+}
+func (UnimplementedFileServiceServer) RenameFile(context.Context, *RenameFileRequest) (*RenameFileResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RenameFile not implemented")
 }
 func (UnimplementedFileServiceServer) mustEmbedUnimplementedFileServiceServer() {}
 func (UnimplementedFileServiceServer) testEmbeddedByValue()                     {}
@@ -550,6 +566,24 @@ func _FileService_DeleteFile_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _FileService_RenameFile_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RenameFileRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FileServiceServer).RenameFile(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: FileService_RenameFile_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FileServiceServer).RenameFile(ctx, req.(*RenameFileRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // FileService_ServiceDesc is the grpc.ServiceDesc for FileService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -584,6 +618,10 @@ var FileService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeleteFile",
 			Handler:    _FileService_DeleteFile_Handler,
+		},
+		{
+			MethodName: "RenameFile",
+			Handler:    _FileService_RenameFile_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -20,6 +20,7 @@ type fakeFileServiceAgentClient struct {
 	writeChunkFn   func(context.Context, grpcclient.WriteFileChunkRequest) (grpcclient.WriteFileChunkResult, error)
 	writeTextFn    func(context.Context, grpcclient.WriteTextFileRequest) (grpcclient.WriteTextFileResult, error)
 	deleteFileFn   func(context.Context, grpcclient.DeleteFileRequest) (grpcclient.DeleteFileResult, error)
+	renameFileFn   func(context.Context, grpcclient.RenameFileRequest) (grpcclient.RenameFileResult, error)
 }
 
 func (f *fakeFileServiceAgentClient) ListFiles(
@@ -82,38 +83,26 @@ func (f *fakeFileServiceAgentClient) DeleteFile(
 	return grpcclient.DeleteFileResult{}, nil
 }
 
+func (f *fakeFileServiceAgentClient) RenameFile(
+	ctx context.Context,
+	req grpcclient.RenameFileRequest,
+) (grpcclient.RenameFileResult, error) {
+	if f.renameFileFn != nil {
+		return f.renameFileFn(ctx, req)
+	}
+	return grpcclient.RenameFileResult{}, nil
+}
+
 func TestFileServiceRenameFileSuccess(t *testing.T) {
-	calls := make([]string, 0, 4)
+	calls := make([]string, 0, 1)
 	client := &fakeFileServiceAgentClient{
-		listFilesFn: func(_ context.Context, req grpcclient.ListFilesRequest) (grpcclient.ListFilesResult, error) {
-			calls = append(calls, "list:"+req.Path)
-			return grpcclient.ListFilesResult{
-				CurrentPath: "/tmp",
-				Entries: []grpcclient.FileEntry{
-					{Name: "a.txt", Path: "/tmp/a.txt"},
-				},
+		renameFileFn: func(_ context.Context, req grpcclient.RenameFileRequest) (grpcclient.RenameFileResult, error) {
+			calls = append(calls, "rename:"+req.SourcePath+"->"+req.TargetPath)
+			return grpcclient.RenameFileResult{
+				SourcePath: req.SourcePath,
+				TargetPath: req.TargetPath,
+				MovedBytes: 5,
 			}, nil
-		},
-		readTextFileFn: func(_ context.Context, req grpcclient.ReadTextFileRequest) (grpcclient.ReadTextFileResult, error) {
-			calls = append(calls, "read:"+req.Path)
-			return grpcclient.ReadTextFileResult{
-				Path:      req.Path,
-				Content:   "hello",
-				Size:      5,
-				Truncated: false,
-				Encoding:  "utf-8",
-			}, nil
-		},
-		writeTextFn: func(_ context.Context, req grpcclient.WriteTextFileRequest) (grpcclient.WriteTextFileResult, error) {
-			calls = append(calls, "write:"+req.Path)
-			return grpcclient.WriteTextFileResult{
-				Path:         req.Path,
-				WrittenBytes: uint64(len(req.Content)),
-			}, nil
-		},
-		deleteFileFn: func(_ context.Context, req grpcclient.DeleteFileRequest) (grpcclient.DeleteFileResult, error) {
-			calls = append(calls, "delete:"+req.Path)
-			return grpcclient.DeleteFileResult{Path: req.Path}, nil
 		},
 	}
 
@@ -132,42 +121,28 @@ func TestFileServiceRenameFileSuccess(t *testing.T) {
 		t.Fatalf("unexpected target path: %s", result.TargetPath)
 	}
 	if result.WrittenBytes != 5 {
-		t.Fatalf("unexpected written bytes: %d", result.WrittenBytes)
+		t.Fatalf("unexpected moved bytes: %d", result.WrittenBytes)
 	}
 
-	if len(calls) != 4 {
+	if len(calls) != 1 {
 		t.Fatalf("unexpected call count: %d (%v)", len(calls), calls)
 	}
-	if calls[0] != "list:/tmp" || calls[1] != "read:/tmp/a.txt" || calls[2] != "write:/tmp/b.txt" || calls[3] != "delete:/tmp/a.txt" {
+	if calls[0] != "rename:/tmp/a.txt->/tmp/b.txt" {
 		t.Fatalf("unexpected call order: %v", calls)
 	}
 }
 
 func TestFileServiceRenameFileTargetExists(t *testing.T) {
-	readCalled := false
-	writeCalled := false
-	deleteCalled := false
+	renameCalled := false
 
 	client := &fakeFileServiceAgentClient{
-		listFilesFn: func(_ context.Context, _ grpcclient.ListFilesRequest) (grpcclient.ListFilesResult, error) {
-			return grpcclient.ListFilesResult{
-				CurrentPath: "/tmp",
-				Entries: []grpcclient.FileEntry{
-					{Name: "b.txt", Path: "/tmp/b.txt"},
-				},
-			}, nil
-		},
-		readTextFileFn: func(_ context.Context, _ grpcclient.ReadTextFileRequest) (grpcclient.ReadTextFileResult, error) {
-			readCalled = true
-			return grpcclient.ReadTextFileResult{}, nil
-		},
-		writeTextFn: func(_ context.Context, _ grpcclient.WriteTextFileRequest) (grpcclient.WriteTextFileResult, error) {
-			writeCalled = true
-			return grpcclient.WriteTextFileResult{}, nil
-		},
-		deleteFileFn: func(_ context.Context, _ grpcclient.DeleteFileRequest) (grpcclient.DeleteFileResult, error) {
-			deleteCalled = true
-			return grpcclient.DeleteFileResult{}, nil
+		renameFileFn: func(_ context.Context, _ grpcclient.RenameFileRequest) (grpcclient.RenameFileResult, error) {
+			renameCalled = true
+			return grpcclient.RenameFileResult{}, &grpcclient.AgentError{
+				Code:    4000,
+				Message: "bad request",
+				Detail:  "target '/tmp/b.txt' already exists",
+			}
 		},
 	}
 
@@ -183,53 +158,30 @@ func TestFileServiceRenameFileTargetExists(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected app error, got: %T", err)
 	}
-	if appErr.Code != apperror.ErrBadRequest.Code {
-		t.Fatalf("expected bad request code, got: %d", appErr.Code)
+	if appErr.Code != 4000 {
+		t.Fatalf("expected mapped agent code 4000, got: %d", appErr.Code)
 	}
-	if readCalled || writeCalled || deleteCalled {
-		t.Fatalf("unexpected calls after target-exists validation: read=%v write=%v delete=%v", readCalled, writeCalled, deleteCalled)
+	if !renameCalled {
+		t.Fatalf("expected rename RPC to be called")
 	}
 }
 
-func TestFileServiceRenameFileRejectsTruncatedSource(t *testing.T) {
-	writeCalled := false
-	deleteCalled := false
-
+func TestFileServiceRenameFileRejectsSamePath(t *testing.T) {
+	renameCalled := false
 	client := &fakeFileServiceAgentClient{
-		listFilesFn: func(_ context.Context, _ grpcclient.ListFilesRequest) (grpcclient.ListFilesResult, error) {
-			return grpcclient.ListFilesResult{
-				CurrentPath: "/tmp",
-				Entries: []grpcclient.FileEntry{
-					{Name: "a.txt", Path: "/tmp/a.txt"},
-				},
-			}, nil
-		},
-		readTextFileFn: func(_ context.Context, req grpcclient.ReadTextFileRequest) (grpcclient.ReadTextFileResult, error) {
-			return grpcclient.ReadTextFileResult{
-				Path:      req.Path,
-				Content:   "partial",
-				Size:      16 * 1024 * 1024,
-				Truncated: true,
-				Encoding:  "utf-8",
-			}, nil
-		},
-		writeTextFn: func(_ context.Context, _ grpcclient.WriteTextFileRequest) (grpcclient.WriteTextFileResult, error) {
-			writeCalled = true
-			return grpcclient.WriteTextFileResult{}, nil
-		},
-		deleteFileFn: func(_ context.Context, _ grpcclient.DeleteFileRequest) (grpcclient.DeleteFileResult, error) {
-			deleteCalled = true
-			return grpcclient.DeleteFileResult{}, nil
+		renameFileFn: func(_ context.Context, _ grpcclient.RenameFileRequest) (grpcclient.RenameFileResult, error) {
+			renameCalled = true
+			return grpcclient.RenameFileResult{}, nil
 		},
 	}
 
 	service := NewFileService(client)
 	_, err := service.RenameFile(context.Background(), dto.RenameFileRequest{
 		SourcePath: "/tmp/a.txt",
-		TargetPath: "/tmp/b.txt",
+		TargetPath: "/tmp/a.txt",
 	})
 	if err == nil {
-		t.Fatalf("expected rename error when source content is truncated")
+		t.Fatalf("expected rename validation error when source and target are the same")
 	}
 	appErr, ok := apperror.As(err)
 	if !ok {
@@ -238,8 +190,8 @@ func TestFileServiceRenameFileRejectsTruncatedSource(t *testing.T) {
 	if appErr.Code != apperror.ErrBadRequest.Code {
 		t.Fatalf("expected bad request code, got: %d", appErr.Code)
 	}
-	if writeCalled || deleteCalled {
-		t.Fatalf("unexpected calls after truncated read: write=%v delete=%v", writeCalled, deleteCalled)
+	if renameCalled {
+		t.Fatalf("rename RPC should not be called when local validation fails")
 	}
 }
 

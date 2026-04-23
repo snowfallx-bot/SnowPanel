@@ -5,8 +5,8 @@ use std::time::UNIX_EPOCH;
 
 use crate::api::proto::{
     CreateDirectoryResponse, DeleteFileResponse, Error, FileEntry, ListFilesResponse,
-    PathSafetyContext, ReadFileChunkResponse, ReadTextFileResponse, WriteFileChunkResponse,
-    WriteTextFileResponse,
+    PathSafetyContext, ReadFileChunkResponse, ReadTextFileResponse, RenameFileResponse,
+    WriteFileChunkResponse, WriteTextFileResponse,
 };
 use crate::security::path_validator::{FileOperation, PathValidationError, PathValidator};
 
@@ -503,6 +503,97 @@ impl FileService {
         }
     }
 
+    pub fn rename_file(
+        &self,
+        source_path: &str,
+        target_path: &str,
+        safety: Option<PathSafetyContext>,
+    ) -> RenameFileResponse {
+        let safety = safety.unwrap_or_default();
+        let source = match self.path_validator.validate(
+            source_path,
+            &safety.allowed_roots,
+            true,
+            FileOperation::Move,
+        ) {
+            Ok(value) => value,
+            Err(err) => return RenameFileResponse::from_error(file_error_from_validation(err)),
+        };
+
+        let target = match self.path_validator.validate(
+            target_path,
+            &safety.allowed_roots,
+            true,
+            FileOperation::Move,
+        ) {
+            Ok(value) => value,
+            Err(err) => return RenameFileResponse::from_error(file_error_from_validation(err)),
+        };
+
+        if source == target {
+            return RenameFileResponse::from_error(FileError::bad_request(
+                "source_path and target_path cannot be the same".to_string(),
+            ));
+        }
+
+        let source_metadata = match fs::metadata(&source) {
+            Ok(value) => value,
+            Err(err) => {
+                return RenameFileResponse::from_error(FileError::io(format!(
+                    "cannot read metadata for '{}': {err}",
+                    source.display()
+                )))
+            }
+        };
+        if !source_metadata.is_file() {
+            return RenameFileResponse::from_error(FileError::bad_request(format!(
+                "'{}' is not a file",
+                source.display()
+            )));
+        }
+
+        if target.exists() {
+            return RenameFileResponse::from_error(FileError::bad_request(format!(
+                "target '{}' already exists",
+                target.display()
+            )));
+        }
+
+        if let Some(parent) = target.parent() {
+            if !parent.exists() {
+                return RenameFileResponse::from_error(FileError::bad_request(format!(
+                    "parent path '{}' does not exist",
+                    parent.display()
+                )));
+            }
+        }
+
+        if let Err(err) = fs::rename(&source, &target) {
+            return RenameFileResponse::from_error(FileError::io(format!(
+                "cannot rename '{}' -> '{}': {err}",
+                source.display(),
+                target.display()
+            )));
+        }
+
+        let moved_bytes = match fs::metadata(&target) {
+            Ok(value) => value.len(),
+            Err(err) => {
+                return RenameFileResponse::from_error(FileError::io(format!(
+                    "cannot read metadata for '{}': {err}",
+                    target.display()
+                )))
+            }
+        };
+
+        RenameFileResponse {
+            error: Some(Error::ok()),
+            source_path: source.to_string_lossy().into_owned(),
+            target_path: target.to_string_lossy().into_owned(),
+            moved_bytes,
+        }
+    }
+
     pub fn create_directory(
         &self,
         path: &str,
@@ -830,6 +921,21 @@ impl DeleteFileResponseExt for DeleteFileResponse {
         Self {
             error: Some(err.into_proto()),
             path: String::new(),
+        }
+    }
+}
+
+trait RenameFileResponseExt {
+    fn from_error(err: FileError) -> Self;
+}
+
+impl RenameFileResponseExt for RenameFileResponse {
+    fn from_error(err: FileError) -> Self {
+        Self {
+            error: Some(err.into_proto()),
+            source_path: String::new(),
+            target_path: String::new(),
+            moved_bytes: 0,
         }
     }
 }

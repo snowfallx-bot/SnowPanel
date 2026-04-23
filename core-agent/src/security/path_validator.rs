@@ -9,6 +9,7 @@ pub enum FileOperation {
     Write,
     Mkdir,
     Delete,
+    Move,
 }
 
 #[derive(Debug)]
@@ -136,7 +137,7 @@ fn normalize_path(path: &Path) -> Result<PathBuf, PathValidationError> {
 fn is_dangerous_target(path: &Path, operation: FileOperation) -> bool {
     if !matches!(
         operation,
-        FileOperation::Delete | FileOperation::Write | FileOperation::Mkdir
+        FileOperation::Delete | FileOperation::Write | FileOperation::Mkdir | FileOperation::Move
     ) {
         return false;
     }

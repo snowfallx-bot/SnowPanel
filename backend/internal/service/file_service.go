@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"path"
 	"strings"
 
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/apperror"
@@ -371,79 +370,27 @@ func (s *fileService) RenameFile(
 		)
 	}
 
-	if err := s.ensureTargetDoesNotExist(ctx, targetPath); err != nil {
-		return dto.RenameFileResult{}, err
-	}
-
-	readResult, err := s.agentClient.ReadTextFile(ctx, grpcclient.ReadTextFileRequest{
-		Path:     sourcePath,
-		MaxBytes: 8 * 1024 * 1024,
-		Encoding: "utf-8",
-	})
-	if err != nil {
-		return dto.RenameFileResult{}, mapAgentError(err)
-	}
-	if readResult.Truncated {
-		return dto.RenameFileResult{}, apperror.Wrap(
-			apperror.ErrBadRequest.Code,
-			apperror.ErrBadRequest.HTTPStatus,
-			apperror.ErrBadRequest.Message,
-			fmt.Errorf("rename only supports files that can be fully read in one request"),
-		)
-	}
-
-	writeResult, err := s.agentClient.WriteTextFile(ctx, grpcclient.WriteTextFileRequest{
-		Path:              targetPath,
-		Content:           readResult.Content,
-		CreateIfNotExists: true,
-		Truncate:          true,
-		Encoding:          "utf-8",
+	result, err := s.agentClient.RenameFile(ctx, grpcclient.RenameFileRequest{
+		SourcePath: sourcePath,
+		TargetPath: targetPath,
 	})
 	if err != nil {
 		return dto.RenameFileResult{}, mapAgentError(err)
 	}
 
-	_, err = s.agentClient.DeleteFile(ctx, grpcclient.DeleteFileRequest{
-		Path:      sourcePath,
-		Recursive: false,
-	})
-	if err != nil {
-		return dto.RenameFileResult{}, apperror.Wrap(
-			apperror.ErrInternal.Code,
-			apperror.ErrInternal.HTTPStatus,
-			"rename failed after write; source cleanup failed",
-			err,
-		)
+	normalizedSource := strings.TrimSpace(result.SourcePath)
+	if normalizedSource == "" {
+		normalizedSource = sourcePath
+	}
+
+	normalizedTarget := strings.TrimSpace(result.TargetPath)
+	if normalizedTarget == "" {
+		normalizedTarget = targetPath
 	}
 
 	return dto.RenameFileResult{
-		SourcePath:   sourcePath,
-		TargetPath:   writeResult.Path,
-		WrittenBytes: writeResult.WrittenBytes,
+		SourcePath:   normalizedSource,
+		TargetPath:   normalizedTarget,
+		WrittenBytes: result.MovedBytes,
 	}, nil
-}
-
-func (s *fileService) ensureTargetDoesNotExist(ctx context.Context, targetPath string) error {
-	parent := path.Dir(targetPath)
-	if parent == "." {
-		parent = "/"
-	}
-
-	listResult, err := s.agentClient.ListFiles(ctx, grpcclient.ListFilesRequest{Path: parent})
-	if err != nil {
-		return mapAgentError(err)
-	}
-
-	targetName := path.Base(targetPath)
-	for _, entry := range listResult.Entries {
-		if entry.Name == targetName {
-			return apperror.Wrap(
-				apperror.ErrBadRequest.Code,
-				apperror.ErrBadRequest.HTTPStatus,
-				apperror.ErrBadRequest.Message,
-				fmt.Errorf("target path already exists: %s", targetPath),
-			)
-		}
-	}
-	return nil
 }
