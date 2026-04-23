@@ -376,7 +376,17 @@ func (s *taskService) createAndRunTask(
 func (s *taskService) runTask(taskID int64, payload taskPayload) {
 	ctx := context.Background()
 
-	if err := s.repo.UpdateStatus(ctx, taskID, TaskStatusRunning, 5, ""); err != nil {
+	if s.isCanceled(ctx, taskID) {
+		_ = s.repo.AppendLog(ctx, &model.TaskLog{
+			TaskID:   taskID,
+			Level:    "warn",
+			Message:  "task canceled before execution",
+			Metadata: "{}",
+		})
+		return
+	}
+
+	if !s.setRunningProgress(ctx, taskID, 5) {
 		return
 	}
 	_ = s.repo.AppendLog(ctx, &model.TaskLog{
@@ -401,7 +411,15 @@ func (s *taskService) runTask(taskID int64, payload taskPayload) {
 
 	switch payload.Operation {
 	case taskOperationDockerRestart:
-		_ = s.repo.UpdateStatus(ctx, taskID, TaskStatusRunning, 30, "")
+		if !s.setRunningProgress(ctx, taskID, 30) {
+			_ = s.repo.AppendLog(ctx, &model.TaskLog{
+				TaskID:   taskID,
+				Level:    "warn",
+				Message:  "task canceled before docker restart",
+				Metadata: "{}",
+			})
+			return
+		}
 		_ = s.repo.AppendLog(ctx, &model.TaskLog{
 			TaskID:  taskID,
 			Level:   "info",
@@ -419,7 +437,15 @@ func (s *taskService) runTask(taskID int64, payload taskPayload) {
 			})
 			return
 		}
-		_ = s.repo.UpdateStatus(ctx, taskID, TaskStatusRunning, 85, "")
+		if !s.setRunningProgress(ctx, taskID, 85) {
+			_ = s.repo.AppendLog(ctx, &model.TaskLog{
+				TaskID:   taskID,
+				Level:    "warn",
+				Message:  "task canceled after docker restart",
+				Metadata: "{}",
+			})
+			return
+		}
 		_ = s.repo.AppendLog(ctx, &model.TaskLog{
 			TaskID:  taskID,
 			Level:   "info",
@@ -431,7 +457,15 @@ func (s *taskService) runTask(taskID int64, payload taskPayload) {
 			}),
 		})
 	case taskOperationServiceRestart:
-		_ = s.repo.UpdateStatus(ctx, taskID, TaskStatusRunning, 30, "")
+		if !s.setRunningProgress(ctx, taskID, 30) {
+			_ = s.repo.AppendLog(ctx, &model.TaskLog{
+				TaskID:   taskID,
+				Level:    "warn",
+				Message:  "task canceled before service restart",
+				Metadata: "{}",
+			})
+			return
+		}
 		_ = s.repo.AppendLog(ctx, &model.TaskLog{
 			TaskID:  taskID,
 			Level:   "info",
@@ -449,7 +483,15 @@ func (s *taskService) runTask(taskID int64, payload taskPayload) {
 			})
 			return
 		}
-		_ = s.repo.UpdateStatus(ctx, taskID, TaskStatusRunning, 85, "")
+		if !s.setRunningProgress(ctx, taskID, 85) {
+			_ = s.repo.AppendLog(ctx, &model.TaskLog{
+				TaskID:   taskID,
+				Level:    "warn",
+				Message:  "task canceled after service restart",
+				Metadata: "{}",
+			})
+			return
+		}
 		_ = s.repo.AppendLog(ctx, &model.TaskLog{
 			TaskID:  taskID,
 			Level:   "info",
@@ -555,6 +597,16 @@ func (s *taskService) markTaskFailed(
 	err error,
 	metadata map[string]interface{},
 ) {
+	if s.isCanceled(ctx, taskID) {
+		_ = s.repo.AppendLog(ctx, &model.TaskLog{
+			TaskID:   taskID,
+			Level:    "warn",
+			Message:  "task canceled while operation was running",
+			Metadata: "{}",
+		})
+		return
+	}
+
 	_ = s.repo.UpdateStatus(ctx, taskID, TaskStatusFailed, 100, err.Error())
 
 	fields := map[string]interface{}{
@@ -570,4 +622,14 @@ func (s *taskService) markTaskFailed(
 		Message:  "task failed",
 		Metadata: marshalTaskMetadata(fields),
 	})
+}
+
+func (s *taskService) setRunningProgress(ctx context.Context, taskID int64, progress int) bool {
+	if s.isCanceled(ctx, taskID) {
+		return false
+	}
+	if err := s.repo.UpdateStatus(ctx, taskID, TaskStatusRunning, progress, ""); err != nil {
+		return false
+	}
+	return true
 }

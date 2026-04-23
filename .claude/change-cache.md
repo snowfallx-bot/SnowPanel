@@ -12,48 +12,37 @@
 
 ============
 
-本轮先完成“接手提交 + 继续收尾”的稳定推进：
+本轮主要修复了任务系统中的“取消状态被后台执行覆盖”的竞态问题，并补上回归测试。
 
-1. 已将上一个 AI 留下的下载链路改动提交并推送：
-   - commit: `70308a8`
-   - 摘要: `feat(files): add backend text file download endpoint`
-2. 在此基础上补齐了 backend 下载链路测试：
-   - 新增 `file_handler` 下载接口测试（成功/失败 + 审计校验）
-   - 为 `file_service.DownloadTextFile` 增加单测（成功/空路径/截断拒绝）
-3. 改善 frontend 下载失败可读性：
-   - 解析 `/files/download` 返回的 `blob` 错误响应（JSON envelope）并转换为 `ApiError`，避免只显示通用失败提示。
-4. 更新 API 文档（中/英）：
-   - 明确 `GET /files/download`
-   - 明确当前下载能力边界（UTF-8 文本，8MB，上游仍非二进制分块链路）
-5. 追加 backend gRPC 集成测试覆盖：
-   - 新增 `TestFileService_DownloadTextFileViaGRPC`
-   - fake agent 补充 `ReadTextFile` 响应，覆盖 backend->grpcclient->agent 的下载调用链
+本次核心完成项
+
+1. 修复 `taskService.runTask` 的取消竞态：
+   - 任务在执行前/执行中/执行后只要被取消，不再被写回 `running`。
+   - 增加 `setRunningProgress` 守卫，更新进度前先检查取消状态。
+2. 修复失败写回覆盖取消状态的问题：
+   - `markTaskFailed` 在任务已取消时不再写 `failed`，仅记录取消日志。
+3. 新增并发回归测试：
+   - 覆盖“任务运行中取消，操作随后完成”的场景，确保最终状态仍为 `canceled`。
 
 本轮修改文件
 
-backend/internal/api/handler/file_handler_test.go
-backend/internal/service/file_service_test.go
-backend/internal/service/agent_integration_test.go
-frontend/src/api/files.ts
-docs/api-design.md
-docs/api-design.zh-CN.md
+backend/internal/service/task_service.go
+backend/internal/service/task_service_test.go
 
 验证结果
 
 1. `cd backend && go test ./...` 通过。
-2. `cd frontend && npm run build` 通过。
 
 commit摘要
 
-已提交：`test(files): cover download endpoint and improve error handling`（`6095883`）
-待提交：`test(files): add grpc integration coverage for download path`
+待提交：`fix(tasks): prevent canceled tasks from being overwritten by worker`
 
 希望接下来的 AI 做什么
 
-继续推进真正的“二进制 + 大文件”下载闭环（建议优先）：
-- 在 `proto/agent/v1/agent.proto` 增加文件字节分块读取 RPC（offset/limit/eof/total_size）。
-- core-agent file service 支持原始字节读取与偏移续读（保留路径安全校验）。
-- backend grpcclient 与 `/api/v1/files/download` 改为流式透传，避免 UTF-8 限制。
-- 前端下载按钮无需关心文本/二进制类型，统一由后端透传 `Content-Type` 与附件头。
+优先继续文件模块真实下载闭环（binary + large file）：
+- 在 proto 增加文件分块读取 RPC（offset/limit/eof/total_size）。
+- core-agent 提供原始字节读取并保留路径安全校验。
+- backend `/api/v1/files/download` 改为流式透传，不再受 UTF-8/8MB 限制。
+- 前端下载直接复用后端附件响应，统一处理文本和二进制文件。
 
 by: gpt-5

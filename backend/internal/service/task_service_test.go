@@ -296,6 +296,51 @@ func TestRetryTaskFromFailedCreatesNewTask(t *testing.T) {
 	waitForTaskStatus(t, repo, result.ID, TaskStatusSuccess, 2*time.Second)
 }
 
+func TestCancelTaskKeepsCanceledStatusAfterRunningOperationCompletes(t *testing.T) {
+	repo := newFakeTaskRepo()
+	started := make(chan struct{})
+	release := make(chan struct{})
+
+	service := NewTaskService(
+		repo,
+		fakeTaskDockerService{
+			restartFn: func(_ context.Context, id string) (dto.DockerContainerActionResult, error) {
+				close(started)
+				<-release
+				return dto.DockerContainerActionResult{ID: id, State: "running"}, nil
+			},
+		},
+		nil,
+	)
+
+	result, err := service.CreateDockerRestartTask(
+		context.Background(),
+		dto.CreateDockerRestartTaskRequest{ContainerID: "web"},
+		nil,
+		"tester",
+	)
+	if err != nil {
+		t.Fatalf("expected create task success, got %v", err)
+	}
+
+	select {
+	case <-started:
+	case <-time.After(2 * time.Second):
+		t.Fatalf("docker restart function did not start in time")
+	}
+
+	if err := service.CancelTask(context.Background(), result.ID, "tester"); err != nil {
+		t.Fatalf("expected cancel success, got %v", err)
+	}
+
+	close(release)
+
+	task := waitForTaskTerminalStatus(t, repo, result.ID, 2*time.Second)
+	if task.Status != TaskStatusCanceled {
+		t.Fatalf("expected final status canceled, got %+v", task)
+	}
+}
+
 func waitForTaskStatus(
 	t *testing.T,
 	repo *fakeTaskRepo,
@@ -316,4 +361,29 @@ func waitForTaskStatus(
 
 	task, _ := repo.GetByID(context.Background(), taskID)
 	t.Fatalf("task %d did not reach status %s, current=%+v", taskID, wantStatus, task)
+}
+
+func waitForTaskTerminalStatus(
+	t *testing.T,
+	repo *fakeTaskRepo,
+	taskID int64,
+	timeout time.Duration,
+) model.Task {
+	t.Helper()
+
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		task, err := repo.GetByID(context.Background(), taskID)
+		if err == nil && task != nil {
+			switch task.Status {
+			case TaskStatusSuccess, TaskStatusFailed, TaskStatusCanceled:
+				return *task
+			}
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+
+	task, _ := repo.GetByID(context.Background(), taskID)
+	t.Fatalf("task %d did not reach terminal status, current=%+v", taskID, task)
+	return model.Task{}
 }
