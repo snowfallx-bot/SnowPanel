@@ -159,6 +159,7 @@ impl SystemdServiceManager {
         Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
     }
 
+    #[allow(dead_code)]
     pub fn tail_logs_placeholder(&self, _name: &str) -> Result<String, ServiceError> {
         Err(ServiceError {
             code: 5005,

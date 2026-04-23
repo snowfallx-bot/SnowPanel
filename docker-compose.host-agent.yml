@@ -5,6 +5,9 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
+      core-agent:
+        condition: service_started
+        required: false
       postgres:
         condition: service_healthy
       redis:
