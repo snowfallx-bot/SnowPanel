@@ -34,11 +34,15 @@ type RenameFileRequest struct {
 }
 
 type DownloadFileQuery struct {
-	Path string `form:"path" binding:"required"`
+	Path   string `form:"path" binding:"required"`
+	Offset uint64 `form:"offset"`
+	Limit  uint64 `form:"limit"`
 }
 
 type DownloadFileResult struct {
 	Path            string `json:"path"`
+	StartOffset     uint64 `json:"start_offset"`
+	EndOffset       uint64 `json:"end_offset"`
 	TotalSize       uint64 `json:"total_size"`
 	DownloadedBytes uint64 `json:"downloaded_bytes"`
 }

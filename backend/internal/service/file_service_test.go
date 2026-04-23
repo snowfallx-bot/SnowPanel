@@ -267,6 +267,54 @@ func TestFileServiceDownloadFileSuccess(t *testing.T) {
 	}
 }
 
+func TestFileServiceDownloadFileWithOffsetAndLimit(t *testing.T) {
+	requests := make([]grpcclient.ReadFileChunkRequest, 0, 1)
+	client := &fakeFileServiceAgentClient{
+		readChunkFn: func(
+			_ context.Context,
+			req grpcclient.ReadFileChunkRequest,
+		) (grpcclient.ReadFileChunkResult, error) {
+			requests = append(requests, req)
+			return grpcclient.ReadFileChunkResult{
+				Path:      "/tmp/sample.bin",
+				Offset:    6,
+				Chunk:     []byte("world"),
+				TotalSize: 11,
+				EOF:       true,
+			}, nil
+		},
+	}
+
+	chunks := make([][]byte, 0, 1)
+	service := NewFileService(client)
+	result, err := service.DownloadFile(
+		context.Background(),
+		dto.DownloadFileQuery{Path: "/tmp/sample.bin", Offset: 6, Limit: 5},
+		func(chunk []byte) error {
+			chunks = append(chunks, append([]byte(nil), chunk...))
+			return nil
+		},
+	)
+	if err != nil {
+		t.Fatalf("expected partial download success, got error: %v", err)
+	}
+	if len(requests) != 1 {
+		t.Fatalf("unexpected request count: %d", len(requests))
+	}
+	if requests[0].Offset != 6 || requests[0].Limit != 5 {
+		t.Fatalf("unexpected partial request: %+v", requests[0])
+	}
+	if result.StartOffset != 6 || result.EndOffset != 10 {
+		t.Fatalf("unexpected offsets: start=%d end=%d", result.StartOffset, result.EndOffset)
+	}
+	if result.DownloadedBytes != 5 || result.TotalSize != 11 {
+		t.Fatalf("unexpected partial download result: %+v", result)
+	}
+	if len(chunks) != 1 || string(chunks[0]) != "world" {
+		t.Fatalf("unexpected chunk payloads: %+v", chunks)
+	}
+}
+
 func TestFileServiceDownloadFileRejectsEmptyPath(t *testing.T) {
 	client := &fakeFileServiceAgentClient{
 		readChunkFn: func(

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"path"
+	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -67,55 +68,78 @@ func (h *FileHandler) DownloadFile(c *gin.Context) {
 		return
 	}
 
+	if rangeHeader := strings.TrimSpace(c.GetHeader("Range")); rangeHeader != "" && query.Offset == 0 && query.Limit == 0 {
+		if rangeValue, ok := strings.CutPrefix(rangeHeader, "bytes="); ok {
+			if start, ok := strings.CutSuffix(rangeValue, "-"); ok {
+				if parsed, err := strconv.ParseUint(strings.TrimSpace(start), 10, 64); err == nil {
+					query.Offset = parsed
+				}
+			}
+		}
+	}
+
 	fileName := path.Base(strings.TrimSpace(query.Path))
 	if fileName == "" || fileName == "." || fileName == "/" {
 		fileName = "download.bin"
 	}
 
-	headersWritten := false
+	var (
+		result       dto.DownloadFileResult
+		headersWritten bool
+		bufferedChunks [][]byte
+	)
 	writeChunk := func(chunk []byte) error {
-		if !headersWritten {
-			contentType := "application/octet-stream"
-			if len(chunk) > 0 {
-				sample := chunk
-				if len(sample) > 512 {
-					sample = sample[:512]
-				}
-				contentType = http.DetectContentType(sample)
-			}
-			c.Header("Content-Type", contentType)
-			c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%q", fileName))
-			c.Header("X-Content-Type-Options", "nosniff")
-			headersWritten = true
-		}
-		_, err := c.Writer.Write(chunk)
-		return err
+		copied := append([]byte(nil), chunk...)
+		bufferedChunks = append(bufferedChunks, copied)
+		return nil
 	}
 
-	_, err := h.fileService.DownloadFile(c.Request.Context(), query, writeChunk)
+	var err error
+	result, err = h.fileService.DownloadFile(c.Request.Context(), query, writeChunk)
 	if err != nil {
 		recordAudit(c, h.auditService, dto.RecordAuditInput{
 			Module:         "files",
 			Action:         "download",
 			TargetType:     "path",
 			TargetID:       query.Path,
-			RequestSummary: `{"op":"download"}`,
+			RequestSummary: fmt.Sprintf(`{"op":"download","offset":%d,"limit":%d}`, query.Offset, query.Limit),
 			Success:        false,
 			ResultCode:     "failed",
 			ResultMessage:  err.Error(),
 		})
-		if !headersWritten {
-			response.FromError(c, err)
-		} else {
-			_ = c.Error(err)
-		}
+		response.FromError(c, err)
 		return
 	}
 
+	contentType := "application/octet-stream"
+	if len(bufferedChunks) > 0 && len(bufferedChunks[0]) > 0 {
+		sample := bufferedChunks[0]
+		if len(sample) > 512 {
+			sample = sample[:512]
+		}
+		contentType = http.DetectContentType(sample)
+	}
+	c.Header("Content-Type", contentType)
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%q", fileName))
+	c.Header("X-Content-Type-Options", "nosniff")
+	c.Header("Accept-Ranges", "bytes")
+	c.Header("Content-Length", fmt.Sprintf("%d", result.DownloadedBytes))
+	if query.Offset > 0 || query.Limit > 0 {
+		c.Header("Content-Range", fmt.Sprintf("bytes %d-%d/%d", result.StartOffset, result.EndOffset, result.TotalSize))
+		c.Status(http.StatusPartialContent)
+	} else {
+		c.Status(http.StatusOK)
+	}
+	headersWritten = true
+
+	for _, chunk := range bufferedChunks {
+		if _, err := c.Writer.Write(chunk); err != nil {
+			_ = c.Error(err)
+			return
+		}
+	}
+
 	if !headersWritten {
-		c.Header("Content-Type", "application/octet-stream")
-		c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%q", fileName))
-		c.Header("X-Content-Type-Options", "nosniff")
 		c.Status(http.StatusOK)
 	}
 
@@ -124,7 +148,7 @@ func (h *FileHandler) DownloadFile(c *gin.Context) {
 		Action:         "download",
 		TargetType:     "path",
 		TargetID:       query.Path,
-		RequestSummary: `{"op":"download"}`,
+		RequestSummary: fmt.Sprintf(`{"op":"download","offset":%d,"limit":%d}`, query.Offset, query.Limit),
 		Success:        true,
 		ResultCode:     "ok",
 		ResultMessage:  "download success",

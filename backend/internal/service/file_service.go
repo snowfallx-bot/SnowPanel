@@ -151,17 +151,27 @@ func (s *fileService) DownloadFile(
 	}
 
 	var (
-		offset          uint64
+		offset          = query.Offset
+		startOffset     = query.Offset
 		normalizedPath  string
 		downloadedBytes uint64
 		totalSize       uint64
+		remaining       = query.Limit
 	)
 
 	for {
+		limit := downloadChunkSize
+		if remaining > 0 && remaining < uint64(limit) {
+			limit = uint32(remaining)
+		}
+		if remaining == 0 && query.Limit > 0 {
+			break
+		}
+
 		chunk, err := s.agentClient.ReadFileChunk(ctx, grpcclient.ReadFileChunkRequest{
 			Path:   path,
 			Offset: offset,
-			Limit:  downloadChunkSize,
+			Limit:  limit,
 		})
 		if err != nil {
 			return dto.DownloadFileResult{}, mapAgentError(err)
@@ -187,7 +197,11 @@ func (s *fileService) DownloadFile(
 		}
 
 		if len(chunk.Chunk) > 0 {
-			if err := writeChunk(chunk.Chunk); err != nil {
+			writeBytes := chunk.Chunk
+			if remaining > 0 && uint64(len(writeBytes)) > remaining {
+				writeBytes = writeBytes[:remaining]
+			}
+			if err := writeChunk(writeBytes); err != nil {
 				return dto.DownloadFileResult{}, apperror.Wrap(
 					apperror.ErrInternal.Code,
 					apperror.ErrInternal.HTTPStatus,
@@ -195,11 +209,15 @@ func (s *fileService) DownloadFile(
 					err,
 				)
 			}
-			offset += uint64(len(chunk.Chunk))
-			downloadedBytes += uint64(len(chunk.Chunk))
+			writtenLen := uint64(len(writeBytes))
+			offset += writtenLen
+			downloadedBytes += writtenLen
+			if remaining > 0 {
+				remaining -= writtenLen
+			}
 		}
 
-		if chunk.EOF {
+		if chunk.EOF || (query.Limit > 0 && remaining == 0) {
 			break
 		}
 		if len(chunk.Chunk) == 0 {
@@ -213,11 +231,18 @@ func (s *fileService) DownloadFile(
 	}
 
 	if totalSize == 0 {
-		totalSize = downloadedBytes
+		totalSize = offset
+	}
+
+	endOffset := startOffset
+	if downloadedBytes > 0 {
+		endOffset = startOffset + downloadedBytes - 1
 	}
 
 	return dto.DownloadFileResult{
 		Path:            normalizedPath,
+		StartOffset:     startOffset,
+		EndOffset:       endOffset,
 		TotalSize:       totalSize,
 		DownloadedBytes: downloadedBytes,
 	}, nil

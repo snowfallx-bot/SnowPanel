@@ -176,6 +176,51 @@ func TestFileHandlerDownloadFileSuccess(t *testing.T) {
 	}
 }
 
+func TestFileHandlerDownloadFilePartialSuccess(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	fileSvc := &fileHandlerServiceStub{
+		downloadChunks: [][]byte{
+			[]byte("from file"),
+		},
+		downloadResult: dto.DownloadFileResult{
+			Path:            "/tmp/sample.log",
+			StartOffset:     6,
+			EndOffset:       14,
+			TotalSize:       15,
+			DownloadedBytes: 9,
+		},
+	}
+	auditSvc := &fileAuditRecorder{}
+	handler := NewFileHandler(fileSvc, auditSvc)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(
+		http.MethodGet,
+		"/api/v1/files/download?path=/tmp/sample.log&offset=6",
+		nil,
+	)
+
+	handler.DownloadFile(c)
+
+	if w.Code != http.StatusPartialContent {
+		t.Fatalf("expected 206, got %d", w.Code)
+	}
+	if got := w.Header().Get("Content-Range"); got != "bytes 6-14/15" {
+		t.Fatalf("unexpected content-range: %s", got)
+	}
+	if got := w.Header().Get("Accept-Ranges"); got != "bytes" {
+		t.Fatalf("unexpected accept-ranges: %s", got)
+	}
+	if body := w.Body.String(); body != "from file" {
+		t.Fatalf("unexpected response body: %q", body)
+	}
+	if fileSvc.downloadQuery.Offset != 6 {
+		t.Fatalf("unexpected download offset: %d", fileSvc.downloadQuery.Offset)
+	}
+}
+
 func TestFileHandlerDownloadFileFailure(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
