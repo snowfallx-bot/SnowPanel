@@ -12,25 +12,30 @@
 
 ============
 
-本轮继续推进文件传输链路，完成“上传 offset 续传参数 + 前端分块重试/续传接入”。
+本轮继续推进文件传输链路，完成“下载断点续传后端 Range 支持 + 前端分段重试/续传接入”。
 
 本次核心完成项
 
 1. backend（Go）：
-   - `backend/internal/dto/file.go` 为 `UploadFileRequest` 增加 `offset`
-   - `backend/internal/api/handler/file_handler.go`：`/files/upload` 解析 multipart 中的 `offset`，并把 offset 写入审计摘要
-   - `backend/internal/service/file_service.go`：上传从 `req.Offset` 开始写入；仅在 offset=0 的首块执行 truncate，避免续传时错误清空已落盘内容
-2. frontend（React/TS）：
+   - `backend/internal/dto/file.go`：为下载请求增加 `offset` / `limit`，为结果增加 `start_offset` / `end_offset`
+   - `backend/internal/service/file_service.go`：支持从指定 offset 开始读取，并按 limit 截断返回区间
+   - `backend/internal/api/handler/file_handler.go`：
+     - 解析 `Range: bytes=<offset>-`
+     - 输出 `206 Partial Content`
+     - 返回 `Accept-Ranges: bytes` 与 `Content-Range`
+     - 下载审计摘要增加 `offset` / `limit`
+2. backend 测试：
+   - `backend/internal/service/file_service_test.go`：新增 offset + limit 的下载用例
+   - `backend/internal/api/handler/file_handler_test.go`：新增 partial download 的 `206` / `Content-Range` 断言
+   - 已通过：`cd backend && go test ./internal/service ./internal/api/handler`
+3. frontend（React/TS）：
    - `frontend/src/api/files.ts`：
-     - `uploadFile` 支持可选 `offset`
-     - 新增 `uploadFileWithRetry`，按 1MB 分块上传
-     - 每块最多重试 3 次，失败后从最近成功 offset 继续，而不是整体从 0 重传
-   - `frontend/src/pages/FilesPage.tsx`：上传入口改为使用 `uploadFileWithRetry`
-   - `frontend/src/types/file.ts`：新增上传选项类型
-3. 测试：
-   - `backend/internal/api/handler/file_handler_test.go`：上传用例补充 `offset` 字段断言
+     - 下载改为按 1MB 分段拉取
+     - 每段最多重试 3 次
+     - 通过 `offset + limit` 查询参数和 `Range` 请求头续传
+     - 基于 `Content-Range` 识别总大小并拼接最终 Blob
 4. 文档：
-   - `docs/api-design.md`、`docs/api-design.zh-CN.md`：补充 `/files/upload` 可选 `offset` 字段，以及前端分块重试/续传语义说明
+   - `docs/api-design.md`、`docs/api-design.zh-CN.md`：补充 `/files/download` 的 Range/206/Content-Range 语义与前端分段重试说明
 
 本轮修改文件
 
@@ -38,27 +43,29 @@
 - `backend/internal/api/handler/file_handler_test.go`
 - `backend/internal/dto/file.go`
 - `backend/internal/service/file_service.go`
+- `backend/internal/service/file_service_test.go`
+- `frontend/src/api/files.ts`
 - `docs/api-design.md`
 - `docs/api-design.zh-CN.md`
-- `frontend/src/api/files.ts`
-- `frontend/src/pages/FilesPage.tsx`
-- `frontend/src/types/file.ts`
 
 本地验证
 
+- `cd backend && go test ./internal/service ./internal/api/handler` ✅
 - `npm --prefix frontend run build` ✅
-- backend 定向测试命令仍需在正确模块目录执行；本轮两次从仓库根触发 `go test`，Go 因未命中 module root 失败，需下轮在 `backend/` 内继续确认
 - 本机未执行 Rust 编译/测试
 
 commit摘要
 
+已提交并推送：
+- `feat(files): add resumable download range handling`
+
 待提交：
-- `feat(files): add upload resume offset and frontend retry`
+- `feat(files): add frontend segmented download retry`
 
 希望接下来的 AI 做什么
 
-1. 在 `backend/` 模块目录内补跑 `go test ./internal/service ./internal/api/handler`，确认本轮 Go 改动通过。
-2. 继续做下载链路的断点续传能力，优先评估是否补 `Range`/`Content-Range` HTTP 语义。
-3. 如需继续增强文件模块，可补上传/下载错误响应示例到 API 文档。
+1. 提交并推送本轮前端下载分段重试与文档改动。
+2. 如继续增强文件链路，可为上传/下载补更细的错误响应示例与前端进度展示。
+3. 若要继续完善下载能力，可评估多段 Range、校验 ETag/Last-Modified 等更完整的恢复语义。
 
 by: claude-sonnet-4-6

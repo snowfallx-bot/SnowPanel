@@ -45,7 +45,7 @@
 ## 文件管理
 
 - `GET /files/list?path=/abs/path`（`files.read`）
-- `GET /files/download?path=/abs/path`（`files.read`）
+- `GET /files/download?path=/abs/path`（`files.read`，支持可选 HTTP `Range: bytes=<offset>-` 断点续传）
 - `POST /files/upload`（`files.write`，`multipart/form-data`，字段：`path`、`file`、可选 `offset`）
 - `POST /files/read`（`files.read`）
 - `POST /files/write`（`files.write`）
@@ -58,6 +58,7 @@
 当前行为说明：
 - 文件读写 API 为文本导向（`utf-8`），超出最大预览字节数时返回 `truncated`。
 - `GET /files/download` 通过 core-agent 分块读取 RPC（`ReadFileChunk`）流式下载，支持文本与二进制文件。
+- 下载响应支持 `206 Partial Content`、`Accept-Ranges: bytes` 与 `Content-Range` 断点续传语义；前端现按 1MB 分段重试，并从最近完成的 offset 继续下载。
 - `POST /files/upload` 通过 core-agent 分块写入 RPC（`WriteFileChunk`）流式上传，支持文本与二进制文件。
 - 上传请求可携带 `offset` 从已落盘字节位置继续续传；前端按分块重试/续传语义处理瞬时失败，避免每次失败都从 `0` 开始重传。
 - `POST /files/rename` 通过 core-agent `RenameFile` RPC 执行原子重命名（不再走读/写/删拷贝链路）。

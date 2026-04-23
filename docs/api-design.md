@@ -45,7 +45,7 @@ Language: **English** | [简体中文](api-design.zh-CN.md)
 ## File Management
 
 - `GET /files/list?path=/abs/path` (`files.read`)
-- `GET /files/download?path=/abs/path` (`files.read`)
+- `GET /files/download?path=/abs/path` (`files.read`, supports optional HTTP `Range: bytes=<offset>-` for resumable partial downloads)
 - `POST /files/upload` (`files.write`, `multipart/form-data`, fields: `path`, `file`, optional `offset`)
 - `POST /files/read` (`files.read`)
 - `POST /files/write` (`files.write`)
@@ -58,6 +58,7 @@ All file paths are validated by the agent safe-root policy.
 Current behavior notes:
 - File read/write APIs are text-oriented (`utf-8`) and return `truncated` when max preview bytes are exceeded.
 - `GET /files/download` streams file bytes from core-agent chunk RPC (`ReadFileChunk`) and supports both text and binary files.
+- Download responses support resumable partial content with `206 Partial Content`, `Accept-Ranges: bytes`, and `Content-Range`; frontend now retries per 1MB segment and resumes from the last completed offset.
 - `POST /files/upload` streams raw file bytes from backend to core-agent chunk RPC (`WriteFileChunk`) and supports both text and binary files.
 - Upload requests may provide `offset` to resume from an already persisted byte position; frontend uses chunked retry/resume semantics instead of restarting from byte `0` after every transient failure.
 - `POST /files/rename` uses core-agent `RenameFile` RPC for an atomic filesystem rename operation (no read/write/delete copy path).

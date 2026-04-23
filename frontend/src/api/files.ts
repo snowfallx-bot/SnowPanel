@@ -24,6 +24,8 @@ export interface DownloadFilePayload {
 
 const uploadChunkSize = 1024 * 1024;
 const uploadRetryLimit = 3;
+const downloadChunkSize = 1024 * 1024;
+const downloadRetryLimit = 3;
 
 export function listFiles(path: string) {
   return unwrap<ListFilesResult>(http.get("/api/v1/files/list", { params: { path } }));
@@ -138,42 +140,101 @@ function parseDownloadFileName(contentDisposition: string | null | undefined) {
   return null;
 }
 
-export async function downloadFile(path: string) {
-  try {
-    const response = await http.get("/api/v1/files/download", {
-      params: { path },
-      responseType: "blob"
-    });
-    return {
-      blob: response.data as Blob,
-      fileName: parseDownloadFileName(response.headers["content-disposition"])
-    } as DownloadFilePayload;
-  } catch (error) {
-    if (!axios.isAxiosError(error)) {
-      throw error;
-    }
+function parseContentRangeTotal(contentRange: string | null | undefined) {
+  if (!contentRange) {
+    return null;
+  }
 
-    const status = error.response?.status;
-    const data = error.response?.data;
-    if (data instanceof Blob) {
+  const match = contentRange.match(/^bytes\s+\d+-\d+\/(\d+)$/i);
+  if (!match?.[1]) {
+    return null;
+  }
+
+  const total = Number(match[1]);
+  return Number.isFinite(total) && total >= 0 ? total : null;
+}
+
+async function downloadFileChunk(path: string, offset: number, limit: number) {
+  const response = await http.get("/api/v1/files/download", {
+    params: { path, offset, limit },
+    responseType: "blob",
+    headers: {
+      Range: `bytes=${offset}-`
+    }
+  });
+
+  return {
+    blob: response.data as Blob,
+    fileName: parseDownloadFileName(response.headers["content-disposition"]),
+    totalSize: parseContentRangeTotal(response.headers["content-range"])
+  };
+}
+
+export async function downloadFile(path: string) {
+  let offset = 0;
+  let totalSize: number | null = null;
+  let fileName: string | null = null;
+  const chunks: BlobPart[] = [];
+
+  while (totalSize === null || offset < totalSize) {
+    let success = false;
+    let lastError: unknown = null;
+
+    for (let attempt = 0; attempt < downloadRetryLimit; attempt += 1) {
       try {
-        const text = await data.text();
-        const payload = JSON.parse(text) as Partial<ApiEnvelope<unknown>>;
-        if (typeof payload.message === "string") {
-          throw new ApiError(payload.message, {
-            code: typeof payload.code === "number" ? payload.code : undefined,
-            status,
-            cause: error
-          });
+        const chunk = await downloadFileChunk(path, offset, downloadChunkSize);
+        if (fileName === null) {
+          fileName = chunk.fileName;
         }
-      } catch {
-        // fall through to generic error handling below
+        if (chunk.totalSize !== null) {
+          totalSize = chunk.totalSize;
+        }
+        if (chunk.blob.size === 0) {
+          if (totalSize === null || offset < totalSize) {
+            throw new ApiError("Download did not advance", { cause: chunk });
+          }
+          success = true;
+          break;
+        }
+        chunks.push(chunk.blob);
+        offset += chunk.blob.size;
+        success = true;
+        break;
+      } catch (error) {
+        lastError = error;
       }
     }
 
-    throw new ApiError(error.message || "Download failed", {
-      status,
-      cause: error
-    });
+    if (!success) {
+      if (axios.isAxiosError(lastError)) {
+        const status = lastError.response?.status;
+        const data = lastError.response?.data;
+        if (data instanceof Blob) {
+          try {
+            const text = await data.text();
+            const payload = JSON.parse(text) as Partial<ApiEnvelope<unknown>>;
+            if (typeof payload.message === "string") {
+              throw new ApiError(payload.message, {
+                code: typeof payload.code === "number" ? payload.code : undefined,
+                status,
+                cause: lastError
+              });
+            }
+          } catch {
+            // fall through
+          }
+        }
+      }
+      throw lastError;
+    }
+
+    if (totalSize !== null && offset >= totalSize) {
+      break;
+    }
   }
+
+  return {
+    blob: new Blob(chunks),
+    fileName
+  } as DownloadFilePayload;
 }
