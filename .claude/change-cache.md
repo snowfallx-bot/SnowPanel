@@ -12,40 +12,42 @@
 
 ============
 
-本轮继续推进 Docker 页面筛选体验，完成“清空筛选 + URL 持久化筛选条件”。
+本轮继续推进 Docker 页面，补齐前端测试覆盖（URL 筛选恢复、清空筛选、筛选空态文案）。
 
 本次核心完成项
 
-1. frontend（React/TS）：
-   - `frontend/src/pages/DockerPage.tsx`
-     - 新增 URL 查询参数持久化：`container` / `state` / `image`
-     - 页面刷新后可恢复筛选条件（容器关键字、容器状态、镜像关键字）
-     - 新增 `Clear filters` 按钮，一键清空全部筛选条件
-     - 仅在存在激活筛选时允许点击 `Clear filters`
-     - 状态下拉选项会保留当前筛选值（即使当前数据里暂未出现该状态）
+1. frontend tests（Vitest + Testing Library）：
+   - 新增 `frontend/src/pages/DockerPage.test.tsx`
+   - 覆盖用例：
+     - URL 参数恢复筛选状态（`container/state/image`）
+     - 筛选条件回写 URL，并通过 `Clear filters` 一键清空
+     - 筛选无结果时空态文案展示：
+       - `No containers match the current filter.`
+       - `No images match the current filter.`
+   - 使用 `QueryClientProvider + MemoryRouter` 构造页面上下文
+   - 对 `@/api/docker` 进行了 mock，避免网络依赖
 2. 本地验证：
+   - `npm --prefix frontend run test` ✅
    - `npm --prefix frontend run build` ✅
 
 本轮修改文件
 
-- `frontend/src/pages/DockerPage.tsx`
+- `frontend/src/pages/DockerPage.test.tsx`
 
 本地验证
 
+- `npm --prefix frontend run test` ✅
 - `npm --prefix frontend run build` ✅
 
 commit摘要
 
 待提交：
-- `feat(docker): persist docker filters in url`
+- `test(docker): cover filter persistence and empty states`
 
 希望接下来的 AI 做什么
 
-1. 给 Docker 页面补充交互测试，覆盖：
-   - URL 参数恢复筛选
-   - 清空筛选按钮状态与行为
-   - 筛选空态文案
-2. 如继续增强体验，可在筛选区增加“按状态快速 chips”。
-3. 可考虑将当前 Docker 的筛选逻辑抽成可复用 hook（后续 Cron/Services 页可复用）。
+1. 给 Docker 页面动作按钮补交互测试（start/stop/restart 成功与失败反馈）。
+2. 如切到 Cron 页面，优先补列表筛选/排序测试与基础交互测试。
+3. 可把 Docker 页面筛选状态逻辑提炼为可复用 hook，为 Services/Cron 页复用铺路。
 
 by: gpt-5.4
