@@ -12,34 +12,26 @@
 
 ============
 
-本轮继续推进文件模块可用性，完成“上传/下载进度展示 UI”。
+本轮继续推进文件模块交互体验，完成“文件页拖拽上传”。
 
 本次核心完成项
 
 1. frontend（React/TS）：
-   - `frontend/src/api/files.ts`：
-     - `uploadFileWithRetry` 增加进度回调
-     - `downloadFile` 增加进度回调
    - `frontend/src/pages/FilesPage.tsx`：
-     - 增加上传/下载中的状态管理
-     - 上传时显示 `Uploading: x%`
-     - 下载时显示 `Downloading: x%`
-     - 上传中禁用重复上传
-     - 下载中禁用下载按钮与保存按钮
-   - `frontend/src/components/files/FileEditorPanel.tsx`：支持展示下载中的进度提示
+     - 增加拖拽上传区域
+     - 支持将单个文件拖入当前目录直接上传
+     - 复用现有上传重试与进度展示逻辑
+     - 上传中禁止重复触发拖拽上传
 2. 本地验证：
    - `npm --prefix frontend run build` ✅
 
 本轮修改文件
 
-- `frontend/src/api/files.ts`
 - `frontend/src/pages/FilesPage.tsx`
-- `frontend/src/components/files/FileEditorPanel.tsx`
 
 本地验证
 
 - `npm --prefix frontend run build` ✅
-- 本机未执行 Rust 编译/测试
 
 commit摘要
 
@@ -48,14 +40,16 @@ commit摘要
 - `e4044e4` `feat(files): add resumable download range handling`
 - `90f7443` `feat(files): add frontend segmented download retry`
 - `563b437` `fix(agent): align grpc server imports with rustfmt`
+- `781626e` `feat(files): add transfer progress feedback`
+- `c4a9771` `docs(files): add file API error response examples`
 
 待提交：
-- `feat(files): add transfer progress feedback`
+- `feat(files): add drag and drop upload`
 
 希望接下来的 AI 做什么
 
-1. 提交并推送本轮文件传输进度展示改动。
-2. 继续补 API 文档里的 upload/download/rename 错误响应示例。
-3. 如 CI 再报错，优先根据最新日志继续收尾。
+1. 提交并推送本轮拖拽上传改动。
+2. 如继续增强文件页，可做批量选择/批量删除。
+3. 若切换回主链任务，可继续推进服务管理、Docker、Cron 或测试补强。
 
 by: claude-sonnet-4-6

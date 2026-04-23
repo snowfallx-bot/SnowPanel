@@ -1,4 +1,4 @@
-import { ChangeEvent, FormEvent, useMemo, useState } from "react";
+import { ChangeEvent, DragEvent, FormEvent, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createDirectory,
@@ -105,6 +105,7 @@ export function FilesPage() {
   const [downloadProgressText, setDownloadProgressText] = useState("");
   const [downloading, setDownloading] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [dragging, setDragging] = useState(false);
 
   const listQuery = useQuery({
     queryKey: ["files", path],
@@ -307,10 +308,8 @@ export function FilesPage() {
     }
   }
 
-  async function handleUpload(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file || uploading) {
+  async function uploadSingleFile(file: File) {
+    if (uploading) {
       return;
     }
 
@@ -329,6 +328,45 @@ export function FilesPage() {
       setUploading(false);
       setUploadProgressText("");
     }
+  }
+
+  async function handleUpload(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || uploading) {
+      return;
+    }
+
+    await uploadSingleFile(file);
+  }
+
+  function handleDragOver(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    if (!uploading) {
+      setDragging(true);
+    }
+  }
+
+  function handleDragLeave(event: DragEvent<HTMLDivElement>) {
+    if (event.currentTarget.contains(event.relatedTarget as Node | null)) {
+      return;
+    }
+    setDragging(false);
+  }
+
+  async function handleDrop(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    setDragging(false);
+    if (uploading) {
+      return;
+    }
+
+    const file = event.dataTransfer.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    await uploadSingleFile(file);
   }
 
   async function handleCreateDirectory(event: FormEvent<HTMLFormElement>) {
@@ -397,6 +435,21 @@ export function FilesPage() {
               </div>
             </CardContent>
           </Card>
+
+          <div
+            className={`rounded-lg border-2 border-dashed p-4 transition ${dragging ? "border-panel-500 bg-panel-50" : "border-slate-300 bg-slate-50"}`}
+            onDragLeave={handleDragLeave}
+            onDragOver={handleDragOver}
+            onDrop={handleDrop}
+          >
+            <p className="text-sm text-slate-600">
+              {uploading
+                ? "Uploading file..."
+                : dragging
+                  ? "Drop the file here to upload into the current directory."
+                  : "Drag and drop a file here to upload it into the current directory."}
+            </p>
+          </div>
 
           {listQuery.isLoading ? (
             <Card>
