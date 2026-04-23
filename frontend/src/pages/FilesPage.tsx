@@ -99,6 +99,7 @@ export function FilesPage() {
   const [selectedContent, setSelectedContent] = useState("");
   const [selectedTruncated, setSelectedTruncated] = useState(false);
   const [selectedBinary, setSelectedBinary] = useState(false);
+  const [selectedEntries, setSelectedEntries] = useState<string[]>([]);
   const [readMaxBytes, setReadMaxBytes] = useState(1024 * 1024);
   const [feedback, setFeedback] = useState("");
   const [uploadProgressText, setUploadProgressText] = useState("");
@@ -152,6 +153,7 @@ export function FilesPage() {
       if (selectedPath === result.source_path) {
         setSelectedPath(result.target_path);
       }
+      setSelectedEntries((current) => current.filter((item) => item !== result.source_path));
     },
     onError(error) {
       setFeedback(describeFileApiError(error, "Failed to rename path"));
@@ -198,8 +200,10 @@ export function FilesPage() {
   }, [feedback, listQuery.error, listQuery.isError, uploadProgressText]);
 
   const currentPath = listQuery.data?.current_path || path;
+  const currentEntries = listQuery.data?.entries || [];
   const canLoadMorePreview = selectedTruncated && readMaxBytes < 8 * 1024 * 1024;
   const canDownload = !!selectedPath;
+  const hasBulkSelection = selectedEntries.length > 0;
 
   function setPreviewLimit(nextMaxBytes: number) {
     setReadMaxBytes(nextMaxBytes);
@@ -213,8 +217,24 @@ export function FilesPage() {
     });
   }
 
+  function toggleSelect(entry: FileEntry) {
+    setSelectedEntries((current) =>
+      current.includes(entry.path) ? current.filter((item) => item !== entry.path) : [...current, entry.path]
+    );
+  }
+
+  function toggleSelectAll() {
+    setSelectedEntries((current) => {
+      if (currentEntries.length > 0 && currentEntries.every((entry) => current.includes(entry.path))) {
+        return [];
+      }
+      return currentEntries.map((entry) => entry.path);
+    });
+  }
+
   async function handleOpen(entry: FileEntry) {
     if (entry.is_dir) {
+      setSelectedEntries([]);
       setPath(entry.path);
       return;
     }
@@ -253,6 +273,29 @@ export function FilesPage() {
       path: entry.path,
       recursive: entry.is_dir
     });
+    setSelectedEntries((current) => current.filter((item) => item !== entry.path));
+  }
+
+  async function handleBulkDelete() {
+    if (!hasBulkSelection) {
+      return;
+    }
+
+    const selectedItems = currentEntries.filter((entry) => selectedEntries.includes(entry.path));
+    const ok = window.confirm(`Delete ${selectedItems.length} selected item(s)? This action cannot be undone.`);
+    if (!ok) {
+      return;
+    }
+
+    for (const entry of selectedItems) {
+      await deleteMutation.mutateAsync({
+        path: entry.path,
+        recursive: entry.is_dir
+      });
+    }
+
+    setSelectedEntries([]);
+    setFeedback(`Deleted ${selectedItems.length} item(s).`);
   }
 
   async function handleRename(entry: FileEntry) {
@@ -392,8 +435,14 @@ export function FilesPage() {
       </div>
 
       <FilePathBar
-        onGoUp={() => setPath(parentPath(currentPath))}
-        onNavigate={(target) => setPath(target)}
+        onGoUp={() => {
+          setSelectedEntries([]);
+          setPath(parentPath(currentPath));
+        }}
+        onNavigate={(target) => {
+          setSelectedEntries([]);
+          setPath(target);
+        }}
         path={currentPath}
       />
 
@@ -420,6 +469,9 @@ export function FilesPage() {
                   <input className="hidden" disabled={uploading} onChange={handleUpload} type="file" />
                   {uploading ? "Uploading..." : "Upload File"}
                 </label>
+                <Button disabled={!hasBulkSelection || deleteMutation.isPending} onClick={handleBulkDelete} type="button" variant="ghost">
+                  Delete Selected
+                </Button>
                 <label className="text-sm text-slate-500">Preview limit</label>
                 <select
                   className="rounded-md border border-slate-300 px-2 py-1 text-sm"
@@ -459,10 +511,13 @@ export function FilesPage() {
             </Card>
           ) : (
             <FileTable
-              entries={listQuery.data?.entries || []}
+              entries={currentEntries}
+              selectedPaths={selectedEntries}
               onDelete={handleDelete}
               onOpen={handleOpen}
               onRename={handleRename}
+              onToggleSelect={toggleSelect}
+              onToggleSelectAll={toggleSelectAll}
             />
           )}
         </div>

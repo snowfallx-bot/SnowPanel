@@ -3,6 +3,9 @@ import { Button } from "@/components/ui/button";
 
 interface FileTableProps {
   entries: FileEntry[];
+  selectedPaths: string[];
+  onToggleSelect: (entry: FileEntry) => void;
+  onToggleSelectAll: () => void;
   onOpen: (entry: FileEntry) => void;
   onRename: (entry: FileEntry) => void;
   onDelete: (entry: FileEntry) => void;
@@ -28,12 +31,25 @@ function formatSize(size: number, isDir: boolean) {
   return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export function FileTable({ entries, onOpen, onRename, onDelete }: FileTableProps) {
+export function FileTable({
+  entries,
+  selectedPaths,
+  onToggleSelect,
+  onToggleSelectAll,
+  onOpen,
+  onRename,
+  onDelete
+}: FileTableProps) {
+  const allSelected = entries.length > 0 && entries.every((entry) => selectedPaths.includes(entry.path));
+
   return (
     <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
       <table className="w-full text-left text-sm">
         <thead className="bg-slate-50 text-slate-600">
           <tr>
+            <th className="px-4 py-3">
+              <input checked={allSelected} onChange={onToggleSelectAll} type="checkbox" />
+            </th>
             <th className="px-4 py-3">Name</th>
             <th className="px-4 py-3">Type</th>
             <th className="px-4 py-3">Size</th>
@@ -42,37 +58,43 @@ export function FileTable({ entries, onOpen, onRename, onDelete }: FileTableProp
           </tr>
         </thead>
         <tbody>
-          {entries.map((entry) => (
-            <tr className="border-t border-slate-200" key={entry.path}>
-              <td className="px-4 py-3">
-                <button className="font-medium text-panel-700 hover:underline" onClick={() => onOpen(entry)} type="button">
-                  {entry.name}
-                </button>
-              </td>
-              <td className="px-4 py-3">{entry.is_dir ? "Directory" : "File"}</td>
-              <td className="px-4 py-3">{formatSize(entry.size, entry.is_dir)}</td>
-              <td className="px-4 py-3">{formatTime(entry.modified_at_unix)}</td>
-              <td className="px-4 py-3">
-                <div className="flex gap-2">
-                  <Button
-                    disabled={entry.is_dir}
-                    size="sm"
-                    title={entry.is_dir ? "Directory rename is not supported yet." : undefined}
-                    variant="ghost"
-                    onClick={() => onRename(entry)}
-                  >
-                    Rename
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => onDelete(entry)}>
-                    Delete
-                  </Button>
-                </div>
-              </td>
-            </tr>
-          ))}
+          {entries.map((entry) => {
+            const selected = selectedPaths.includes(entry.path);
+            return (
+              <tr className="border-t border-slate-200" key={entry.path}>
+                <td className="px-4 py-3">
+                  <input checked={selected} onChange={() => onToggleSelect(entry)} type="checkbox" />
+                </td>
+                <td className="px-4 py-3">
+                  <button className="font-medium text-panel-700 hover:underline" onClick={() => onOpen(entry)} type="button">
+                    {entry.name}
+                  </button>
+                </td>
+                <td className="px-4 py-3">{entry.is_dir ? "Directory" : "File"}</td>
+                <td className="px-4 py-3">{formatSize(entry.size, entry.is_dir)}</td>
+                <td className="px-4 py-3">{formatTime(entry.modified_at_unix)}</td>
+                <td className="px-4 py-3">
+                  <div className="flex gap-2">
+                    <Button
+                      disabled={entry.is_dir}
+                      size="sm"
+                      title={entry.is_dir ? "Directory rename is not supported yet." : undefined}
+                      variant="ghost"
+                      onClick={() => onRename(entry)}
+                    >
+                      Rename
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => onDelete(entry)}>
+                      Delete
+                    </Button>
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
           {entries.length === 0 && (
             <tr>
-              <td className="px-4 py-8 text-center text-slate-500" colSpan={5}>
+              <td className="px-4 py-8 text-center text-slate-500" colSpan={6}>
                 Directory is empty.
               </td>
             </tr>
