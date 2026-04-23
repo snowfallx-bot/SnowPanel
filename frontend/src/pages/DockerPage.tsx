@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
 import {
   listDockerContainers,
   listDockerImages,
@@ -29,10 +30,13 @@ function formatSize(size: number) {
 
 export function DockerPage() {
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [feedback, setFeedback] = useState("");
-  const [filter, setFilter] = useState("");
-  const [stateFilter, setStateFilter] = useState("all");
-  const [imageFilter, setImageFilter] = useState("");
+  const [filter, setFilter] = useState(() => searchParams.get("container") || "");
+  const [stateFilter, setStateFilter] = useState(
+    () => searchParams.get("state")?.trim().toLowerCase() || "all"
+  );
+  const [imageFilter, setImageFilter] = useState(() => searchParams.get("image") || "");
   const [activeActionKey, setActiveActionKey] = useState("");
 
   const containersQuery = useQuery({
@@ -100,8 +104,11 @@ export function DockerPage() {
       const normalized = item.state.trim().toLowerCase() || "unknown";
       states.add(normalized);
     }
+    if (stateFilter !== "all") {
+      states.add(stateFilter);
+    }
     return ["all", ...Array.from(states).sort()];
-  }, [containersQuery.data?.containers]);
+  }, [containersQuery.data?.containers, stateFilter]);
 
   const filteredImages = useMemo(() => {
     const keyword = imageFilter.trim().toLowerCase();
@@ -130,6 +137,39 @@ export function DockerPage() {
     return feedback;
   }, [containersQuery.error, containersQuery.isError, feedback, imagesQuery.error, imagesQuery.isError]);
 
+  const hasActiveFilters = useMemo(
+    () => filter.trim() !== "" || stateFilter !== "all" || imageFilter.trim() !== "",
+    [filter, imageFilter, stateFilter]
+  );
+
+  useEffect(() => {
+    const nextParams = new URLSearchParams(searchParams);
+    const containerKeyword = filter.trim();
+    const imageKeyword = imageFilter.trim();
+
+    if (containerKeyword) {
+      nextParams.set("container", containerKeyword);
+    } else {
+      nextParams.delete("container");
+    }
+
+    if (stateFilter !== "all") {
+      nextParams.set("state", stateFilter);
+    } else {
+      nextParams.delete("state");
+    }
+
+    if (imageKeyword) {
+      nextParams.set("image", imageKeyword);
+    } else {
+      nextParams.delete("image");
+    }
+
+    if (nextParams.toString() !== searchParams.toString()) {
+      setSearchParams(nextParams, { replace: true });
+    }
+  }, [filter, imageFilter, searchParams, setSearchParams, stateFilter]);
+
   async function handleAction(item: DockerContainerInfo, action: DockerAction) {
     const confirmed = window.confirm(`${action.toUpperCase()} container "${item.name || item.id}"?`);
     if (!confirmed) {
@@ -148,6 +188,13 @@ export function DockerPage() {
     queryClient.invalidateQueries({ queryKey: ["docker", "images"] });
   }
 
+  function clearFilters() {
+    setFilter("");
+    setStateFilter("all");
+    setImageFilter("");
+    setFeedback("Filters cleared.");
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
@@ -155,14 +202,19 @@ export function DockerPage() {
           <h2 className="text-2xl font-semibold text-slate-900">Docker</h2>
           <p className="text-sm text-slate-500">Manage containers and view images.</p>
         </div>
-        <Button
-          disabled={containersQuery.isFetching || imagesQuery.isFetching}
-          onClick={refreshAll}
-          size="sm"
-          variant="ghost"
-        >
-          {containersQuery.isFetching || imagesQuery.isFetching ? "Refreshing..." : "Refresh"}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button disabled={!hasActiveFilters} onClick={clearFilters} size="sm" variant="ghost">
+            Clear filters
+          </Button>
+          <Button
+            disabled={containersQuery.isFetching || imagesQuery.isFetching}
+            onClick={refreshAll}
+            size="sm"
+            variant="ghost"
+          >
+            {containersQuery.isFetching || imagesQuery.isFetching ? "Refreshing..." : "Refresh"}
+          </Button>
+        </div>
       </div>
 
       <Card>

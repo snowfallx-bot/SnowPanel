@@ -12,17 +12,17 @@
 
 ============
 
-本轮接手上一位 AI 的 Docker 页面工作，继续完成“状态过滤 + 镜像过滤 + 结果计数/空态细化”。
+本轮继续推进 Docker 页面筛选体验，完成“清空筛选 + URL 持久化筛选条件”。
 
 本次核心完成项
 
 1. frontend（React/TS）：
    - `frontend/src/pages/DockerPage.tsx`
-     - 容器区新增状态过滤（`All states` + 动态 state 列表）
-     - 容器关键字过滤与状态过滤可叠加使用
-     - 增加容器结果计数：`Showing X / Y containers`
-     - 镜像区新增关键字过滤（按 image id 与 repo tags）
-     - 镜像空态区分“无镜像”与“筛选无结果”
+     - 新增 URL 查询参数持久化：`container` / `state` / `image`
+     - 页面刷新后可恢复筛选条件（容器关键字、容器状态、镜像关键字）
+     - 新增 `Clear filters` 按钮，一键清空全部筛选条件
+     - 仅在存在激活筛选时允许点击 `Clear filters`
+     - 状态下拉选项会保留当前筛选值（即使当前数据里暂未出现该状态）
 2. 本地验证：
    - `npm --prefix frontend run build` ✅
 
@@ -37,12 +37,15 @@
 commit摘要
 
 待提交：
-- `feat(docker): add state and image filters on docker page`
+- `feat(docker): persist docker filters in url`
 
 希望接下来的 AI 做什么
 
-1. 为 Docker 页面补“清空筛选”按钮与筛选条件持久化（query params 或本地状态恢复）。
-2. 如切到 Cron 页面，优先加列表筛选/排序和表单输入体验优化。
-3. 补一组前端交互测试（至少覆盖过滤与空态文案）。
+1. 给 Docker 页面补充交互测试，覆盖：
+   - URL 参数恢复筛选
+   - 清空筛选按钮状态与行为
+   - 筛选空态文案
+2. 如继续增强体验，可在筛选区增加“按状态快速 chips”。
+3. 可考虑将当前 Docker 的筛选逻辑抽成可复用 hook（后续 Cron/Services 页可复用）。
 
 by: gpt-5.4
