@@ -45,6 +45,7 @@ Language: **English** | [简体中文](api-design.zh-CN.md)
 ## File Management
 
 - `GET /files/list?path=/abs/path` (`files.read`)
+- `GET /files/download?path=/abs/path` (`files.read`)
 - `POST /files/read` (`files.read`)
 - `POST /files/write` (`files.write`)
 - `POST /files/rename` (`files.write`)
@@ -55,7 +56,7 @@ All file paths are validated by the agent safe-root policy.
 
 Current behavior notes:
 - File read/write APIs are text-oriented (`utf-8`) and return `truncated` when max preview bytes are exceeded.
-- The frontend supports text upload/download by reusing read/write APIs.
+- `GET /files/download` currently proxies text reads (UTF-8, max `8MB`) and returns a `text/plain` attachment.
 - Binary or non-UTF-8 files are shown with a clear hint and inline editing is disabled.
 - Preview size is selectable (`256KB` to `8MB`); offset/chunk pagination is not yet exposed as a dedicated API.
 - File-related error codes currently used by the core-agent:

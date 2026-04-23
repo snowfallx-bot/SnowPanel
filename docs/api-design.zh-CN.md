@@ -45,6 +45,7 @@
 ## 文件管理
 
 - `GET /files/list?path=/abs/path`（`files.read`）
+- `GET /files/download?path=/abs/path`（`files.read`）
 - `POST /files/read`（`files.read`）
 - `POST /files/write`（`files.write`）
 - `POST /files/rename`（`files.write`）
@@ -55,7 +56,7 @@
 
 当前行为说明：
 - 文件读写 API 为文本导向（`utf-8`），超出最大预览字节数时返回 `truncated`。
-- 前端的上传/下载能力当前通过复用读写接口实现，面向 UTF-8 文本文件。
+- `GET /files/download` 当前通过文本读取链路代理下载（UTF-8，最大 `8MB`），并返回 `text/plain` 附件。
 - 二进制或非 UTF-8 文件会给出明确提示，并禁用内联编辑。
 - 预览大小可选（`256KB` 到 `8MB`）；尚未提供独立的 offset/chunk 分页读取 API。
 - 当前 core-agent 文件相关错误码语义：

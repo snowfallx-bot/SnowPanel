@@ -218,3 +218,102 @@ func TestFileServiceRenameFileRejectsTruncatedSource(t *testing.T) {
 		t.Fatalf("unexpected calls after truncated read: write=%v delete=%v", writeCalled, deleteCalled)
 	}
 }
+
+func TestFileServiceDownloadTextFileSuccess(t *testing.T) {
+	var captured grpcclient.ReadTextFileRequest
+	client := &fakeFileServiceAgentClient{
+		readTextFileFn: func(
+			_ context.Context,
+			req grpcclient.ReadTextFileRequest,
+		) (grpcclient.ReadTextFileResult, error) {
+			captured = req
+			return grpcclient.ReadTextFileResult{
+				Path:      "/tmp/sample.log",
+				Content:   "hello world",
+				Size:      11,
+				Truncated: false,
+				Encoding:  "utf-8",
+			}, nil
+		},
+	}
+
+	service := NewFileService(client)
+	result, err := service.DownloadTextFile(context.Background(), dto.DownloadFileQuery{
+		Path: " /tmp/sample.log ",
+	})
+	if err != nil {
+		t.Fatalf("expected download success, got error: %v", err)
+	}
+	if result.Path != "/tmp/sample.log" {
+		t.Fatalf("unexpected path: %s", result.Path)
+	}
+	if result.Content != "hello world" {
+		t.Fatalf("unexpected content: %s", result.Content)
+	}
+	if captured.Path != "/tmp/sample.log" {
+		t.Fatalf("expected trimmed path, got %s", captured.Path)
+	}
+	if captured.MaxBytes != 8*1024*1024 {
+		t.Fatalf("unexpected max bytes: %d", captured.MaxBytes)
+	}
+	if captured.Encoding != "utf-8" {
+		t.Fatalf("unexpected encoding: %s", captured.Encoding)
+	}
+}
+
+func TestFileServiceDownloadTextFileRejectsEmptyPath(t *testing.T) {
+	client := &fakeFileServiceAgentClient{
+		readTextFileFn: func(
+			_ context.Context,
+			_ grpcclient.ReadTextFileRequest,
+		) (grpcclient.ReadTextFileResult, error) {
+			t.Fatalf("read should not be called for empty path")
+			return grpcclient.ReadTextFileResult{}, nil
+		},
+	}
+
+	service := NewFileService(client)
+	_, err := service.DownloadTextFile(context.Background(), dto.DownloadFileQuery{Path: "  "})
+	if err == nil {
+		t.Fatalf("expected bad request error")
+	}
+	appErr, ok := apperror.As(err)
+	if !ok {
+		t.Fatalf("expected app error, got %T", err)
+	}
+	if appErr.Code != apperror.ErrBadRequest.Code {
+		t.Fatalf("expected bad request code, got %d", appErr.Code)
+	}
+}
+
+func TestFileServiceDownloadTextFileRejectsTruncatedResult(t *testing.T) {
+	client := &fakeFileServiceAgentClient{
+		readTextFileFn: func(
+			_ context.Context,
+			req grpcclient.ReadTextFileRequest,
+		) (grpcclient.ReadTextFileResult, error) {
+			return grpcclient.ReadTextFileResult{
+				Path:      req.Path,
+				Content:   "partial",
+				Size:      20 * 1024 * 1024,
+				Truncated: true,
+				Encoding:  "utf-8",
+			}, nil
+		},
+	}
+
+	service := NewFileService(client)
+	_, err := service.DownloadTextFile(context.Background(), dto.DownloadFileQuery{
+		Path: "/tmp/huge.log",
+	})
+	if err == nil {
+		t.Fatalf("expected bad request error for truncated result")
+	}
+	appErr, ok := apperror.As(err)
+	if !ok {
+		t.Fatalf("expected app error, got %T", err)
+	}
+	if appErr.Code != apperror.ErrBadRequest.Code {
+		t.Fatalf("expected bad request code, got %d", appErr.Code)
+	}
+}
