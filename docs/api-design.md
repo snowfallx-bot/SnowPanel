@@ -73,6 +73,35 @@ Current behavior notes:
   - `4006`: unsupported encoding
   - `4007`: dangerous path
 
+Example error responses:
+
+Unsafe path:
+```json
+{
+  "code": 4001,
+  "message": "unsafe path",
+  "data": null
+}
+```
+
+Binary preview requested through `/files/read`:
+```json
+{
+  "code": 4003,
+  "message": "text file required",
+  "data": null
+}
+```
+
+Rename target already exists:
+```json
+{
+  "code": 4000,
+  "message": "bad request",
+  "data": null
+}
+```
+
 ## Service Management
 
 - `GET /services` (`services.read`)

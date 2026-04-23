@@ -73,6 +73,35 @@
   - `4006`：unsupported encoding（编码不支持）
   - `4007`：dangerous path（危险路径）
 
+错误响应示例：
+
+路径越界：
+```json
+{
+  "code": 4001,
+  "message": "unsafe path",
+  "data": null
+}
+```
+
+通过 `/files/read` 预览二进制文件：
+```json
+{
+  "code": 4003,
+  "message": "text file required",
+  "data": null
+}
+```
+
+重命名目标已存在：
+```json
+{
+  "code": 4000,
+  "message": "bad request",
+  "data": null
+}
+```
+
 ## 服务管理
 
 - `GET /services`（`services.read`）
