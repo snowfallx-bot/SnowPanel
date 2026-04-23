@@ -12,17 +12,17 @@
 
 ============
 
-本轮从文件模块切到 Docker 页面，完成“容器筛选 + 行级动作反馈 + 刷新态增强”。
+本轮接手上一位 AI 的 Docker 页面工作，继续完成“状态过滤 + 镜像过滤 + 结果计数/空态细化”。
 
 本次核心完成项
 
 1. frontend（React/TS）：
-   - `frontend/src/pages/DockerPage.tsx`：
-     - 增加容器名称/镜像/状态关键字筛选框
-     - 增加行级动作态文案：`Starting...` / `Stopping...` / `Restarting...`
-     - Refresh 按钮在刷新时显示 `Refreshing...`
-     - 统一刷新动作的反馈文案
-     - 过滤结果为空时区分“没有容器”与“筛选后无结果”
+   - `frontend/src/pages/DockerPage.tsx`
+     - 容器区新增状态过滤（`All states` + 动态 state 列表）
+     - 容器关键字过滤与状态过滤可叠加使用
+     - 增加容器结果计数：`Showing X / Y containers`
+     - 镜像区新增关键字过滤（按 image id 与 repo tags）
+     - 镜像空态区分“无镜像”与“筛选无结果”
 2. 本地验证：
    - `npm --prefix frontend run build` ✅
 
@@ -36,25 +36,13 @@
 
 commit摘要
 
-已提交并推送：
-- `23bbd95` `feat(files): add upload resume offset and retry`
-- `e4044e4` `feat(files): add resumable download range handling`
-- `90f7443` `feat(files): add frontend segmented download retry`
-- `563b437` `fix(agent): align grpc server imports with rustfmt`
-- `781626e` `feat(files): add transfer progress feedback`
-- `c4a9771` `docs(files): add file API error response examples`
-- `eded13d` `feat(files): add drag and drop upload`
-- `0885dfd` `feat(files): add bulk selection and delete`
-- `c43d872` `feat(files): enable directory rename in ui`
-- `efa227d` `feat(files): add bulk file downloads`
-
 待提交：
-- `feat(docker): improve container action feedback`
+- `feat(docker): add state and image filters on docker page`
 
 希望接下来的 AI 做什么
 
-1. 提交并推送本轮 Docker 页面增强改动。
-2. 如继续增强 Docker 页面，可增加容器状态过滤或镜像关键字过滤。
-3. 若切到 Cron 页面，可做筛选、排序或表单体验补强。
+1. 为 Docker 页面补“清空筛选”按钮与筛选条件持久化（query params 或本地状态恢复）。
+2. 如切到 Cron 页面，优先加列表筛选/排序和表单输入体验优化。
+3. 补一组前端交互测试（至少覆盖过滤与空态文案）。
 
-by: claude-sonnet-4-6
+by: gpt-5.4

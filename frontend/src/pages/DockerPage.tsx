@@ -31,6 +31,8 @@ export function DockerPage() {
   const queryClient = useQueryClient();
   const [feedback, setFeedback] = useState("");
   const [filter, setFilter] = useState("");
+  const [stateFilter, setStateFilter] = useState("all");
+  const [imageFilter, setImageFilter] = useState("");
   const [activeActionKey, setActiveActionKey] = useState("");
 
   const containersQuery = useQuery({
@@ -70,18 +72,49 @@ export function DockerPage() {
   });
 
   const filteredContainers = useMemo(() => {
+    const normalizeState = (value: string) => {
+      const normalized = value.trim().toLowerCase();
+      return normalized || "unknown";
+    };
     const keyword = filter.trim().toLowerCase();
     const items = containersQuery.data?.containers || [];
-    if (!keyword) {
-      return items;
-    }
+
     return items.filter((item) => {
+      const stateMatch = stateFilter === "all" || normalizeState(item.state) === stateFilter;
+      if (!stateMatch) {
+        return false;
+      }
+      if (!keyword) {
+        return true;
+      }
       const haystacks = [item.name, item.id, item.image, item.state, item.status]
         .map((value) => value.toLowerCase())
         .join(" ");
       return haystacks.includes(keyword);
     });
-  }, [containersQuery.data?.containers, filter]);
+  }, [containersQuery.data?.containers, filter, stateFilter]);
+
+  const containerStateOptions = useMemo(() => {
+    const states = new Set<string>();
+    for (const item of containersQuery.data?.containers || []) {
+      const normalized = item.state.trim().toLowerCase() || "unknown";
+      states.add(normalized);
+    }
+    return ["all", ...Array.from(states).sort()];
+  }, [containersQuery.data?.containers]);
+
+  const filteredImages = useMemo(() => {
+    const keyword = imageFilter.trim().toLowerCase();
+    const items = imagesQuery.data?.images || [];
+    if (!keyword) {
+      return items;
+    }
+    return items.filter((item) => {
+      const idMatched = item.id.toLowerCase().includes(keyword);
+      const tagsMatched = item.repo_tags.join(" ").toLowerCase().includes(keyword);
+      return idMatched || tagsMatched;
+    });
+  }, [imageFilter, imagesQuery.data?.images]);
 
   const message = useMemo(() => {
     if (containersQuery.isError) {
@@ -137,13 +170,27 @@ export function DockerPage() {
           <CardTitle className="text-base">Containers</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="flex items-center gap-2">
+          <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_220px]">
             <Input
               onChange={(event) => setFilter(event.target.value)}
               placeholder="Filter by name, image, state, or status"
               value={filter}
             />
+            <select
+              className="h-9 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700"
+              onChange={(event) => setStateFilter(event.target.value)}
+              value={stateFilter}
+            >
+              {containerStateOptions.map((value) => (
+                <option key={value} value={value}>
+                  {value === "all" ? "All states" : value}
+                </option>
+              ))}
+            </select>
           </div>
+          <p className="text-xs text-slate-500">
+            Showing {filteredContainers.length} / {(containersQuery.data?.containers || []).length} containers
+          </p>
           {containersQuery.isLoading ? (
             <p className="text-sm text-slate-600">Loading containers...</p>
           ) : (
@@ -215,7 +262,12 @@ export function DockerPage() {
         <CardHeader>
           <CardTitle className="text-base">Images</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-3">
+          <Input
+            onChange={(event) => setImageFilter(event.target.value)}
+            placeholder="Filter images by id or tag"
+            value={imageFilter}
+          />
           {imagesQuery.isLoading ? (
             <p className="text-sm text-slate-600">Loading images...</p>
           ) : (
@@ -229,17 +281,19 @@ export function DockerPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {(imagesQuery.data?.images || []).map((item) => (
+                  {filteredImages.map((item) => (
                     <tr className="border-t border-slate-200" key={item.id}>
                       <td className="px-4 py-3">{item.id}</td>
                       <td className="px-4 py-3">{item.repo_tags.join(", ") || "<none>"}</td>
                       <td className="px-4 py-3">{formatSize(item.size)}</td>
                     </tr>
                   ))}
-                  {(imagesQuery.data?.images || []).length === 0 && (
+                  {filteredImages.length === 0 && (
                     <tr>
                       <td className="px-4 py-8 text-center text-slate-500" colSpan={3}>
-                        No images found.
+                        {(imagesQuery.data?.images || []).length === 0
+                          ? "No images found."
+                          : "No images match the current filter."}
                       </td>
                     </tr>
                   )}
