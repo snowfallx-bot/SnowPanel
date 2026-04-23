@@ -175,7 +175,11 @@ export function DockerPage() {
     if (!confirmed) {
       return;
     }
-    await actionMutation.mutateAsync({ id: item.id || item.name, action });
+    try {
+      await actionMutation.mutateAsync({ id: item.id || item.name, action });
+    } catch {
+      // onError already updates feedback; avoid unhandled promise rejection from event handler.
+    }
   }
 
   function isActionPending(item: DockerContainerInfo, action: DockerAction) {

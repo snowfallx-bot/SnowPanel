@@ -174,4 +174,60 @@ describe("DockerPage", () => {
     expect(screen.getByText("No containers match the current filter.")).toBeInTheDocument();
     expect(screen.getByText("No images match the current filter.")).toBeInTheDocument();
   });
+
+  it("runs start/stop/restart actions and shows success feedback", async () => {
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+
+    renderDockerPage("/docker");
+    await screen.findByText("Showing 2 / 2 containers");
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Start" })[0]);
+    await waitFor(() => {
+      expect(startDockerContainer).toHaveBeenCalledWith("container-web");
+    });
+    expect(screen.getByText("start success: container-web -> running")).toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Stop" })[0]);
+    await waitFor(() => {
+      expect(stopDockerContainer).toHaveBeenCalledWith("container-web");
+    });
+    expect(screen.getByText("stop success: container-web -> stopped")).toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Restart" })[0]);
+    await waitFor(() => {
+      expect(restartDockerContainer).toHaveBeenCalledWith("container-web");
+    });
+    expect(screen.getByText("restart success: container-web -> running")).toBeInTheDocument();
+
+    expect(confirmSpy).toHaveBeenCalledTimes(3);
+  });
+
+  it("shows action error feedback when docker action fails", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    vi.mocked(stopDockerContainer).mockRejectedValueOnce(new Error("stop failed for container-web"));
+
+    renderDockerPage("/docker");
+    await screen.findByText("Showing 2 / 2 containers");
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Stop" })[0]);
+
+    await waitFor(() => {
+      expect(stopDockerContainer).toHaveBeenCalledWith("container-web");
+    });
+    expect(screen.getByText("stop failed for container-web")).toBeInTheDocument();
+  });
+
+  it("does not run action when confirmation is cancelled", async () => {
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+
+    renderDockerPage("/docker");
+    await screen.findByText("Showing 2 / 2 containers");
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Start" })[0]);
+
+    expect(confirmSpy).toHaveBeenCalledTimes(1);
+    expect(startDockerContainer).not.toHaveBeenCalled();
+    expect(screen.queryByText(/start requested:/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/start success:/i)).not.toBeInTheDocument();
+  });
 });

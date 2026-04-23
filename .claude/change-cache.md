@@ -12,42 +12,40 @@
 
 ============
 
-本轮继续推进 Docker 页面，补齐前端测试覆盖（URL 筛选恢复、清空筛选、筛选空态文案）。
+本轮继续推进 Docker 页面测试，补齐动作按钮交互覆盖，并修复一个真实的未处理异常问题。
 
 本次核心完成项
 
 1. frontend tests（Vitest + Testing Library）：
-   - 新增 `frontend/src/pages/DockerPage.test.tsx`
-   - 覆盖用例：
-     - URL 参数恢复筛选状态（`container/state/image`）
-     - 筛选条件回写 URL，并通过 `Clear filters` 一键清空
-     - 筛选无结果时空态文案展示：
-       - `No containers match the current filter.`
-       - `No images match the current filter.`
-   - 使用 `QueryClientProvider + MemoryRouter` 构造页面上下文
-   - 对 `@/api/docker` 进行了 mock，避免网络依赖
-2. 本地验证：
-   - `npm --prefix frontend run test` ✅
-   - `npm --prefix frontend run build` ✅
+   - 更新 `frontend/src/pages/DockerPage.test.tsx`
+   - 新增用例：
+     - `start/stop/restart` 动作成功路径与反馈文案
+     - 动作失败路径反馈文案（error message）
+     - 用户取消确认时不触发 API 请求
+2. bugfix（frontend）：
+   - 更新 `frontend/src/pages/DockerPage.tsx`
+   - `handleAction` 中对 `mutateAsync` 增加 `try/catch`，避免动作失败时产生未处理 Promise rejection。
+   - `onError` 仍负责反馈文案，行为无回归。
 
 本轮修改文件
 
 - `frontend/src/pages/DockerPage.test.tsx`
+- `frontend/src/pages/DockerPage.tsx`
 
 本地验证
 
-- `npm --prefix frontend run test` ✅
+- `npm --prefix frontend run test` ✅（7 tests passed）
 - `npm --prefix frontend run build` ✅
 
 commit摘要
 
 待提交：
-- `test(docker): cover filter persistence and empty states`
+- `test(docker): cover docker action feedback flows`
 
 希望接下来的 AI 做什么
 
-1. 给 Docker 页面动作按钮补交互测试（start/stop/restart 成功与失败反馈）。
-2. 如切到 Cron 页面，优先补列表筛选/排序测试与基础交互测试。
-3. 可把 Docker 页面筛选状态逻辑提炼为可复用 hook，为 Services/Cron 页复用铺路。
+1. Docker 页面可继续补“动作进行中按钮文案（Starting.../Stopping.../Restarting...）”测试。
+2. 可切到 Cron 页面，先补筛选/排序与表单交互测试。
+3. 如开始抽象复用，优先提炼 Docker 当前筛选状态逻辑为可复用 hook。
 
 by: gpt-5.4
