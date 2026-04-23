@@ -6,3 +6,4 @@
 
 - [Core-agent systemd 部署](core-agent/systemd/README.zh-CN.md) | [Core-agent systemd deployment](core-agent/systemd/README.md)
 - `docker-compose.host-agent.yml`：用于“backend 容器运行 + core-agent 宿主机运行”的 compose 覆盖文件
+- [Ubuntu 25.10 一键安装](one-click/ubuntu-25.10/README.zh-CN.md) | [Ubuntu 25.10 one-click installer](one-click/ubuntu-25.10/README.md)

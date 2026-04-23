@@ -12,47 +12,64 @@
 
 ============
 
-本轮从 Docker 切换到 Cron 页面，完成“筛选/排序体验增强 + 交互测试补齐”。
+本轮按新目标实现了 Ubuntu 25.10 的“一键安装”sh 脚本（Host-Agent 推荐模式），并补齐部署文档入口。
 
 本次核心完成项
 
-1. frontend（Cron 页面能力增强）：
-   - 更新 `frontend/src/pages/CronPage.tsx`
-   - 新增任务列表筛选与排序：
-     - 关键字筛选（id / expression / command）
-     - 状态筛选（all / enabled / disabled）
-     - 排序（ID A-Z / ID Z-A / Enabled first / Disabled first）
-   - 新增 `Clear filters` 按钮与结果计数文案：`Showing X / Y tasks`
-   - 空态细化：区分“无任务”与“筛选后无结果”
-   - 对 `create/save/delete` 的 `mutateAsync` 增加 `try/catch`，避免事件处理器中的未处理 Promise rejection
-2. frontend tests（Vitest + Testing Library）：
-   - 新增 `frontend/src/pages/CronPage.test.tsx`
-   - 覆盖用例：
-     - 列表筛选与排序
-     - 清空筛选行为
-     - 创建任务表单提交流程
-     - 编辑任务并保存（update payload 断言）
-   - `@/api/cron` 全量 mock，避免网络依赖
+1. 一键安装脚本：
+   - 新增 `deploy/one-click/ubuntu-25.10/install.sh`（已设可执行权限）
+   - 关键能力：
+     - OS 检测：默认只允许 `ubuntu 25.10`，支持 `--force-unsupported`
+     - 自动安装依赖：`docker`/`compose plugin`、`rust`、构建依赖
+     - 自动获取/更新仓库到 `/opt/snowpanel`（可参数化）
+     - 自动准备 `.env`，注入 Host-Agent 模式关键变量
+     - 自动生成强 `JWT_SECRET` 与 bootstrap 管理员密码（可显式传参覆盖）
+     - 构建并安装 `core-agent` 到 systemd
+     - 启动 compose（`docker-compose.yml + docker-compose.host-agent.yml`）
+     - 自动做 `/health` 和 `/ready` 验证
+     - 输出并落盘安装凭据到 `/root/.snowpanel/installer-output.env`
+   - 稳定性补强：
+     - 修复 `pipefail` 下随机串生成的潜在 SIGPIPE 失败
+     - Docker apt repo 对 codename 不可用时回退 `noble`
+     - 新增参数防呆校验（必填值、端口范围、安装目录安全）
+
+2. 文档与入口：
+   - 新增：
+     - `deploy/one-click/ubuntu-25.10/README.md`
+     - `deploy/one-click/ubuntu-25.10/README.zh-CN.md`
+   - 更新：
+     - `deploy/README.md`
+     - `deploy/README.zh-CN.md`
+     - `docs/deployment.md`
+     - `docs/deployment.zh-CN.md`
+   - 已在部署文档中添加“一键安装”入口链接。
 
 本轮修改文件
 
-- `frontend/src/pages/CronPage.tsx`
-- `frontend/src/pages/CronPage.test.tsx`
+- `deploy/one-click/ubuntu-25.10/install.sh`
+- `deploy/one-click/ubuntu-25.10/README.md`
+- `deploy/one-click/ubuntu-25.10/README.zh-CN.md`
+- `deploy/README.md`
+- `deploy/README.zh-CN.md`
+- `docs/deployment.md`
+- `docs/deployment.zh-CN.md`
 
 本地验证
 
-- `npm --prefix frontend run test` ✅（3 files, 13 tests passed）
-- `npm --prefix frontend run build` ✅
+- 由于当前执行环境是 Windows，无法在本机直接执行 Ubuntu 25.10 安装脚本做端到端验证（这是当前交付风险点）。
+- 文档链接与脚本内容已静态检查；脚本可执行位已设置。
 
 commit摘要
 
 待提交：
-- `feat(cron): add task filters and interaction tests`
+- `feat(deploy): add ubuntu 25.10 one-click installer`
 
 希望接下来的 AI 做什么
 
-1. 继续 Cron：补“enable/disable/delete”动作按钮反馈与 pending 状态测试。
-2. 若切回 Docker：可提炼 Docker/Cron 的筛选状态与空态逻辑为复用 hook。
-3. 可评估把筛选条件持久化到 URL（Cron 与 Docker 保持一致体验）。
+1. 在全新 Ubuntu 25.10 VM 上执行端到端冒烟：
+   - `sudo bash deploy/one-click/ubuntu-25.10/install.sh`
+   - 验证 `core-agent` systemd、`docker compose ps`、`/health`、`/ready`
+2. 补一份“交付测试 checklist”文档（安装、登录、核心模块 smoke）。
+3. 根据真实测试日志修复脚本兼容性问题（若出现 Docker 源、Rust 构建或 systemd 权限差异）。
 
 by: gpt-5.4

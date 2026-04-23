@@ -1,0 +1,62 @@
+# One-Click Install (Ubuntu 25.10)
+
+Language: **English** | [简体中文](README.zh-CN.md)
+
+This installer is designed for **Ubuntu 25.10** and deploys SnowPanel in:
+
+- host `core-agent` via systemd (recommended runtime mode)
+- backend/frontend/postgres/redis via docker compose (`docker-compose.host-agent.yml`)
+
+## Script
+
+- `install.sh`
+
+## Run
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/snowfallx-bot/SnowPanel/main/deploy/one-click/ubuntu-25.10/install.sh -o install.sh
+sudo bash install.sh
+```
+
+Or run from a local repository checkout:
+
+```bash
+sudo bash deploy/one-click/ubuntu-25.10/install.sh
+```
+
+## Optional Flags
+
+```bash
+sudo bash install.sh \
+  --install-dir /opt/snowpanel \
+  --branch main \
+  --backend-port 8080 \
+  --frontend-port 5173 \
+  --admin-username admin \
+  --admin-email admin@example.com
+```
+
+Important options:
+
+- `--admin-password`: set bootstrap admin password explicitly
+- `--jwt-secret`: set JWT secret explicitly
+- `--force-unsupported`: allow non-Ubuntu-25.10 hosts (not recommended)
+
+## Output
+
+Installer writes generated credentials to:
+
+- `/root/.snowpanel/installer-output.env`
+
+After install:
+
+- Frontend: `http://127.0.0.1:<FRONTEND_PORT>`
+- Backend health: `http://127.0.0.1:<BACKEND_PORT>/health`
+
+## Notes
+
+- For production tests, review and tighten:
+  - `/etc/snowpanel/core-agent.env`
+  - `${INSTALL_DIR}/.env`
+- Restrict network access to backend/core-agent ports before internet exposure.
+
