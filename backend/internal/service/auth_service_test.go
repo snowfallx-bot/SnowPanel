@@ -368,6 +368,9 @@ func TestLoginSuccessAndParseToken(t *testing.T) {
 	if claims.SessionIssuedAt <= 0 {
 		t.Fatalf("expected session_issued_at claim to be set")
 	}
+	if claims.RBACChecksum == "" {
+		t.Fatalf("expected rbac checksum claim to be set")
+	}
 	if _, exists := repo.updatedLogins[7]; exists {
 		t.Fatalf("did not expect last_login_at update when password change is required")
 	}
@@ -653,14 +656,90 @@ func TestValidateSessionAcceptsFreshSession(t *testing.T) {
 				LastLoginAt: &lastLogin,
 			},
 		},
+		userRoles: map[int64][]string{
+			7: []string{"operator"},
+		},
+	}
+	if err := repo.EnsureRBACDefaults(context.Background()); err != nil {
+		t.Fatalf("failed to seed fake rbac defaults: %v", err)
+	}
+	roles, permissions, err := repo.GetRolesAndPermissions(context.Background(), 7)
+	if err != nil {
+		t.Fatalf("failed to resolve rbac claims: %v", err)
 	}
 	service := NewAuthService(repo, testAuthConfig())
-	err := service.ValidateSession(context.Background(), TokenClaims{
+	err = service.ValidateSession(context.Background(), TokenClaims{
 		UserID:          7,
 		SessionIssuedAt: lastLogin.UnixNano(),
+		Roles:           roles,
+		Permissions:     permissions,
+		RBACChecksum:    computeRBACChecksum(roles, permissions),
 	})
 	if err != nil {
 		t.Fatalf("expected session validation success, got %v", err)
+	}
+}
+
+func TestValidateSessionRejectsWhenRBACChanged(t *testing.T) {
+	password := "StrongPassword#1"
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		t.Fatalf("failed to generate bcrypt hash: %v", err)
+	}
+
+	repo := &fakeUserRepo{
+		usersByName: map[string]*model.User{
+			"operator": {
+				ID:           9,
+				Username:     "operator",
+				Email:        "operator@example.com",
+				PasswordHash: string(hash),
+				Status:       1,
+			},
+		},
+		usersByID: map[int64]*model.User{
+			9: {
+				ID:           9,
+				Username:     "operator",
+				Email:        "operator@example.com",
+				PasswordHash: string(hash),
+				Status:       1,
+			},
+		},
+		userRoles: map[int64][]string{
+			9: []string{"operator"},
+		},
+	}
+	if err := repo.EnsureRBACDefaults(context.Background()); err != nil {
+		t.Fatalf("failed to seed fake rbac defaults: %v", err)
+	}
+
+	service := NewAuthService(repo, testAuthConfig())
+	loginResp, err := service.Login(context.Background(), dto.LoginRequest{
+		Username: "operator",
+		Password: password,
+	})
+	if err != nil {
+		t.Fatalf("expected login success, got %v", err)
+	}
+
+	claims, err := service.ParseToken(loginResp.AccessToken)
+	if err != nil {
+		t.Fatalf("expected access token parse success, got %v", err)
+	}
+
+	repo.userRoles[9] = []string{"super_admin"}
+
+	err = service.ValidateSession(context.Background(), claims)
+	if err == nil {
+		t.Fatalf("expected session validation failure after role change")
+	}
+	appErr, ok := apperror.As(err)
+	if !ok {
+		t.Fatalf("expected app error, got %T", err)
+	}
+	if appErr.Code != apperror.ErrSessionExpired.Code {
+		t.Fatalf("unexpected error code: %d", appErr.Code)
 	}
 }
 

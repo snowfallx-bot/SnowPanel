@@ -25,6 +25,7 @@
 - 改密成功后会签发新的 token，并将 `must_change_password` 置为 `false`。
 - 后端会基于数据库用户状态与 `last_login_at` 校验 token 会话状态。
 - 用户重新登录/改密后旧 token 会失效，被禁用用户的活动会话也会失效。
+- 后端还会校验 token 内 RBAC 摘要与数据库当前角色/权限是否一致，角色或权限变更后旧会话会被强制失效并要求重新登录。
 - 已支持 access/refresh 双令牌，`/auth/refresh` 会轮转两个令牌并推进会话时间戳。
 - `/auth/logout` 会通过轮转会话时间戳撤销当前逻辑会话。
 - 登录接口已增加基于 `username + client IP` 的防爆破保护。

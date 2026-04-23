@@ -25,6 +25,7 @@ Language: **English** | [简体中文](security.zh-CN.md)
 - Password change returns a refreshed token with `must_change_password=false`.
 - Backend validates token session state against DB user status and `last_login_at`.
 - Old tokens are revoked after re-login/password change, and disabled users lose active sessions.
+- Backend also validates a token RBAC checksum against current DB roles/permissions, so role/permission changes force re-authentication.
 - Access/refresh token pair is supported; `/auth/refresh` rotates both tokens and advances session timestamp.
 - `/auth/logout` revokes current logical session by rotating session timestamp.
 - Login endpoint has brute-force protection keyed by `username + client IP`.

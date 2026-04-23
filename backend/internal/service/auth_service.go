@@ -3,10 +3,13 @@ package service
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log"
+	"slices"
 	"strings"
 	"time"
 
@@ -38,6 +41,7 @@ type TokenClaims struct {
 	MustChangePassword bool
 	SessionIssuedAt    int64
 	TokenUse           string
+	RBACChecksum       string
 }
 
 type jwtClaims struct {
@@ -48,6 +52,7 @@ type jwtClaims struct {
 	MustChangePassword bool     `json:"must_change_password"`
 	SessionIssuedAt    int64    `json:"session_issued_at"`
 	TokenUse           string   `json:"token_use"`
+	RBACChecksum       string   `json:"rbac_checksum"`
 	jwt.RegisteredClaims
 }
 
@@ -511,6 +516,7 @@ func (s *authService) parseTokenWithUse(rawToken string, expectedUse string) (To
 		MustChangePassword: claims.MustChangePassword,
 		SessionIssuedAt:    claims.SessionIssuedAt,
 		TokenUse:           tokenUse,
+		RBACChecksum:       strings.TrimSpace(claims.RBACChecksum),
 	}, nil
 }
 
@@ -536,6 +542,25 @@ func (s *authService) ValidateSession(ctx context.Context, claims TokenClaims) e
 	if user.LastLoginAt != nil && claims.SessionIssuedAt < user.LastLoginAt.UnixNano() {
 		return apperror.ErrSessionExpired
 	}
+
+	currentRoles, currentPermissions, err := s.resolveUserRBAC(ctx, *user)
+	if err != nil {
+		return apperror.Wrap(
+			apperror.ErrInternal.Code,
+			apperror.ErrInternal.HTTPStatus,
+			apperror.ErrInternal.Message,
+			err,
+		)
+	}
+	currentChecksum := computeRBACChecksum(currentRoles, currentPermissions)
+	claimChecksum := strings.TrimSpace(claims.RBACChecksum)
+	if claimChecksum == "" {
+		claimChecksum = computeRBACChecksum(claims.Roles, claims.Permissions)
+	}
+	if claimChecksum != currentChecksum {
+		return apperror.ErrSessionExpired
+	}
+
 	return nil
 }
 
@@ -545,6 +570,7 @@ func (s *authService) generateToken(
 	permissions []string,
 	mustChangePassword bool,
 	tokenUse string,
+	rbacChecksum string,
 	expireAfter time.Duration,
 	sessionIssuedAt int64,
 ) (string, int64, error) {
@@ -562,6 +588,7 @@ func (s *authService) generateToken(
 		MustChangePassword: mustChangePassword,
 		SessionIssuedAt:    sessionIssuedAt,
 		TokenUse:           tokenUse,
+		RBACChecksum:       rbacChecksum,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expireAt),
 			IssuedAt:  jwt.NewNumericDate(issuedAt),
@@ -589,6 +616,7 @@ func (s *authService) generateTokenPair(
 	if sessionIssuedAt <= 0 {
 		sessionIssuedAt = time.Now().UTC().UnixNano()
 	}
+	rbacChecksum := computeRBACChecksum(roles, permissions)
 
 	accessToken, accessExpiresIn, err := s.generateToken(
 		user,
@@ -596,6 +624,7 @@ func (s *authService) generateTokenPair(
 		permissions,
 		mustChangePassword,
 		tokenUseAccess,
+		rbacChecksum,
 		s.cfg.JWTExpire,
 		sessionIssuedAt,
 	)
@@ -609,6 +638,7 @@ func (s *authService) generateTokenPair(
 		permissions,
 		mustChangePassword,
 		tokenUseRefresh,
+		rbacChecksum,
 		s.cfg.JWTRefreshExpire,
 		sessionIssuedAt,
 	)
@@ -628,6 +658,17 @@ func nextSessionTime(previous *time.Time) time.Time {
 		return previous.Add(time.Nanosecond)
 	}
 	return now
+}
+
+func computeRBACChecksum(roles []string, permissions []string) string {
+	normalizedRoles := append([]string(nil), roles...)
+	normalizedPermissions := append([]string(nil), permissions...)
+	slices.Sort(normalizedRoles)
+	slices.Sort(normalizedPermissions)
+
+	payload := strings.Join(normalizedRoles, ",") + "|" + strings.Join(normalizedPermissions, ",")
+	digest := sha256.Sum256([]byte(payload))
+	return hex.EncodeToString(digest[:])
 }
 
 func toProfile(
