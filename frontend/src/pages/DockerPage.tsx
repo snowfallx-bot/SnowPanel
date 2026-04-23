@@ -9,6 +9,7 @@ import {
 } from "@/api/docker";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { DockerContainerInfo } from "@/types/docker";
 
 type DockerAction = "start" | "stop" | "restart";
@@ -29,6 +30,8 @@ function formatSize(size: number) {
 export function DockerPage() {
   const queryClient = useQueryClient();
   const [feedback, setFeedback] = useState("");
+  const [filter, setFilter] = useState("");
+  const [activeActionKey, setActiveActionKey] = useState("");
 
   const containersQuery = useQuery({
     queryKey: ["docker", "containers"],
@@ -50,14 +53,35 @@ export function DockerPage() {
       }
       return restartDockerContainer(payload.id);
     },
+    onMutate(payload) {
+      setActiveActionKey(`${payload.action}:${payload.id}`);
+      setFeedback(`${payload.action} requested: ${payload.id}`);
+    },
     onSuccess(result, payload) {
       setFeedback(`${payload.action} success: ${result.id} -> ${result.state}`);
       queryClient.invalidateQueries({ queryKey: ["docker", "containers"] });
     },
     onError(error) {
       setFeedback(error instanceof Error ? error.message : "Docker action failed");
+    },
+    onSettled() {
+      setActiveActionKey("");
     }
   });
+
+  const filteredContainers = useMemo(() => {
+    const keyword = filter.trim().toLowerCase();
+    const items = containersQuery.data?.containers || [];
+    if (!keyword) {
+      return items;
+    }
+    return items.filter((item) => {
+      const haystacks = [item.name, item.id, item.image, item.state, item.status]
+        .map((value) => value.toLowerCase())
+        .join(" ");
+      return haystacks.includes(keyword);
+    });
+  }, [containersQuery.data?.containers, filter]);
 
   const message = useMemo(() => {
     if (containersQuery.isError) {
@@ -81,22 +105,30 @@ export function DockerPage() {
     await actionMutation.mutateAsync({ id: item.id || item.name, action });
   }
 
+  function isActionPending(item: DockerContainerInfo, action: DockerAction) {
+    return activeActionKey === `${action}:${item.id || item.name}`;
+  }
+
+  function refreshAll() {
+    setFeedback("Refreshing docker data...");
+    queryClient.invalidateQueries({ queryKey: ["docker", "containers"] });
+    queryClient.invalidateQueries({ queryKey: ["docker", "images"] });
+  }
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <div>
           <h2 className="text-2xl font-semibold text-slate-900">Docker</h2>
           <p className="text-sm text-slate-500">Manage containers and view images.</p>
         </div>
         <Button
-          onClick={() => {
-            queryClient.invalidateQueries({ queryKey: ["docker", "containers"] });
-            queryClient.invalidateQueries({ queryKey: ["docker", "images"] });
-          }}
+          disabled={containersQuery.isFetching || imagesQuery.isFetching}
+          onClick={refreshAll}
           size="sm"
           variant="ghost"
         >
-          Refresh
+          {containersQuery.isFetching || imagesQuery.isFetching ? "Refreshing..." : "Refresh"}
         </Button>
       </div>
 
@@ -104,7 +136,14 @@ export function DockerPage() {
         <CardHeader>
           <CardTitle className="text-base">Containers</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-3">
+          <div className="flex items-center gap-2">
+            <Input
+              onChange={(event) => setFilter(event.target.value)}
+              placeholder="Filter by name, image, state, or status"
+              value={filter}
+            />
+          </div>
           {containersQuery.isLoading ? (
             <p className="text-sm text-slate-600">Loading containers...</p>
           ) : (
@@ -120,7 +159,7 @@ export function DockerPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {(containersQuery.data?.containers || []).map((item) => (
+                  {filteredContainers.map((item) => (
                     <tr className="border-t border-slate-200" key={item.id || item.name}>
                       <td className="px-4 py-3">{item.name || item.id}</td>
                       <td className="px-4 py-3">{item.image || "-"}</td>
@@ -128,23 +167,40 @@ export function DockerPage() {
                       <td className="px-4 py-3">{item.status || "-"}</td>
                       <td className="px-4 py-3">
                         <div className="flex gap-2">
-                          <Button onClick={() => handleAction(item, "start")} size="sm" variant="ghost">
-                            Start
+                          <Button
+                            disabled={actionMutation.isPending}
+                            onClick={() => handleAction(item, "start")}
+                            size="sm"
+                            variant="ghost"
+                          >
+                            {isActionPending(item, "start") ? "Starting..." : "Start"}
                           </Button>
-                          <Button onClick={() => handleAction(item, "stop")} size="sm" variant="ghost">
-                            Stop
+                          <Button
+                            disabled={actionMutation.isPending}
+                            onClick={() => handleAction(item, "stop")}
+                            size="sm"
+                            variant="ghost"
+                          >
+                            {isActionPending(item, "stop") ? "Stopping..." : "Stop"}
                           </Button>
-                          <Button onClick={() => handleAction(item, "restart")} size="sm" variant="ghost">
-                            Restart
+                          <Button
+                            disabled={actionMutation.isPending}
+                            onClick={() => handleAction(item, "restart")}
+                            size="sm"
+                            variant="ghost"
+                          >
+                            {isActionPending(item, "restart") ? "Restarting..." : "Restart"}
                           </Button>
                         </div>
                       </td>
                     </tr>
                   ))}
-                  {(containersQuery.data?.containers || []).length === 0 && (
+                  {filteredContainers.length === 0 && (
                     <tr>
                       <td className="px-4 py-8 text-center text-slate-500" colSpan={5}>
-                        No containers found.
+                        {(containersQuery.data?.containers || []).length === 0
+                          ? "No containers found."
+                          : "No containers match the current filter."}
                       </td>
                     </tr>
                   )}

@@ -12,23 +12,23 @@
 
 ============
 
-本轮继续推进文件模块交互体验，完成“批量下载（文件项）”。
+本轮从文件模块切到 Docker 页面，完成“容器筛选 + 行级动作反馈 + 刷新态增强”。
 
 本次核心完成项
 
 1. frontend（React/TS）：
-   - `frontend/src/pages/FilesPage.tsx`：
-     - 增加 `Download Selected`
-     - 对已选中的文件逐个下载
-     - 自动跳过目录
-     - 批量下载过程中复用现有下载进度展示
-     - 单文件下载也统一复用浏览器下载函数
+   - `frontend/src/pages/DockerPage.tsx`：
+     - 增加容器名称/镜像/状态关键字筛选框
+     - 增加行级动作态文案：`Starting...` / `Stopping...` / `Restarting...`
+     - Refresh 按钮在刷新时显示 `Refreshing...`
+     - 统一刷新动作的反馈文案
+     - 过滤结果为空时区分“没有容器”与“筛选后无结果”
 2. 本地验证：
    - `npm --prefix frontend run build` ✅
 
 本轮修改文件
 
-- `frontend/src/pages/FilesPage.tsx`
+- `frontend/src/pages/DockerPage.tsx`
 
 本地验证
 
@@ -46,14 +46,15 @@ commit摘要
 - `eded13d` `feat(files): add drag and drop upload`
 - `0885dfd` `feat(files): add bulk selection and delete`
 - `c43d872` `feat(files): enable directory rename in ui`
+- `efa227d` `feat(files): add bulk file downloads`
 
 待提交：
-- `feat(files): add bulk file downloads`
+- `feat(docker): improve container action feedback`
 
 希望接下来的 AI 做什么
 
-1. 提交并推送本轮批量下载改动。
-2. 如继续增强文件页，可考虑批量压缩下载或目录下载体验。
-3. 若切回主链任务，可继续服务管理、Docker、Cron 或测试补强。
+1. 提交并推送本轮 Docker 页面增强改动。
+2. 如继续增强 Docker 页面，可增加容器状态过滤或镜像关键字过滤。
+3. 若切到 Cron 页面，可做筛选、排序或表单体验补强。
 
 by: claude-sonnet-4-6
