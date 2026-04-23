@@ -12,42 +12,37 @@
 
 ============
 
-本轮继续推进 Docker 页面测试，补齐“动作进行中文案”覆盖，并同步修复一次动作失败时的未处理 Promise 问题。
+本轮继续推进 Docker 页面测试，补齐“某动作 pending 时，其它动作按钮也禁用”的断言覆盖。
 
 本次核心完成项
 
 1. frontend tests（Vitest + Testing Library）：
    - 更新 `frontend/src/pages/DockerPage.test.tsx`
    - 新增测试：
-     - 动作执行中按钮文案展示与恢复：
-       - `Starting...`
-       - `Stopping...`
-       - `Restarting...`
-   - 通过 deferred promise 模拟 in-flight 请求，验证按钮在 pending 阶段禁用并在完成后恢复。
-2. bugfix（frontend）：
-   - 更新 `frontend/src/pages/DockerPage.tsx`
-   - `handleAction` 对 `mutateAsync` 增加 `try/catch`，避免 action 失败时出现未处理 Promise rejection。
-   - 错误反馈仍走 `onError`，用户提示不受影响。
+     - 当某个容器 `Start` 动作 pending 时：
+       - 当前按钮显示 `Starting...` 且禁用
+       - 其它 `Start` / `Stop` / `Restart` 按钮同样禁用
+       - 动作完成后按钮恢复可用
+   - 通过 deferred promise 模拟请求进行中状态，确保断言稳定可靠。
 
 本轮修改文件
 
 - `frontend/src/pages/DockerPage.test.tsx`
-- `frontend/src/pages/DockerPage.tsx`
 
 本地验证
 
-- `npm --prefix frontend run test` ✅（8 tests passed）
+- `npm --prefix frontend run test` ✅（9 tests passed）
 - `npm --prefix frontend run build` ✅
 
 commit摘要
 
 待提交：
-- `test(docker): cover pending action labels in docker page`
+- `test(docker): assert global action disable while pending`
 
 希望接下来的 AI 做什么
 
-1. Docker 页面可继续补测试：验证 pending 时“非当前动作按钮”也被禁用（`actionMutation.isPending` 语义）。
-2. 可转向 Cron 页面，先补筛选/排序与表单交互测试，再考虑小幅 UI 强化。
-3. 若做抽象优化，可提炼 Docker/Cron 的筛选状态同步逻辑为复用 hook。
+1. 若继续 Docker，可补“refresh pending 时按钮文案/禁用状态”的交互测试。
+2. 若切换模块，建议转到 Cron 页面补筛选/排序与表单交互测试。
+3. 可开始抽取 Docker/Cron 的筛选状态同步为复用 hook，减少页面重复逻辑。
 
 by: gpt-5.4

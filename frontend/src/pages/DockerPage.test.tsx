@@ -279,4 +279,34 @@ describe("DockerPage", () => {
       expect(screen.getAllByRole("button", { name: "Restart" })[0]).toBeEnabled();
     });
   });
+
+  it("disables other action buttons while one action is pending", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    renderDockerPage("/docker");
+    await screen.findByText("Showing 2 / 2 containers");
+
+    const startDeferred = createDeferred<{ id: string; state: string }>();
+    vi.mocked(startDockerContainer).mockImplementationOnce(() => startDeferred.promise);
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Start" })[0]);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Starting..." })).toBeDisabled();
+    });
+
+    for (const button of screen.getAllByRole("button", { name: "Start" })) {
+      expect(button).toBeDisabled();
+    }
+    for (const button of screen.getAllByRole("button", { name: "Stop" })) {
+      expect(button).toBeDisabled();
+    }
+    for (const button of screen.getAllByRole("button", { name: "Restart" })) {
+      expect(button).toBeDisabled();
+    }
+
+    startDeferred.resolve({ id: "container-web", state: "running" });
+    await waitFor(() => {
+      expect(screen.getAllByRole("button", { name: "Start" })[0]).toBeEnabled();
+    });
+  });
 });
