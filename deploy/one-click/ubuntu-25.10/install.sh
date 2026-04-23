@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_VERSION="0.4.0"
+SCRIPT_VERSION="0.5.0"
 SUPPORTED_OS_ID="ubuntu"
 SUPPORTED_VERSION_ID="25.10"
 
@@ -277,6 +277,15 @@ configure_docker_registry_mirror() {
   systemctl restart docker
 }
 
+recover_docker_daemon() {
+  systemctl reset-failed docker >/dev/null 2>&1 || true
+  if systemctl restart docker >/dev/null 2>&1; then
+    return 0
+  fi
+  systemctl start docker >/dev/null 2>&1 || true
+  systemctl is-active --quiet docker
+}
+
 run_with_retry() {
   local retries="$1"
   local description="$2"
@@ -289,8 +298,8 @@ run_with_retry() {
     fi
     warn "${description} failed (attempt ${attempt}/${retries})"
     if (( attempt < retries )); then
-      warn "restarting docker daemon before retry"
-      systemctl restart docker || true
+      warn "recovering docker daemon before retry"
+      recover_docker_daemon || warn "docker daemon is still not active after recovery attempt"
       sleep $((attempt * 3))
     fi
     attempt=$((attempt + 1))
@@ -299,12 +308,37 @@ run_with_retry() {
   return 1
 }
 
+docker_pull_image() {
+  local image="$1"
+  docker pull "${image}" >&2
+}
+
+clear_registry_mirrors_if_present() {
+  local daemon_file="/etc/docker/daemon.json"
+  if [[ ! -f "${daemon_file}" ]]; then
+    return 1
+  fi
+
+  if ! jq -e '.["registry-mirrors"] and (.["registry-mirrors"] | length > 0)' "${daemon_file}" >/dev/null 2>&1; then
+    return 1
+  fi
+
+  local backup_file="${daemon_file}.bak.$(date +%s)"
+  cp "${daemon_file}" "${backup_file}"
+  jq 'del(.["registry-mirrors"])' "${daemon_file}" >"${daemon_file}.tmp"
+  install -m 644 "${daemon_file}.tmp" "${daemon_file}"
+  rm -f "${daemon_file}.tmp"
+  warn "removed registry-mirrors from ${daemon_file}; backup: ${backup_file}"
+  recover_docker_daemon || true
+  return 0
+}
+
 pull_image_with_fallback() {
   local role="$1"
   local primary="$2"
   local fallback="$3"
 
-  if run_with_retry "${DOCKER_PULL_RETRIES}" "docker pull ${primary}" docker pull "${primary}"; then
+  if run_with_retry "${DOCKER_PULL_RETRIES}" "docker pull ${primary}" docker_pull_image "${primary}"; then
     printf '%s' "${primary}"
     return 0
   fi
@@ -314,17 +348,37 @@ pull_image_with_fallback() {
   docker image rm -f "${primary}" >/dev/null 2>&1 || true
 
   if [[ -z "${fallback}" ]]; then
+    if clear_registry_mirrors_if_present; then
+      warn "retrying ${role} primary image without registry mirrors"
+      if run_with_retry "${DOCKER_PULL_RETRIES}" "docker pull ${primary}" docker_pull_image "${primary}"; then
+        printf '%s' "${primary}"
+        return 0
+      fi
+    fi
     return 1
   fi
 
   warn "trying ${role} fallback image: ${fallback}"
-  if run_with_retry "${DOCKER_PULL_RETRIES}" "docker pull ${fallback}" docker pull "${fallback}"; then
+  if run_with_retry "${DOCKER_PULL_RETRIES}" "docker pull ${fallback}" docker_pull_image "${fallback}"; then
     printf '%s' "${fallback}"
     return 0
   fi
 
   warn "${role} fallback image pull failed: ${fallback}"
   docker image rm -f "${fallback}" >/dev/null 2>&1 || true
+
+  if clear_registry_mirrors_if_present; then
+    warn "retrying ${role} images without registry mirrors"
+    if run_with_retry "${DOCKER_PULL_RETRIES}" "docker pull ${primary}" docker_pull_image "${primary}"; then
+      printf '%s' "${primary}"
+      return 0
+    fi
+    if run_with_retry "${DOCKER_PULL_RETRIES}" "docker pull ${fallback}" docker_pull_image "${fallback}"; then
+      printf '%s' "${fallback}"
+      return 0
+    fi
+  fi
+
   return 1
 }
 
@@ -390,6 +444,7 @@ fi
 
 systemctl enable --now docker
 configure_docker_registry_mirror "${DOCKER_REGISTRY_MIRROR}"
+recover_docker_daemon || die "docker service is not active after setup"
 
 if ! command -v cargo >/dev/null 2>&1; then
   log "installing rust toolchain (minimal)"

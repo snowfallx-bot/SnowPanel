@@ -53,6 +53,8 @@ sudo bash install.sh \
 sudo bash install.sh --postgres-image postgres:16 --redis-image redis:7
 ```
 
+脚本还包含自动兜底：当主镜像和回退镜像都拉取失败，且 Docker 配置了 `registry-mirrors` 时，会临时移除 mirror 并再重试一次拉取。
+
 ## 输出结果
 
 脚本会将生成的凭据写入：

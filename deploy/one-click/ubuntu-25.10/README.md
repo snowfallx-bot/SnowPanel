@@ -53,6 +53,8 @@ If `*-alpine` image pull keeps failing in your region, you can switch to non-alp
 sudo bash install.sh --postgres-image postgres:16 --redis-image redis:7
 ```
 
+The installer also includes an automatic fallback: if both primary and fallback pulls fail and Docker has `registry-mirrors` configured, it will temporarily remove mirrors and retry pulls once.
+
 ## Output
 
 Installer writes generated credentials to:
