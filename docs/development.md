@@ -18,6 +18,7 @@ Language: **English** | [简体中文](development.zh-CN.md)
 3. Access services:
    - Frontend: `http://127.0.0.1:5173`
    - Backend health: `http://127.0.0.1:8080/health`
+   - Backend readiness: `http://127.0.0.1:8080/ready`
 4. Stop stack:
    - `make down`
 

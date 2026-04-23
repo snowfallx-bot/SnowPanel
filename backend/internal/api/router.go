@@ -36,7 +36,7 @@ func NewRouter(deps RouterDeps) *gin.Engine {
 		middleware.AccessLog(deps.Logger),
 	)
 
-	healthHandler := handler.NewHealthHandler(deps.DB)
+	healthHandler := handler.NewHealthHandler(deps.DB, deps.AgentClient)
 	systemHandler := handler.NewSystemHandler(time.Now)
 	authHandler := handler.NewAuthHandler(deps.AuthService, deps.AuditService, deps.LoginAttempts)
 	dashboardHandler := handler.NewDashboardHandler(deps.DashboardService)
@@ -48,6 +48,7 @@ func NewRouter(deps RouterDeps) *gin.Engine {
 	taskHandler := handler.NewTaskHandler(deps.TaskService, deps.AuditService)
 
 	router.GET("/health", healthHandler.Health)
+	router.GET("/ready", healthHandler.Readiness)
 
 	v1 := router.Group("/api/v1")
 	{

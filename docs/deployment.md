@@ -20,6 +20,7 @@ This project ships with a development-oriented compose stack including:
 3. Verify:
    - `docker compose ps`
    - `curl http://127.0.0.1:8080/health`
+   - `curl http://127.0.0.1:8080/ready`
 4. Stop:
    - `docker compose down`
 

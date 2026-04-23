@@ -243,6 +243,7 @@ type SetCronTaskEnabledResult struct {
 }
 
 type AgentClient interface {
+	CheckHealth(ctx context.Context) (string, error)
 	GetSystemOverview(ctx context.Context) (SystemOverview, error)
 	GetRealtimeResource(ctx context.Context) (RealtimeResource, error)
 	ListFiles(ctx context.Context, req ListFilesRequest) (ListFilesResult, error)
@@ -284,6 +285,26 @@ func (c *Client) Target() string {
 
 func (c *Client) Timeout() time.Duration {
 	return c.timeout
+}
+
+func (c *Client) CheckHealth(ctx context.Context) (string, error) {
+	result := ""
+	err := c.invoke(ctx, func(callCtx context.Context, conn *grpc.ClientConn) error {
+		client := agentv1.NewHealthServiceClient(conn)
+		resp, err := client.Check(callCtx, &agentv1.HealthCheckRequest{})
+		if err != nil {
+			return err
+		}
+		if err := responseError(resp.GetError()); err != nil {
+			return err
+		}
+		result = strings.TrimSpace(resp.GetStatus())
+		if result == "" {
+			result = "UNKNOWN"
+		}
+		return nil
+	})
+	return result, err
 }
 
 func (c *Client) GetSystemOverview(ctx context.Context) (SystemOverview, error) {

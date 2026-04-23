@@ -20,6 +20,7 @@
 3. 验证状态：
    - `docker compose ps`
    - `curl http://127.0.0.1:8080/health`
+   - `curl http://127.0.0.1:8080/ready`
 4. 停止服务：
    - `docker compose down`
 

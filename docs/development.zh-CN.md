@@ -18,6 +18,7 @@
 3. 访问服务：
    - Frontend：`http://127.0.0.1:5173`
    - Backend 健康检查：`http://127.0.0.1:8080/health`
+   - Backend 就绪检查：`http://127.0.0.1:8080/ready`
 4. 停止服务栈：
    - `make down`
 

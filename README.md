@@ -55,6 +55,7 @@ SnowPanel is a Linux server ops panel built with Vibe Coding.
 3. Open:
    - Frontend: `http://127.0.0.1:5173`
    - Backend health: `http://127.0.0.1:8080/health`
+   - Backend readiness: `http://127.0.0.1:8080/ready`
 4. Bootstrap admin (first start only when DB is empty):
    - username: `DEFAULT_ADMIN_USERNAME` (default: `admin`)
    - password:

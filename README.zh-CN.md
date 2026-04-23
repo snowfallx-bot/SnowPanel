@@ -57,6 +57,7 @@ SnowPanel 是一个 Linux 服务器运维面板，采用 Vibe Coding 而成。
 3. 访问地址：
    - 前端：`http://127.0.0.1:5173`
    - 后端健康检查：`http://127.0.0.1:8080/health`
+   - 后端就绪检查：`http://127.0.0.1:8080/ready`
 4. 初始化管理员（仅在数据库为空的首次启动时创建）：
    - 用户名：`DEFAULT_ADMIN_USERNAME`（默认：`admin`）
    - 密码：
