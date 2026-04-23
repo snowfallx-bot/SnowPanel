@@ -9,6 +9,8 @@ interface FileEditorPanelProps {
   binary: boolean;
   loading: boolean;
   canDownload: boolean;
+  downloading: boolean;
+  downloadProgressText?: string;
   onDownload: () => void;
   onSave: (content: string) => Promise<void>;
 }
@@ -20,6 +22,8 @@ export function FileEditorPanel({
   binary,
   loading,
   canDownload,
+  downloading,
+  downloadProgressText,
   onDownload,
   onSave
 }: FileEditorPanelProps) {
@@ -63,15 +67,18 @@ export function FileEditorPanel({
           <p className="mt-1 text-xs text-slate-500">{path}</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button disabled={!canDownload} onClick={onDownload} size="sm" variant="ghost">
-            Download
+          <Button disabled={!canDownload || downloading} onClick={onDownload} size="sm" variant="ghost">
+            {downloading ? "Downloading..." : "Download"}
           </Button>
-          <Button disabled={saving || binary} onClick={handleSave} size="sm">
+          <Button disabled={saving || binary || downloading} onClick={handleSave} size="sm">
             {saving ? "Saving..." : "Save"}
           </Button>
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
+        {downloading && downloadProgressText ? (
+          <p className="rounded bg-sky-50 px-3 py-2 text-xs text-sky-700">{downloadProgressText}</p>
+        ) : null}
         {binary && (
           <p className="rounded bg-slate-100 px-3 py-2 text-xs text-slate-700">
             This file appears to be binary or non UTF-8 text, so inline editing is disabled.

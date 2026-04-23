@@ -83,6 +83,14 @@ function describeFileApiError(error: unknown, fallback: string) {
   return fallback;
 }
 
+function formatProgress(current: number, total: number | null) {
+  if (total !== null && total > 0) {
+    const percent = Math.min(100, Math.round((current / total) * 100));
+    return `${percent}% (${current}/${total} bytes)`;
+  }
+  return `${current} bytes`;
+}
+
 export function FilesPage() {
   const queryClient = useQueryClient();
   const [path, setPath] = useState("/tmp");
@@ -93,6 +101,10 @@ export function FilesPage() {
   const [selectedBinary, setSelectedBinary] = useState(false);
   const [readMaxBytes, setReadMaxBytes] = useState(1024 * 1024);
   const [feedback, setFeedback] = useState("");
+  const [uploadProgressText, setUploadProgressText] = useState("");
+  const [downloadProgressText, setDownloadProgressText] = useState("");
+  const [downloading, setDownloading] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   const listQuery = useQuery({
     queryKey: ["files", path],
@@ -178,8 +190,11 @@ export function FilesPage() {
     if (listQuery.isError) {
       return describeFileApiError(listQuery.error, "Failed to list files");
     }
+    if (uploadProgressText) {
+      return uploadProgressText;
+    }
     return feedback;
-  }, [feedback, listQuery.error, listQuery.isError]);
+  }, [feedback, listQuery.error, listQuery.isError, uploadProgressText]);
 
   const currentPath = listQuery.data?.current_path || path;
   const canLoadMorePreview = selectedTruncated && readMaxBytes < 8 * 1024 * 1024;
@@ -266,12 +281,16 @@ export function FilesPage() {
   }
 
   async function handleDownload() {
-    if (!canDownload) {
+    if (!canDownload || downloading) {
       return;
     }
+    setDownloading(true);
+    setDownloadProgressText("Starting download...");
     try {
       const fallbackName = fileNameFromPath(selectedPath) || "download.bin";
-      const { blob, fileName } = await downloadFile(selectedPath);
+      const { blob, fileName } = await downloadFile(selectedPath, (downloadedBytes, totalBytes) => {
+        setDownloadProgressText(`Downloading: ${formatProgress(downloadedBytes, totalBytes)}`);
+      });
       const name = fileName || fallbackName;
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
@@ -282,23 +301,33 @@ export function FilesPage() {
       setFeedback(`Downloaded ${name}`);
     } catch (error) {
       setFeedback(describeFileApiError(error, "Download failed"));
+    } finally {
+      setDownloading(false);
+      setDownloadProgressText("");
     }
   }
 
   async function handleUpload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = "";
-    if (!file) {
+    if (!file || uploading) {
       return;
     }
 
+    setUploading(true);
+    setUploadProgressText("Starting upload...");
     try {
       const targetPath = joinPath(currentPath, file.name);
-      const result = await uploadFileWithRetry(file, targetPath);
+      const result = await uploadFileWithRetry(file, targetPath, (uploadedBytes, totalBytes) => {
+        setUploadProgressText(`Uploading: ${formatProgress(uploadedBytes, totalBytes)}`);
+      });
       setFeedback(`Uploaded ${file.name} (${result.uploaded_bytes} bytes) to ${result.path}`);
       queryClient.invalidateQueries({ queryKey: ["files", path] });
     } catch (error) {
       setFeedback(describeFileApiError(error, "Upload failed"));
+    } finally {
+      setUploading(false);
+      setUploadProgressText("");
     }
   }
 
@@ -350,8 +379,8 @@ export function FilesPage() {
 
               <div className="flex items-center gap-2">
                 <label className="rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-700">
-                  <input className="hidden" onChange={handleUpload} type="file" />
-                  Upload File
+                  <input className="hidden" disabled={uploading} onChange={handleUpload} type="file" />
+                  {uploading ? "Uploading..." : "Upload File"}
                 </label>
                 <label className="text-sm text-slate-500">Preview limit</label>
                 <select
@@ -390,6 +419,8 @@ export function FilesPage() {
             binary={selectedBinary}
             canDownload={canDownload}
             content={selectedContent}
+            downloading={downloading}
+            downloadProgressText={downloadProgressText}
             loading={readMutation.isPending || writeMutation.isPending}
             onDownload={handleDownload}
             onSave={handleSave}

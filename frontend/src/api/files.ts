@@ -65,9 +65,15 @@ export function uploadFile(file: Blob, path: string, options: UploadFileOptions 
   return unwrap<UploadFileResult>(http.post("/api/v1/files/upload", formData));
 }
 
-export async function uploadFileWithRetry(file: File, path: string) {
+export async function uploadFileWithRetry(
+  file: File,
+  path: string,
+  onProgress?: (uploadedBytes: number, totalBytes: number) => void
+) {
   let offset = 0;
   let lastResult: UploadFileResult | null = null;
+
+  onProgress?.(0, file.size);
 
   while (offset < file.size || (file.size === 0 && offset === 0)) {
     const chunk = file.slice(offset, offset + uploadChunkSize);
@@ -86,6 +92,7 @@ export async function uploadFileWithRetry(file: File, path: string) {
         }
         offset = result.uploaded_bytes;
         lastResult = result;
+        onProgress?.(offset, file.size);
         success = true;
         break;
       } catch (error) {
@@ -170,11 +177,16 @@ async function downloadFileChunk(path: string, offset: number, limit: number) {
   };
 }
 
-export async function downloadFile(path: string) {
+export async function downloadFile(
+  path: string,
+  onProgress?: (downloadedBytes: number, totalBytes: number | null) => void
+) {
   let offset = 0;
   let totalSize: number | null = null;
   let fileName: string | null = null;
   const chunks: BlobPart[] = [];
+
+  onProgress?.(0, null);
 
   while (totalSize === null || offset < totalSize) {
     let success = false;
@@ -198,6 +210,7 @@ export async function downloadFile(path: string) {
         }
         chunks.push(chunk.blob);
         offset += chunk.blob.size;
+        onProgress?.(offset, totalSize);
         success = true;
         break;
       } catch (error) {
