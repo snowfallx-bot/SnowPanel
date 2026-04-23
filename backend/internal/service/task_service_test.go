@@ -88,6 +88,12 @@ func (r *fakeTaskRepo) List(_ context.Context, filter repository.TaskListFilter)
 
 	items := make([]model.Task, 0, len(r.tasks))
 	for _, item := range r.tasks {
+		if filter.Status != "" && item.Status != filter.Status {
+			continue
+		}
+		if filter.Type != "" && item.Type != filter.Type {
+			continue
+		}
 		items = append(items, *item)
 	}
 	slices.SortFunc(items, func(a model.Task, b model.Task) int {
@@ -294,6 +300,51 @@ func TestRetryTaskFromFailedCreatesNewTask(t *testing.T) {
 	}
 
 	waitForTaskStatus(t, repo, result.ID, TaskStatusSuccess, 2*time.Second)
+}
+
+func TestListTasksSupportsStatusAndTypeFilters(t *testing.T) {
+	repo := newFakeTaskRepo()
+	_ = repo.Create(context.Background(), &model.Task{
+		Type:     TaskTypeDockerRestart,
+		Status:   TaskStatusSuccess,
+		Progress: 100,
+		Payload:  `{"operation":"docker.restart","container_id":"web"}`,
+		Result:   `{}`,
+	})
+	_ = repo.Create(context.Background(), &model.Task{
+		Type:     TaskTypeServiceRestart,
+		Status:   TaskStatusRunning,
+		Progress: 30,
+		Payload:  `{"operation":"service.restart","service_name":"nginx.service"}`,
+		Result:   `{}`,
+	})
+	_ = repo.Create(context.Background(), &model.Task{
+		Type:     TaskTypeServiceRestart,
+		Status:   TaskStatusSuccess,
+		Progress: 100,
+		Payload:  `{"operation":"service.restart","service_name":"redis.service"}`,
+		Result:   `{}`,
+	})
+
+	service := NewTaskService(repo, nil, nil)
+	result, err := service.ListTasks(context.Background(), dto.ListTasksQuery{
+		Page:   1,
+		Size:   20,
+		Status: TaskStatusSuccess,
+		Type:   TaskTypeServiceRestart,
+	})
+	if err != nil {
+		t.Fatalf("expected list success, got %v", err)
+	}
+	if result.Total != 1 {
+		t.Fatalf("expected total=1, got %d", result.Total)
+	}
+	if len(result.Items) != 1 {
+		t.Fatalf("expected 1 item, got %d", len(result.Items))
+	}
+	if result.Items[0].Type != TaskTypeServiceRestart || result.Items[0].Status != TaskStatusSuccess {
+		t.Fatalf("unexpected item: %+v", result.Items[0])
+	}
 }
 
 func TestCancelTaskKeepsCanceledStatusAfterRunningOperationCompletes(t *testing.T) {

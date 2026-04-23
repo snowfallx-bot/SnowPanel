@@ -260,8 +260,10 @@ func (s *taskService) ListTasks(ctx context.Context, query dto.ListTasksQuery) (
 	}
 
 	items, total, err := s.repo.List(ctx, repository.TaskListFilter{
-		Page: page,
-		Size: size,
+		Page:   page,
+		Size:   size,
+		Status: query.Status,
+		Type:   query.Type,
 	})
 	if err != nil {
 		return dto.ListTasksResult{}, apperror.Wrap(

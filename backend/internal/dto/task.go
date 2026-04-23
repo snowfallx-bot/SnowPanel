@@ -15,8 +15,10 @@ type CreateServiceRestartTaskRequest struct {
 }
 
 type ListTasksQuery struct {
-	Page int `form:"page"`
-	Size int `form:"size"`
+	Page   int    `form:"page"`
+	Size   int    `form:"size"`
+	Status string `form:"status"`
+	Type   string `form:"type"`
 }
 
 type TaskLog struct {

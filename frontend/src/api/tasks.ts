@@ -1,7 +1,14 @@
 import { http, unwrap } from "@/lib/http";
 import { CreateTaskResult, ListTasksResult, TaskDetailResult, TaskStatusResult } from "@/types/task";
 
-export function listTasks(params: { page: number; size: number }) {
+export interface ListTasksParams {
+  page: number;
+  size: number;
+  status?: string;
+  type?: string;
+}
+
+export function listTasks(params: ListTasksParams) {
   return unwrap<ListTasksResult>(http.get("/api/v1/tasks", { params }));
 }
 

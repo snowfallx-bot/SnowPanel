@@ -37,20 +37,45 @@ function statusClasses(status: string) {
   return "bg-slate-100 text-slate-700";
 }
 
+const taskStatusOptions = [
+  { value: "all", label: "All Status" },
+  { value: "pending", label: "Pending" },
+  { value: "running", label: "Running" },
+  { value: "success", label: "Success" },
+  { value: "failed", label: "Failed" },
+  { value: "canceled", label: "Canceled" }
+];
+
+const taskTypeOptions = [
+  { value: "all", label: "All Types" },
+  { value: "docker_restart", label: "Docker Restart" },
+  { value: "service_restart", label: "Service Restart" }
+];
+
 export function TasksPage() {
   const queryClient = useQueryClient();
   const user = useAuthStore((state) => state.user);
   const canManageTasks = (user?.permissions || []).includes("tasks.manage");
   const [page, setPage] = useState(1);
   const [size] = useState(20);
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [typeFilter, setTypeFilter] = useState("all");
   const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
   const [feedback, setFeedback] = useState("");
   const [dockerContainerID, setDockerContainerID] = useState("");
   const [serviceName, setServiceName] = useState("");
+  const statusParam = statusFilter === "all" ? undefined : statusFilter;
+  const typeParam = typeFilter === "all" ? undefined : typeFilter;
 
   const tasksQuery = useQuery({
-    queryKey: ["tasks", page, size],
-    queryFn: () => listTasks({ page, size }),
+    queryKey: ["tasks", page, size, statusFilter, typeFilter],
+    queryFn: () =>
+      listTasks({
+        page,
+        size,
+        status: statusParam,
+        type: typeParam
+      }),
     refetchInterval(query) {
       const hasActive = (query.state.data?.items || []).some((item) => isActiveTask(item.status));
       return hasActive ? 2000 : false;
@@ -210,6 +235,43 @@ export function TasksPage() {
           <CardTitle className="text-base">Task List</CardTitle>
         </CardHeader>
         <CardContent>
+          <div className="mb-3 flex flex-wrap gap-2">
+            <label className="text-sm text-slate-600">
+              Status
+              <select
+                className="ml-2 rounded-md border border-slate-300 px-2 py-1 text-sm"
+                value={statusFilter}
+                onChange={(event) => {
+                  setStatusFilter(event.target.value);
+                  setPage(1);
+                }}
+              >
+                {taskStatusOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="text-sm text-slate-600">
+              Type
+              <select
+                className="ml-2 rounded-md border border-slate-300 px-2 py-1 text-sm"
+                value={typeFilter}
+                onChange={(event) => {
+                  setTypeFilter(event.target.value);
+                  setPage(1);
+                }}
+              >
+                {taskTypeOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
           {tasksQuery.isLoading ? (
             <p className="text-sm text-slate-600">Loading tasks...</p>
           ) : (

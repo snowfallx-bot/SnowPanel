@@ -105,7 +105,7 @@
 ## 异步任务
 
 - `GET /tasks`（`tasks.read`）
-  - 查询参数：`page`、`size`
+  - 查询参数：`page`、`size`，可选 `status`、可选 `type`
 - `GET /tasks/:id`（`tasks.read`）
 - `POST /tasks/docker/restart`（`tasks.manage`）
   - 请求体：`{ "container_id": "..." }`

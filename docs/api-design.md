@@ -105,7 +105,7 @@ Security constraints:
 ## Async Tasks
 
 - `GET /tasks` (`tasks.read`)
-  - query: `page`, `size`
+  - query: `page`, `size`, optional `status`, optional `type`
 - `GET /tasks/:id` (`tasks.read`)
 - `POST /tasks/docker/restart` (`tasks.manage`)
   - body: `{ "container_id": "..." }`

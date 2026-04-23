@@ -2,14 +2,17 @@ package repository
 
 import (
 	"context"
+	"strings"
 
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/model"
 	"gorm.io/gorm"
 )
 
 type TaskListFilter struct {
-	Page int
-	Size int
+	Page   int
+	Size   int
+	Status string
+	Type   string
 }
 
 type TaskRepository interface {
@@ -76,6 +79,12 @@ func (r *taskRepository) List(
 	}
 
 	query := r.db.WithContext(ctx).Model(&model.Task{})
+	if status := strings.TrimSpace(filter.Status); status != "" {
+		query = query.Where("status = ?", status)
+	}
+	if taskType := strings.TrimSpace(filter.Type); taskType != "" {
+		query = query.Where("type = ?", taskType)
+	}
 	var total int64
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
