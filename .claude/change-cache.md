@@ -12,37 +12,47 @@
 
 ============
 
-本轮继续推进 Docker 页面测试，补齐“某动作 pending 时，其它动作按钮也禁用”的断言覆盖。
+本轮从 Docker 切换到 Cron 页面，完成“筛选/排序体验增强 + 交互测试补齐”。
 
 本次核心完成项
 
-1. frontend tests（Vitest + Testing Library）：
-   - 更新 `frontend/src/pages/DockerPage.test.tsx`
-   - 新增测试：
-     - 当某个容器 `Start` 动作 pending 时：
-       - 当前按钮显示 `Starting...` 且禁用
-       - 其它 `Start` / `Stop` / `Restart` 按钮同样禁用
-       - 动作完成后按钮恢复可用
-   - 通过 deferred promise 模拟请求进行中状态，确保断言稳定可靠。
+1. frontend（Cron 页面能力增强）：
+   - 更新 `frontend/src/pages/CronPage.tsx`
+   - 新增任务列表筛选与排序：
+     - 关键字筛选（id / expression / command）
+     - 状态筛选（all / enabled / disabled）
+     - 排序（ID A-Z / ID Z-A / Enabled first / Disabled first）
+   - 新增 `Clear filters` 按钮与结果计数文案：`Showing X / Y tasks`
+   - 空态细化：区分“无任务”与“筛选后无结果”
+   - 对 `create/save/delete` 的 `mutateAsync` 增加 `try/catch`，避免事件处理器中的未处理 Promise rejection
+2. frontend tests（Vitest + Testing Library）：
+   - 新增 `frontend/src/pages/CronPage.test.tsx`
+   - 覆盖用例：
+     - 列表筛选与排序
+     - 清空筛选行为
+     - 创建任务表单提交流程
+     - 编辑任务并保存（update payload 断言）
+   - `@/api/cron` 全量 mock，避免网络依赖
 
 本轮修改文件
 
-- `frontend/src/pages/DockerPage.test.tsx`
+- `frontend/src/pages/CronPage.tsx`
+- `frontend/src/pages/CronPage.test.tsx`
 
 本地验证
 
-- `npm --prefix frontend run test` ✅（9 tests passed）
+- `npm --prefix frontend run test` ✅（3 files, 13 tests passed）
 - `npm --prefix frontend run build` ✅
 
 commit摘要
 
 待提交：
-- `test(docker): assert global action disable while pending`
+- `feat(cron): add task filters and interaction tests`
 
 希望接下来的 AI 做什么
 
-1. 若继续 Docker，可补“refresh pending 时按钮文案/禁用状态”的交互测试。
-2. 若切换模块，建议转到 Cron 页面补筛选/排序与表单交互测试。
-3. 可开始抽取 Docker/Cron 的筛选状态同步为复用 hook，减少页面重复逻辑。
+1. 继续 Cron：补“enable/disable/delete”动作按钮反馈与 pending 状态测试。
+2. 若切回 Docker：可提炼 Docker/Cron 的筛选状态与空态逻辑为复用 hook。
+3. 可评估把筛选条件持久化到 URL（Cron 与 Docker 保持一致体验）。
 
 by: gpt-5.4

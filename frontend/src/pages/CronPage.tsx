@@ -19,6 +19,11 @@ export function CronPage() {
   const [command, setCommand] = useState("echo 'hello from snowpanel'");
   const [enabled, setEnabled] = useState(true);
   const [feedback, setFeedback] = useState("");
+  const [filterKeyword, setFilterKeyword] = useState("");
+  const [enabledFilter, setEnabledFilter] = useState<"all" | "enabled" | "disabled">("all");
+  const [sortMode, setSortMode] = useState<"id-asc" | "id-desc" | "enabled-first" | "disabled-first">(
+    "id-asc"
+  );
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingExpression, setEditingExpression] = useState("");
   const [editingCommand, setEditingCommand] = useState("");
@@ -83,9 +88,57 @@ export function CronPage() {
     return feedback;
   }, [feedback, tasksQuery.error, tasksQuery.isError]);
 
+  const displayedTasks = useMemo(() => {
+    const keyword = filterKeyword.trim().toLowerCase();
+    const items = tasksQuery.data?.tasks || [];
+    const filtered = items.filter((task) => {
+      if (enabledFilter === "enabled" && !task.enabled) {
+        return false;
+      }
+      if (enabledFilter === "disabled" && task.enabled) {
+        return false;
+      }
+      if (!keyword) {
+        return true;
+      }
+      const haystack = [task.id, task.expression, task.command].join(" ").toLowerCase();
+      return haystack.includes(keyword);
+    });
+
+    const sorted = [...filtered];
+    sorted.sort((left, right) => {
+      if (sortMode === "id-asc") {
+        return left.id.localeCompare(right.id);
+      }
+      if (sortMode === "id-desc") {
+        return right.id.localeCompare(left.id);
+      }
+      if (sortMode === "enabled-first") {
+        if (left.enabled !== right.enabled) {
+          return left.enabled ? -1 : 1;
+        }
+        return left.id.localeCompare(right.id);
+      }
+      if (left.enabled !== right.enabled) {
+        return left.enabled ? 1 : -1;
+      }
+      return left.id.localeCompare(right.id);
+    });
+    return sorted;
+  }, [enabledFilter, filterKeyword, sortMode, tasksQuery.data?.tasks]);
+
+  const hasActiveFilters = useMemo(
+    () => filterKeyword.trim() !== "" || enabledFilter !== "all" || sortMode !== "id-asc",
+    [enabledFilter, filterKeyword, sortMode]
+  );
+
   async function handleCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    await createMutation.mutateAsync({ expression, command, enabled });
+    try {
+      await createMutation.mutateAsync({ expression, command, enabled });
+    } catch {
+      // onError already updates feedback.
+    }
   }
 
   function beginEdit(task: CronTask) {
@@ -96,14 +149,18 @@ export function CronPage() {
   }
 
   async function saveEdit(taskId: string) {
-    await updateMutation.mutateAsync({
-      id: taskId,
-      payload: {
-        expression: editingExpression,
-        command: editingCommand,
-        enabled: editingEnabled
-      }
-    });
+    try {
+      await updateMutation.mutateAsync({
+        id: taskId,
+        payload: {
+          expression: editingExpression,
+          command: editingCommand,
+          enabled: editingEnabled
+        }
+      });
+    } catch {
+      // onError already updates feedback.
+    }
   }
 
   async function handleDelete(taskId: string) {
@@ -111,7 +168,18 @@ export function CronPage() {
     if (!confirmed) {
       return;
     }
-    await deleteMutation.mutateAsync(taskId);
+    try {
+      await deleteMutation.mutateAsync(taskId);
+    } catch {
+      // onError already updates feedback.
+    }
+  }
+
+  function clearTaskFilters() {
+    setFilterKeyword("");
+    setEnabledFilter("all");
+    setSortMode("id-asc");
+    setFeedback("Filters cleared.");
   }
 
   return (
@@ -148,7 +216,43 @@ export function CronPage() {
         <CardHeader>
           <CardTitle className="text-base">Task List</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-3">
+          <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_180px_200px_auto]">
+            <Input
+              onChange={(event) => setFilterKeyword(event.target.value)}
+              placeholder="Filter by id, expression, or command"
+              value={filterKeyword}
+            />
+            <select
+              className="h-9 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700"
+              onChange={(event) => setEnabledFilter(event.target.value as "all" | "enabled" | "disabled")}
+              value={enabledFilter}
+            >
+              <option value="all">All states</option>
+              <option value="enabled">Enabled only</option>
+              <option value="disabled">Disabled only</option>
+            </select>
+            <select
+              className="h-9 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700"
+              onChange={(event) =>
+                setSortMode(
+                  event.target.value as "id-asc" | "id-desc" | "enabled-first" | "disabled-first"
+                )
+              }
+              value={sortMode}
+            >
+              <option value="id-asc">Sort: ID A-Z</option>
+              <option value="id-desc">Sort: ID Z-A</option>
+              <option value="enabled-first">Sort: Enabled first</option>
+              <option value="disabled-first">Sort: Disabled first</option>
+            </select>
+            <Button disabled={!hasActiveFilters} onClick={clearTaskFilters} type="button" variant="ghost">
+              Clear filters
+            </Button>
+          </div>
+          <p className="text-xs text-slate-500">
+            Showing {displayedTasks.length} / {(tasksQuery.data?.tasks || []).length} tasks
+          </p>
           {tasksQuery.isLoading ? (
             <p className="text-sm text-slate-600">Loading cron tasks...</p>
           ) : (
@@ -164,7 +268,7 @@ export function CronPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {(tasksQuery.data?.tasks || []).map((task) => (
+                  {displayedTasks.map((task) => (
                     <tr className="border-t border-slate-200 align-top" key={task.id}>
                       <td className="px-4 py-3">{task.id}</td>
                       <td className="px-4 py-3">
@@ -239,10 +343,12 @@ export function CronPage() {
                       </td>
                     </tr>
                   ))}
-                  {(tasksQuery.data?.tasks || []).length === 0 && (
+                  {displayedTasks.length === 0 && (
                     <tr>
                       <td className="px-4 py-8 text-center text-slate-500" colSpan={5}>
-                        No cron tasks managed by SnowPanel yet.
+                        {(tasksQuery.data?.tasks || []).length === 0
+                          ? "No cron tasks managed by SnowPanel yet."
+                          : "No cron tasks match the current filter."}
                       </td>
                     </tr>
                   )}
