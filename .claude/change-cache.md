@@ -12,27 +12,28 @@
 
 ============
 
-本轮继续根据你贴回来的 `compose-smoke` 失败结果排查 backend readiness 超时。经过对 smoke 脚本、backend 监听配置和 compose 端口映射的交叉检查，确认这次超时的更直接根因不是 `/ready` 逻辑，而是 backend 容器监听端口与 compose published target 端口不一致。
+本轮继续根据你贴回来的 `compose-smoke` 失败结果排查登录阶段的 `POST /api/v1/auth/login` 500。检查后确认这次 500 不是后端 auth 业务逻辑自己炸了，而是 frontend 容器内的 Vite 代理目标端口仍然写死在 `8080`，与 smoke 注入后的 backend 真实监听端口 `18080` 不一致。
 
 本次核心完成项
 
-1. 修复 backend 端口映射：
+1. 修复 frontend 代理目标：
    - 修改 `docker-compose.yml`
-   - backend 的 ports 从：
-     - `${BACKEND_PORT:-8080}:8080`
+   - frontend 环境变量从：
+     - `VITE_API_PROXY_TARGET: ${VITE_API_PROXY_TARGET:-http://backend:8080}`
    - 改为：
-     - `${BACKEND_PORT:-8080}:${BACKEND_PORT:-8080}`
+     - `VITE_API_PROXY_TARGET: ${VITE_API_PROXY_TARGET:-http://backend:${BACKEND_PORT:-8080}}`
 
 2. 根因说明：
    - `scripts/ci/compose-smoke.ps1` 会设置：
      - `BACKEND_PORT=18080`
-   - backend 容器内也会读取该环境变量并监听 `0.0.0.0:18080`
-   - 但 compose 之前始终把宿主机 `18080` 映射到容器 `8080`
-   - 于是宿主机访问 `http://127.0.0.1:18080/ready` 时，实际容器内没有进程在 `8080` 上监听，表现为 readiness 一直请求失败超时
+   - backend 容器会监听 `18080`
+   - frontend 容器里 Vite dev server 代理之前仍固定转发到 `http://backend:8080`
+   - 因此 smoke 调：
+     - `POST http://127.0.0.1:15173/api/v1/auth/login`
+   - 实际会由 frontend proxy 转发到 backend 容器的错误端口，最后表现成代理层 500，而不是后端正确返回登录结果
 
 3. 本地验证：
-   - 用 `BACKEND_PORT=18080 docker compose config` 验证 backend port mapping 已展开为 target/published 都是 `18080`
-   - 继续跑了 backend health handler 相关测试，未受影响
+   - 通过 `BACKEND_PORT=18080 docker compose config` 验证 frontend 的 `VITE_API_PROXY_TARGET` 已展开为 `http://backend:18080`
 
 本轮修改文件
 
@@ -42,27 +43,28 @@
 本地验证
 
 已通过：
-- `BACKEND_PORT=18080 docker compose config`（确认 backend 端口映射展开正确）
-- `cd backend && go test ./internal/api/handler`
+- `BACKEND_PORT=18080 docker compose config`（确认 frontend 代理目标已对齐 backend 运行端口）
 
-补充说明
+本轮结论
 
-- 我本地最开始尝试直接跑 `./scripts/ci/compose-smoke.ps1`，因为是在 bash 中执行 PowerShell 脚本，失败信息不具参考价值，所以后续主要依据：
-  - smoke 脚本中的环境变量注入
-  - backend main 的监听逻辑
-  - compose config 展开结果
-  来收敛问题
+到目前为止，smoke 路上的关键端口错配已经修了两层：
+1. backend published 端口映射
+2. frontend -> backend 的代理目标端口
+
+如果这轮之后 smoke 还挂，下一步就该看：
+- 登录成功后的 password rotation / refresh / dashboard 链路
+- 或 agent / files 相关真实响应，而不是继续盯 compose 端口配置
 
 commit摘要
 
-- 计划提交：`fix(compose): align backend published port with runtime config`
+- 计划提交：`fix(frontend): align proxy target with backend runtime port`
 
 希望接下来的 AI 做什么
 
-1. 先 push 这次端口映射修复，观察 `compose-smoke` 是否继续往后推进。
-2. 如果 smoke 仍失败，下一优先级是：
-   - frontend 代理目标是否与 backend 容器端口保持一致
-   - `/ready` 是否还被其他依赖拖成 503
-3. 如果 smoke 转绿，就继续回到 `P2-1` 后续项，而不是继续在 smoke 脚本上打转。
+1. 先 push 这次修复并观察 `compose-smoke` 是否穿过 login 阶段。
+2. 如果仍失败：
+   - 优先抓 frontend 容器日志里的 Vite proxy 报错
+   - 再抓 backend 登录接口的真实返回体
+3. 如果 smoke 继续往后跑，再接着修后续链路问题，不要回头重复检查已经对齐的端口映射。
 
 by: claude-sonnet-4-6
