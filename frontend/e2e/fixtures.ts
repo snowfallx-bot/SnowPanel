@@ -12,17 +12,41 @@ type SnowPanelFixtures = {
   bootstrapSession: AuthSession;
 };
 
-async function submitLogin(page: Page, username: string, password: string) {
+type LoginAttemptResult = {
+  status: number;
+  payload: { code?: number; message?: string } | null;
+};
+
+async function submitLogin(page: Page, username: string, password: string): Promise<LoginAttemptResult> {
+  const responsePromise = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" && response.url().includes("/api/v1/auth/login"),
+    { timeout: 15_000 }
+  );
+
   await page.getByLabel(/username/i).fill(username);
   await page.getByLabel(/password/i).fill(password);
   await page.getByRole("button", { name: /sign in/i }).click();
+
+  const response = await responsePromise;
+  let payload: { code?: number; message?: string } | null = null;
+  try {
+    payload = (await response.json()) as { code?: number; message?: string };
+  } catch {
+    payload = null;
+  }
+
+  return {
+    status: response.status(),
+    payload
+  };
 }
 
 export async function loginAndMaybeRotate(page: Page, session: AuthSession) {
   await page.goto("/login");
   await expect(page.getByRole("heading", { name: /sign in to snowpanel/i })).toBeVisible();
 
-  await submitLogin(page, session.username, session.primaryPassword);
+  const primaryAttempt = await submitLogin(page, session.username, session.primaryPassword);
 
   const passwordGate = page.getByRole("heading", { name: /password change required/i });
   const shellMarker = page.getByText(/linux panel prototype/i);
@@ -36,13 +60,10 @@ export async function loginAndMaybeRotate(page: Page, session: AuthSession) {
   }
 
   if (session.fallbackPassword) {
-    const invalidCredential = page.getByText(/invalid credentials|invalid credential/i);
-    await Promise.race([
-      shellMarker.waitFor({ state: "visible", timeout: 4_000 }).catch(() => undefined),
-      invalidCredential.waitFor({ state: "visible", timeout: 4_000 }).catch(() => undefined)
-    ]);
-
-    if (await invalidCredential.isVisible().catch(() => false)) {
+    const primaryFailed =
+      primaryAttempt.status >= 400 ||
+      (typeof primaryAttempt.payload?.code === "number" && primaryAttempt.payload.code !== 0);
+    if (primaryFailed) {
       await submitLogin(page, session.username, session.fallbackPassword);
     }
   }
