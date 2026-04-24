@@ -4,6 +4,8 @@ import { listServices, restartService, startService, stopService } from "@/api/s
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { QueryErrorCard } from "@/components/ui/query-error-card";
+import { describeApiError } from "@/lib/http";
 import { ServiceInfo } from "@/types/service";
 
 type ActionType = "start" | "stop" | "restart";
@@ -18,6 +20,9 @@ export function ServicesPage() {
     queryKey: ["services", searchKeyword],
     queryFn: () => listServices(searchKeyword)
   });
+  const servicesLoadError = servicesQuery.isError
+    ? describeApiError(servicesQuery.error, "Failed to load services.")
+    : null;
 
   const actionMutation = useMutation({
     mutationFn: async (payload: { name: string; action: ActionType }) => {
@@ -39,11 +44,8 @@ export function ServicesPage() {
   });
 
   const message = useMemo(() => {
-    if (servicesQuery.isError) {
-      return servicesQuery.error instanceof Error ? servicesQuery.error.message : "Failed to load services";
-    }
     return feedback;
-  }, [feedback, servicesQuery.error, servicesQuery.isError]);
+  }, [feedback]);
 
   function submitSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -80,6 +82,13 @@ export function ServicesPage() {
             <CardTitle className="text-base">Loading services...</CardTitle>
           </CardHeader>
         </Card>
+      ) : servicesQuery.isError ? (
+        <QueryErrorCard
+          title="Failed to load services"
+          message={servicesLoadError?.message || "Failed to load services."}
+          hint={servicesLoadError?.hint}
+          onRetry={() => servicesQuery.refetch()}
+        />
       ) : (
         <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
           <table className="w-full text-left text-sm">

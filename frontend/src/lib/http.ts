@@ -36,6 +36,86 @@ export class ApiError extends Error {
   }
 }
 
+export interface ApiErrorDisplay {
+  message: string;
+  hint?: string;
+}
+
+function normalizeErrorMessage(message: string | undefined, fallback: string) {
+  const trimmed = message?.trim();
+  return trimmed ? trimmed : fallback;
+}
+
+export function describeApiError(error: unknown, fallback: string): ApiErrorDisplay {
+  if (error instanceof ApiError) {
+    const message = normalizeErrorMessage(error.message, fallback);
+
+    if (error.code === 3001 || error.status === 503) {
+      return {
+        message: "core-agent is unavailable.",
+        hint: "Check the host-agent compose override, the core-agent systemd service, and backend-to-agent connectivity."
+      };
+    }
+
+    if (error.status === 401) {
+      return {
+        message: "Session expired or invalid.",
+        hint: "Please sign in again."
+      };
+    }
+
+    if (error.status === 403) {
+      return {
+        message: "You do not have permission to access this resource.",
+        hint: "Ask an administrator to grant the required permission."
+      };
+    }
+
+    if (error.status === 404) {
+      return {
+        message: "Requested API route was not found.",
+        hint: "Frontend and backend versions may be mismatched, or the proxy target may be incorrect."
+      };
+    }
+
+    if (error.status && error.status >= 500) {
+      return {
+        message: "SnowPanel backend returned an internal error.",
+        hint: "Check backend logs, verify database and agent health, then retry."
+      };
+    }
+
+    if (/timeout/i.test(message)) {
+      return {
+        message: "Request timed out while waiting for the SnowPanel API.",
+        hint: "Check backend health, reverse proxy configuration, and server load."
+      };
+    }
+
+    if (/network error|failed to fetch|load failed|request failed/i.test(message)) {
+      return {
+        message: "Unable to reach the SnowPanel API.",
+        hint: "Check frontend proxy settings, backend port exposure, and browser network access."
+      };
+    }
+
+    return { message };
+  }
+
+  if (error instanceof Error) {
+    const message = normalizeErrorMessage(error.message, fallback);
+    if (/timeout/i.test(message)) {
+      return {
+        message: "Request timed out while waiting for the SnowPanel API.",
+        hint: "Check backend health, reverse proxy configuration, and server load."
+      };
+    }
+    return { message };
+  }
+
+  return { message: fallback };
+}
+
 http.interceptors.request.use((config) => {
   const token = useAuthStore.getState().token;
   if (token) {

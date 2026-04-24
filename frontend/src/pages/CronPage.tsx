@@ -11,6 +11,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { QueryErrorCard } from "@/components/ui/query-error-card";
+import { describeApiError } from "@/lib/http";
 import { CronTask } from "@/types/cron";
 
 export function CronPage() {
@@ -33,6 +35,9 @@ export function CronPage() {
     queryKey: ["cron", "tasks"],
     queryFn: listCronTasks
   });
+  const tasksLoadError = tasksQuery.isError
+    ? describeApiError(tasksQuery.error, "Failed to load cron tasks.")
+    : null;
 
   const createMutation = useMutation({
     mutationFn: createCronTask,
@@ -82,11 +87,8 @@ export function CronPage() {
   });
 
   const message = useMemo(() => {
-    if (tasksQuery.isError) {
-      return tasksQuery.error instanceof Error ? tasksQuery.error.message : "Failed to load cron tasks";
-    }
     return feedback;
-  }, [feedback, tasksQuery.error, tasksQuery.isError]);
+  }, [feedback]);
 
   const displayedTasks = useMemo(() => {
     const keyword = filterKeyword.trim().toLowerCase();
@@ -250,111 +252,121 @@ export function CronPage() {
               Clear filters
             </Button>
           </div>
-          <p className="text-xs text-slate-500">
-            Showing {displayedTasks.length} / {(tasksQuery.data?.tasks || []).length} tasks
-          </p>
           {tasksQuery.isLoading ? (
             <p className="text-sm text-slate-600">Loading cron tasks...</p>
+          ) : tasksQuery.isError ? (
+            <QueryErrorCard
+              className="shadow-none"
+              title="Failed to load cron tasks"
+              message={tasksLoadError?.message || "Failed to load cron tasks."}
+              hint={tasksLoadError?.hint}
+              onRetry={() => tasksQuery.refetch()}
+            />
           ) : (
-            <div className="overflow-hidden rounded-lg border border-slate-200">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-slate-50 text-slate-600">
-                  <tr>
-                    <th className="px-4 py-3">ID</th>
-                    <th className="px-4 py-3">Expression</th>
-                    <th className="px-4 py-3">Command</th>
-                    <th className="px-4 py-3">Enabled</th>
-                    <th className="px-4 py-3">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {displayedTasks.map((task) => (
-                    <tr className="border-t border-slate-200 align-top" key={task.id}>
-                      <td className="px-4 py-3">{task.id}</td>
-                      <td className="px-4 py-3">
-                        {editingId === task.id ? (
-                          <Input
-                            onChange={(event) => setEditingExpression(event.target.value)}
-                            value={editingExpression}
-                          />
-                        ) : (
-                          task.expression
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        {editingId === task.id ? (
-                          <Input
-                            onChange={(event) => setEditingCommand(event.target.value)}
-                            value={editingCommand}
-                          />
-                        ) : (
-                          task.command
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        {editingId === task.id ? (
-                          <label className="flex items-center gap-2 text-sm text-slate-700">
-                            <input
-                              checked={editingEnabled}
-                              onChange={(event) => setEditingEnabled(event.target.checked)}
-                              type="checkbox"
-                            />
-                            Enabled
-                          </label>
-                        ) : task.enabled ? (
-                          "Yes"
-                        ) : (
-                          "No"
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex flex-wrap gap-2">
-                          {editingId === task.id ? (
-                            <>
-                              <Button
-                                onClick={() => saveEdit(task.id)}
-                                size="sm"
-                                variant="ghost"
-                              >
-                                Save
-                              </Button>
-                              <Button onClick={() => setEditingId(null)} size="sm" variant="ghost">
-                                Cancel
-                              </Button>
-                            </>
-                          ) : (
-                            <>
-                              <Button onClick={() => beginEdit(task)} size="sm" variant="ghost">
-                                Edit
-                              </Button>
-                              <Button
-                                onClick={() => toggleMutation.mutate({ id: task.id, enabled: !task.enabled })}
-                                size="sm"
-                                variant="ghost"
-                              >
-                                {task.enabled ? "Disable" : "Enable"}
-                              </Button>
-                              <Button onClick={() => handleDelete(task.id)} size="sm" variant="ghost">
-                                Delete
-                              </Button>
-                            </>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                  {displayedTasks.length === 0 && (
+            <>
+              <p className="text-xs text-slate-500">
+                Showing {displayedTasks.length} / {(tasksQuery.data?.tasks || []).length} tasks
+              </p>
+              <div className="overflow-hidden rounded-lg border border-slate-200">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-slate-50 text-slate-600">
                     <tr>
-                      <td className="px-4 py-8 text-center text-slate-500" colSpan={5}>
-                        {(tasksQuery.data?.tasks || []).length === 0
-                          ? "No cron tasks managed by SnowPanel yet."
-                          : "No cron tasks match the current filter."}
-                      </td>
+                      <th className="px-4 py-3">ID</th>
+                      <th className="px-4 py-3">Expression</th>
+                      <th className="px-4 py-3">Command</th>
+                      <th className="px-4 py-3">Enabled</th>
+                      <th className="px-4 py-3">Actions</th>
                     </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {displayedTasks.map((task) => (
+                      <tr className="border-t border-slate-200 align-top" key={task.id}>
+                        <td className="px-4 py-3">{task.id}</td>
+                        <td className="px-4 py-3">
+                          {editingId === task.id ? (
+                            <Input
+                              onChange={(event) => setEditingExpression(event.target.value)}
+                              value={editingExpression}
+                            />
+                          ) : (
+                            task.expression
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          {editingId === task.id ? (
+                            <Input
+                              onChange={(event) => setEditingCommand(event.target.value)}
+                              value={editingCommand}
+                            />
+                          ) : (
+                            task.command
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          {editingId === task.id ? (
+                            <label className="flex items-center gap-2 text-sm text-slate-700">
+                              <input
+                                checked={editingEnabled}
+                                onChange={(event) => setEditingEnabled(event.target.checked)}
+                                type="checkbox"
+                              />
+                              Enabled
+                            </label>
+                          ) : task.enabled ? (
+                            "Yes"
+                          ) : (
+                            "No"
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex flex-wrap gap-2">
+                            {editingId === task.id ? (
+                              <>
+                                <Button
+                                  onClick={() => saveEdit(task.id)}
+                                  size="sm"
+                                  variant="ghost"
+                                >
+                                  Save
+                                </Button>
+                                <Button onClick={() => setEditingId(null)} size="sm" variant="ghost">
+                                  Cancel
+                                </Button>
+                              </>
+                            ) : (
+                              <>
+                                <Button onClick={() => beginEdit(task)} size="sm" variant="ghost">
+                                  Edit
+                                </Button>
+                                <Button
+                                  onClick={() => toggleMutation.mutate({ id: task.id, enabled: !task.enabled })}
+                                  size="sm"
+                                  variant="ghost"
+                                >
+                                  {task.enabled ? "Disable" : "Enable"}
+                                </Button>
+                                <Button onClick={() => handleDelete(task.id)} size="sm" variant="ghost">
+                                  Delete
+                                </Button>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                    {displayedTasks.length === 0 && (
+                      <tr>
+                        <td className="px-4 py-8 text-center text-slate-500" colSpan={5}>
+                          {(tasksQuery.data?.tasks || []).length === 0
+                            ? "No cron tasks managed by SnowPanel yet."
+                            : "No cron tasks match the current filter."}
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>

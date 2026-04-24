@@ -52,12 +52,16 @@ function buildQueryClient() {
   });
 }
 
-function renderCronPage() {
+function renderCronPage(options?: { listTasksMock?: () => void }) {
   const queryClient = buildQueryClient();
 
-  vi.mocked(listCronTasks).mockResolvedValue({
-    tasks: tasksFixture
-  });
+  if (options?.listTasksMock) {
+    options.listTasksMock();
+  } else {
+    vi.mocked(listCronTasks).mockResolvedValue({
+      tasks: tasksFixture
+    });
+  }
   vi.mocked(createCronTask).mockImplementation(async (payload) => ({
     task: {
       id: "new-task",
@@ -203,5 +207,27 @@ describe("CronPage", () => {
       });
     });
     expect(screen.getByText("Updated task: task-a")).toBeInTheDocument();
+  });
+
+  it("shows retryable error state when loading task list fails", async () => {
+    renderCronPage({
+      listTasksMock: () => {
+        vi.mocked(listCronTasks)
+          .mockRejectedValueOnce(new Error("core agent unavailable"))
+          .mockResolvedValueOnce({
+            tasks: tasksFixture
+          });
+      }
+    });
+
+    expect(await screen.findByText("Failed to load cron tasks")).toBeInTheDocument();
+    expect(screen.getByText("core agent unavailable")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+
+    await waitFor(() => {
+      expect(listCronTasks).toHaveBeenCalledTimes(2);
+    });
+    expect(await screen.findByText("Showing 3 / 3 tasks")).toBeInTheDocument();
   });
 });

@@ -16,6 +16,7 @@ import { FileTable } from "@/components/files/FileTable";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { QueryErrorCard } from "@/components/ui/query-error-card";
 import { ApiError } from "@/lib/http";
 import { FileEntry } from "@/types/file";
 
@@ -199,14 +200,11 @@ export function FilesPage() {
   });
 
   const message = useMemo(() => {
-    if (listQuery.isError) {
-      return describeFileApiError(listQuery.error, "Failed to list files");
-    }
     if (uploadProgressText) {
       return uploadProgressText;
     }
     return feedback;
-  }, [feedback, listQuery.error, listQuery.isError, uploadProgressText]);
+  }, [feedback, uploadProgressText]);
 
   const currentPath = listQuery.data?.current_path || path;
   const currentEntries = listQuery.data?.entries || [];
@@ -544,6 +542,12 @@ export function FilesPage() {
                 <CardTitle className="text-base">Loading directory...</CardTitle>
               </CardHeader>
             </Card>
+          ) : listQuery.isError ? (
+            <QueryErrorCard
+              title="Failed to load directory"
+              message={describeFileApiError(listQuery.error, "Failed to list files")}
+              onRetry={() => listQuery.refetch()}
+            />
           ) : (
             <FileTable
               entries={currentEntries}

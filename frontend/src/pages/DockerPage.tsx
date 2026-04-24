@@ -11,6 +11,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { QueryErrorCard } from "@/components/ui/query-error-card";
+import { describeApiError } from "@/lib/http";
 import { DockerContainerInfo } from "@/types/docker";
 
 type DockerAction = "start" | "stop" | "restart";
@@ -48,6 +50,12 @@ export function DockerPage() {
     queryKey: ["docker", "images"],
     queryFn: listDockerImages
   });
+  const containersLoadError = containersQuery.isError
+    ? describeApiError(containersQuery.error, "Failed to load docker containers.")
+    : null;
+  const imagesLoadError = imagesQuery.isError
+    ? describeApiError(imagesQuery.error, "Failed to load docker images.")
+    : null;
 
   const actionMutation = useMutation({
     mutationFn: async (payload: { id: string; action: DockerAction }) => {
@@ -124,18 +132,8 @@ export function DockerPage() {
   }, [imageFilter, imagesQuery.data?.images]);
 
   const message = useMemo(() => {
-    if (containersQuery.isError) {
-      return containersQuery.error instanceof Error
-        ? containersQuery.error.message
-        : "Failed to load docker containers";
-    }
-    if (imagesQuery.isError) {
-      return imagesQuery.error instanceof Error
-        ? imagesQuery.error.message
-        : "Failed to load docker images";
-    }
     return feedback;
-  }, [containersQuery.error, containersQuery.isError, feedback, imagesQuery.error, imagesQuery.isError]);
+  }, [feedback]);
 
   const hasActiveFilters = useMemo(
     () => filter.trim() !== "" || stateFilter !== "all" || imageFilter.trim() !== "",
@@ -244,72 +242,82 @@ export function DockerPage() {
               ))}
             </select>
           </div>
-          <p className="text-xs text-slate-500">
-            Showing {filteredContainers.length} / {(containersQuery.data?.containers || []).length} containers
-          </p>
           {containersQuery.isLoading ? (
             <p className="text-sm text-slate-600">Loading containers...</p>
+          ) : containersQuery.isError ? (
+            <QueryErrorCard
+              className="shadow-none"
+              title="Failed to load containers"
+              message={containersLoadError?.message || "Failed to load docker containers."}
+              hint={containersLoadError?.hint}
+              onRetry={() => containersQuery.refetch()}
+            />
           ) : (
-            <div className="overflow-hidden rounded-lg border border-slate-200">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-slate-50 text-slate-600">
-                  <tr>
-                    <th className="px-4 py-3">Name</th>
-                    <th className="px-4 py-3">Image</th>
-                    <th className="px-4 py-3">State</th>
-                    <th className="px-4 py-3">Status</th>
-                    <th className="px-4 py-3">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredContainers.map((item) => (
-                    <tr className="border-t border-slate-200" key={item.id || item.name}>
-                      <td className="px-4 py-3">{item.name || item.id}</td>
-                      <td className="px-4 py-3">{item.image || "-"}</td>
-                      <td className="px-4 py-3">{item.state || "-"}</td>
-                      <td className="px-4 py-3">{item.status || "-"}</td>
-                      <td className="px-4 py-3">
-                        <div className="flex gap-2">
-                          <Button
-                            disabled={actionMutation.isPending}
-                            onClick={() => handleAction(item, "start")}
-                            size="sm"
-                            variant="ghost"
-                          >
-                            {isActionPending(item, "start") ? "Starting..." : "Start"}
-                          </Button>
-                          <Button
-                            disabled={actionMutation.isPending}
-                            onClick={() => handleAction(item, "stop")}
-                            size="sm"
-                            variant="ghost"
-                          >
-                            {isActionPending(item, "stop") ? "Stopping..." : "Stop"}
-                          </Button>
-                          <Button
-                            disabled={actionMutation.isPending}
-                            onClick={() => handleAction(item, "restart")}
-                            size="sm"
-                            variant="ghost"
-                          >
-                            {isActionPending(item, "restart") ? "Restarting..." : "Restart"}
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                  {filteredContainers.length === 0 && (
+            <>
+              <p className="text-xs text-slate-500">
+                Showing {filteredContainers.length} / {(containersQuery.data?.containers || []).length} containers
+              </p>
+              <div className="overflow-hidden rounded-lg border border-slate-200">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-slate-50 text-slate-600">
                     <tr>
-                      <td className="px-4 py-8 text-center text-slate-500" colSpan={5}>
-                        {(containersQuery.data?.containers || []).length === 0
-                          ? "No containers found."
-                          : "No containers match the current filter."}
-                      </td>
+                      <th className="px-4 py-3">Name</th>
+                      <th className="px-4 py-3">Image</th>
+                      <th className="px-4 py-3">State</th>
+                      <th className="px-4 py-3">Status</th>
+                      <th className="px-4 py-3">Actions</th>
                     </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {filteredContainers.map((item) => (
+                      <tr className="border-t border-slate-200" key={item.id || item.name}>
+                        <td className="px-4 py-3">{item.name || item.id}</td>
+                        <td className="px-4 py-3">{item.image || "-"}</td>
+                        <td className="px-4 py-3">{item.state || "-"}</td>
+                        <td className="px-4 py-3">{item.status || "-"}</td>
+                        <td className="px-4 py-3">
+                          <div className="flex gap-2">
+                            <Button
+                              disabled={actionMutation.isPending}
+                              onClick={() => handleAction(item, "start")}
+                              size="sm"
+                              variant="ghost"
+                            >
+                              {isActionPending(item, "start") ? "Starting..." : "Start"}
+                            </Button>
+                            <Button
+                              disabled={actionMutation.isPending}
+                              onClick={() => handleAction(item, "stop")}
+                              size="sm"
+                              variant="ghost"
+                            >
+                              {isActionPending(item, "stop") ? "Stopping..." : "Stop"}
+                            </Button>
+                            <Button
+                              disabled={actionMutation.isPending}
+                              onClick={() => handleAction(item, "restart")}
+                              size="sm"
+                              variant="ghost"
+                            >
+                              {isActionPending(item, "restart") ? "Restarting..." : "Restart"}
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                    {filteredContainers.length === 0 && (
+                      <tr>
+                        <td className="px-4 py-8 text-center text-slate-500" colSpan={5}>
+                          {(containersQuery.data?.containers || []).length === 0
+                            ? "No containers found."
+                            : "No containers match the current filter."}
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
@@ -326,6 +334,14 @@ export function DockerPage() {
           />
           {imagesQuery.isLoading ? (
             <p className="text-sm text-slate-600">Loading images...</p>
+          ) : imagesQuery.isError ? (
+            <QueryErrorCard
+              className="shadow-none"
+              title="Failed to load images"
+              message={imagesLoadError?.message || "Failed to load docker images."}
+              hint={imagesLoadError?.hint}
+              onRetry={() => imagesQuery.refetch()}
+            />
           ) : (
             <div className="overflow-hidden rounded-lg border border-slate-200">
               <table className="w-full text-left text-sm">

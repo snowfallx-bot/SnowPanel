@@ -4,6 +4,8 @@ import { listAuditLogs } from "@/api/audit";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { QueryErrorCard } from "@/components/ui/query-error-card";
+import { describeApiError } from "@/lib/http";
 
 export function AuditLogsPage() {
   const [page, setPage] = useState(1);
@@ -23,6 +25,9 @@ export function AuditLogsPage() {
         action: actionFilter || undefined
       })
   });
+  const logsLoadError = logsQuery.isError
+    ? describeApiError(logsQuery.error, "Failed to load logs.")
+    : null;
 
   function submitFilter(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -67,9 +72,13 @@ export function AuditLogsPage() {
           {logsQuery.isLoading ? (
             <p className="text-sm text-slate-600">Loading logs...</p>
           ) : logsQuery.isError ? (
-            <p className="text-sm text-rose-600">
-              {logsQuery.error instanceof Error ? logsQuery.error.message : "Failed to load logs"}
-            </p>
+            <QueryErrorCard
+              className="shadow-none"
+              title="Failed to load audit logs"
+              message={logsLoadError?.message || "Failed to load logs."}
+              hint={logsLoadError?.hint}
+              onRetry={() => logsQuery.refetch()}
+            />
           ) : (
             <div className="space-y-3">
               <div className="overflow-hidden rounded-lg border border-slate-200">

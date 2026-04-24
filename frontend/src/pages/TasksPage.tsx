@@ -11,6 +11,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { QueryErrorCard } from "@/components/ui/query-error-card";
+import { describeApiError } from "@/lib/http";
 import { useAuthStore } from "@/store/auth-store";
 
 function isActiveTask(status: string) {
@@ -94,6 +96,12 @@ export function TasksPage() {
       return isActiveTask(status) ? 2000 : false;
     }
   });
+  const tasksLoadError = tasksQuery.isError
+    ? describeApiError(tasksQuery.error, "Failed to load tasks.")
+    : null;
+  const detailLoadError = detailQuery.isError
+    ? describeApiError(detailQuery.error, "Failed to load task detail.")
+    : null;
 
   const createDockerRestartMutation = useMutation({
     mutationFn: createDockerRestartTask,
@@ -149,14 +157,8 @@ export function TasksPage() {
   });
 
   const message = useMemo(() => {
-    if (tasksQuery.isError) {
-      return tasksQuery.error instanceof Error ? tasksQuery.error.message : "Failed to load tasks";
-    }
-    if (detailQuery.isError) {
-      return detailQuery.error instanceof Error ? detailQuery.error.message : "Failed to load task detail";
-    }
     return feedback;
-  }, [detailQuery.error, detailQuery.isError, feedback, tasksQuery.error, tasksQuery.isError]);
+  }, [feedback]);
 
   const total = tasksQuery.data?.total ?? 0;
   const maxPage = Math.max(1, Math.ceil(total / size));
@@ -274,6 +276,14 @@ export function TasksPage() {
 
           {tasksQuery.isLoading ? (
             <p className="text-sm text-slate-600">Loading tasks...</p>
+          ) : tasksQuery.isError ? (
+            <QueryErrorCard
+              className="shadow-none"
+              title="Failed to load tasks"
+              message={tasksLoadError?.message || "Failed to load tasks."}
+              hint={tasksLoadError?.hint}
+              onRetry={() => tasksQuery.refetch()}
+            />
           ) : (
             <div className="space-y-3">
               <div className="overflow-hidden rounded-lg border border-slate-200">
@@ -384,9 +394,13 @@ export function TasksPage() {
           ) : detailQuery.isLoading ? (
             <p className="text-sm text-slate-600">Loading task detail...</p>
           ) : detailQuery.isError ? (
-            <p className="text-sm text-rose-600">
-              {detailQuery.error instanceof Error ? detailQuery.error.message : "Failed to load task detail"}
-            </p>
+            <QueryErrorCard
+              className="shadow-none"
+              title="Failed to load task detail"
+              message={detailLoadError?.message || "Failed to load task detail."}
+              hint={detailLoadError?.hint}
+              onRetry={() => detailQuery.refetch()}
+            />
           ) : (
             <div className="space-y-3">
               <div className="grid gap-2 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm md:grid-cols-4">

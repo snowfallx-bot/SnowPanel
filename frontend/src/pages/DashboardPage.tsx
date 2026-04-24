@@ -1,7 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { getDashboardSummary } from "@/api/dashboard";
+import { QueryErrorCard } from "@/components/ui/query-error-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { describeApiError } from "@/lib/http";
 
 function MetricCard({ title, value, percent }: { title: string; value: string; percent?: number }) {
   return (
@@ -37,18 +38,14 @@ export function DashboardPage() {
   }
 
   if (isError) {
+    const dashboardError = describeApiError(error, "Failed to load dashboard.");
     return (
-      <Card className="border-rose-200 bg-rose-50">
-        <CardHeader>
-          <CardTitle className="text-rose-700">Failed to load dashboard</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <p className="text-sm text-rose-600">{error instanceof Error ? error.message : "Unknown error"}</p>
-          <Button onClick={() => refetch()} size="sm">
-            Retry
-          </Button>
-        </CardContent>
-      </Card>
+      <QueryErrorCard
+        title="Failed to load dashboard"
+        message={dashboardError.message}
+        hint={dashboardError.hint}
+        onRetry={() => refetch()}
+      />
     );
   }
 
