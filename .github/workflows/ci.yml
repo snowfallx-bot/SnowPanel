@@ -120,3 +120,34 @@ jobs:
       - name: Run Compose Smoke Test
         shell: pwsh
         run: ./scripts/ci/compose-smoke.ps1
+
+  frontend-e2e:
+    runs-on: ubuntu-latest
+    needs:
+      - backend
+      - core-agent
+      - frontend
+      - compose-smoke
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Frontend Dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install Playwright Browsers
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Frontend E2E
+        shell: pwsh
+        run: ./scripts/ci/frontend-e2e.ps1

@@ -12,92 +12,74 @@
 
 ============
 
-本轮在 CI 全绿之后，继续按 `.claude/progress.md` 推进 `P2-1`，目标是补上前端真实用户路径的 e2e 基建和第一批浏览器用例。
+本轮继续在上一轮 Playwright e2e 基建之上推进 `P2-1`，目标是把前端 e2e 接进独立的 CI job，而不是把浏览器测试继续塞回已有 `compose-smoke`。
 
 本次核心完成项
 
-1. 引入最小 Playwright e2e 栈：
-   - 修改 `frontend/package.json`
-   - 新增 `frontend/playwright.config.ts`
-   - 新增脚本：
-     - `test:e2e`
-     - `test:e2e:headed`
-   - 新增 `@playwright/test` 依赖
+1. 新增独立 frontend e2e 运行脚本：
+   - 新增 `scripts/ci/frontend-e2e.ps1`
+   - 该脚本会：
+     - 用独立 project name 起 `postgres + redis + core-agent + backend + frontend`
+     - 复用 smoke 同一套端口、JWT secret、bootstrap password 约定
+     - 等待 backend `/ready` 和 frontend 启动成功
+     - 进入 `frontend/` 执行 `npm run test:e2e`
+     - 失败时自动输出 compose `ps` 和 `logs`
+     - 收尾时执行 `docker compose down -v --remove-orphans`
 
-2. 新增第一批前端 e2e 场景：
-   - 新增 `frontend/e2e/fixtures.ts`
-   - 新增 `frontend/e2e/auth-and-nav.spec.ts`
-   - 新增 `frontend/e2e/files.spec.ts`
-   - 新增 `frontend/e2e/helpers/api.ts`
-   - 当前覆盖场景：
-     - 登录成功并到达 dashboard
-     - 受限会话下的权限导航隐藏
-     - 文件页浏览并打开文本文件
+2. 把 Playwright 接入独立 CI job：
+   - 修改 `.github/workflows/ci.yml`
+   - 新增 `frontend-e2e` job
+   - job 依赖：
+     - `backend`
+     - `core-agent`
+     - `frontend`
+     - `compose-smoke`
+   - job 会：
+     - `npm ci`
+     - `npx playwright install --with-deps chromium`
+     - 执行 `./scripts/ci/frontend-e2e.ps1`
 
-3. 为 e2e 稳定性补最小 UI 钩子：
-   - 修改 `frontend/src/pages/LoginPage.tsx`
-     - 给登录用户名/密码输入补 `id/htmlFor`
-   - 修改 `frontend/src/components/files/FileEditorPanel.tsx`
-     - 给编辑器 textarea 增加 `aria-label="File editor"`
-   - 修改 `frontend/src/components/files/FileTable.tsx`
-     - 给文件打开按钮增加 `aria-label`
-   - 修改 `frontend/src/components/files/FilePathBar.tsx`
-     - 增加受控路径输入框和 `Load` 按钮
-   - 修改 `frontend/src/pages/FilesPage.tsx`
-     - 给新建目录输入补 `aria-label`
-
-4. 修正前端 Vitest 与 Playwright 的边界：
-   - 修改 `frontend/vite.config.ts`
-   - 将 `e2e/**` 从 Vitest 扫描范围里排除，避免 Playwright spec 被 Vitest 当成单测执行
+3. 保持 CI 分层清晰：
+   - `compose-smoke` 仍负责 API / auth / files 主链路 smoke
+   - `frontend-e2e` 负责浏览器级回归
+   - 没有把 Playwright 回塞进 smoke 脚本，避免职责混杂
 
 本轮修改文件
 
 - `.claude/change-cache.md`
-- `frontend/package.json`
-- `frontend/package-lock.json`
-- `frontend/playwright.config.ts`
-- `frontend/e2e/fixtures.ts`
-- `frontend/e2e/auth-and-nav.spec.ts`
-- `frontend/e2e/files.spec.ts`
-- `frontend/e2e/helpers/api.ts`
-- `frontend/src/pages/LoginPage.tsx`
-- `frontend/src/components/files/FileEditorPanel.tsx`
-- `frontend/src/components/files/FileTable.tsx`
-- `frontend/src/components/files/FilePathBar.tsx`
-- `frontend/src/pages/FilesPage.tsx`
-- `frontend/vite.config.ts`
+- `.github/workflows/ci.yml`
+- `scripts/ci/frontend-e2e.ps1`
 
 本地验证
 
 已通过：
-- `cd frontend && npm install`
-- `npm run test`
+- `cd frontend && npm run test`
 - `npx playwright test --list`
+- `frontend-e2e.ps1` PowerShell 语法解析检查
 
 验证结果：
-- Vitest：6 个测试文件、24 个测试通过
-- Playwright 已成功发现 3 个 e2e 用例
+- Vitest：6 个文件、24 个测试通过
+- Playwright：成功发现 3 个 e2e 用例
+- `frontend-e2e.ps1`：PowerShell parser 返回 `ok`
 
 当前限制
 
-- 这轮只验证了 Playwright 栈和用例发现，不等于浏览器 e2e 已在真实服务上跑通
-- 受限导航隐藏场景目前使用浏览器侧受控会话 + `GET /api/v1/auth/me` stub，避免为了这轮 e2e 再额外扩后端测试账号准备机制
-- 文件页用例会通过 backend API 先写入 fixture 文件，再走前端打开它
+- 本轮没有在本机完整执行 Linux compose + Playwright 闭环，最终验收依赖 GitHub Actions 上的 `frontend-e2e` job
+- 该 job 当前仍复用真实 Linux `/tmp` 路径和 compose 环境，这是符合仓库目标运行面的
 
 commit摘要
 
-- 计划提交：`test(frontend): add initial playwright e2e coverage`
+- 计划提交：`test(ci): add dedicated frontend e2e job`
 
 希望接下来的 AI 做什么
 
-1. 下一步优先把这批 Playwright 用例接进 Linux CI：
-   - 最好新增独立 `frontend-e2e` job
-   - 不要塞回已有 `compose-smoke` 脚本里
-2. 在 CI 接入时，优先让：
-   - 登录场景走真实接口
-   - 文件场景在 Linux 下继续使用 `/tmp`
-3. 如果要继续增强 e2e，再考虑补：
-   - 低权限真实测试用户准备机制
-   - logout / refresh / session 失效的浏览器级回归
+1. 先观察 `frontend-e2e` 首次 CI 运行结果。
+2. 如果失败：
+   - 优先看 Playwright 浏览器依赖是否安装齐全
+   - 再看 `frontend-e2e.ps1` 的服务等待与环境变量注入
+   - 再看具体是哪条 e2e 场景失败（登录 / 权限导航 / 文件页）
+3. 如果通过：
+   - `P2-1` 可以基本从“只有 smoke 没有浏览器回归”提升到“有独立前端 e2e 层”
+   - 下一步可转向更系统的 backend + core-agent + postgres integration，或进入 `P2-2`
 
 by: claude-sonnet-4-6
