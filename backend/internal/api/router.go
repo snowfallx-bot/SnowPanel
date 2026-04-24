@@ -1,11 +1,14 @@
 package api
 
 import (
+	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/api/handler"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/grpcclient"
+	appmetrics "github.com/snowfallx-bot/SnowPanel/backend/internal/metrics"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/middleware"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/security"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/service"
@@ -29,12 +32,19 @@ type RouterDeps struct {
 }
 
 func NewRouter(deps RouterDeps) *gin.Engine {
+	logger := deps.Logger
+	if logger == nil {
+		logger = zap.NewNop()
+	}
+
 	router := gin.New()
+	metrics := appmetrics.Default()
 	router.Use(
 		middleware.CORS(),
 		middleware.RequestID(),
-		middleware.Recover(deps.Logger),
-		middleware.AccessLog(deps.Logger),
+		middleware.Recover(logger),
+		middleware.Metrics(metrics),
+		middleware.AccessLog(logger),
 	)
 
 	healthHandler := handler.NewHealthHandler(deps.DB, deps.AgentClient)
@@ -50,6 +60,7 @@ func NewRouter(deps RouterDeps) *gin.Engine {
 
 	router.GET("/health", healthHandler.Health)
 	router.GET("/ready", healthHandler.Readiness)
+	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
 	v1 := router.Group("/api/v1")
 	{
@@ -119,6 +130,14 @@ func NewRouter(deps RouterDeps) *gin.Engine {
 			}
 		}
 	}
+
+	router.NoRoute(func(c *gin.Context) {
+		c.JSON(http.StatusNotFound, gin.H{
+			"code":    1004,
+			"message": "not found",
+			"data":    gin.H{},
+		})
+	})
 
 	return router
 }

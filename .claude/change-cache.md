@@ -12,61 +12,86 @@
 
 ============
 
-本轮是根据你贴回来的 `frontend-e2e` CI 失败结果，继续修 Playwright 场景本身的稳定性问题。当前症状不是 CI job wiring 挂了，而是 `npm run test:e2e` 中至少有一条场景失败。
+本轮已经按你的要求从 e2e 支线收回来，开始推进主线能力，落点是 `P2-2` 的第一步：给 backend 加最小 Prometheus metrics。
 
 本次核心完成项
 
-1. 修正 bootstrap admin 在 e2e 中的密码流转逻辑：
-   - 修改 `frontend/e2e/fixtures.ts`
-   - 新增 `loginViaApi()` 辅助
-   - 把“首次登录要改密”和“已经改过密的后续登录”两种情况显式分开处理
-   - 之前的逻辑会优先用主密码登录，再在 UI 里尝试 fallback；但文件场景在 API 预置数据时直接优先使用了 fallback/旋转后密码，这在全新环境下容易直接失败
+1. backend 引入最小 Prometheus 指标集：
+   - 修改 `backend/go.mod`
+   - 更新 `backend/go.sum`
+   - 新增 `backend/internal/metrics/metrics.go`
+   - 当前新增指标：
+     - `snowpanel_http_requests_total`
+     - `snowpanel_http_request_duration_seconds`
+     - `snowpanel_http_requests_in_flight`
 
-2. 修正文件页 e2e 的前置数据准备：
-   - 修改 `frontend/e2e/files.spec.ts`
-   - 现在预置 fixture 文件前，会先通过 `loginViaApi()` 拿到一份稳定可用的 access token
-   - 如果 admin 首次登录需要改密，则会先通过 API 完成改密，再继续写入 fixture 文件
-   - 避免了“预置文件阶段就因为密码状态不一致而失败”的问题
+2. backend 接入 metrics middleware 与 `/metrics`：
+   - 新增 `backend/internal/middleware/metrics.go`
+   - 修改 `backend/internal/api/router.go`
+   - 现在 router 中间件链路为：
+     - CORS
+     - RequestID
+     - Recover
+     - Metrics
+     - AccessLog
+   - 并新增公开抓取端点：
+     - `GET /metrics`
 
-3. 提高权限导航隐藏场景的持久化状态稳定性：
-   - 修改 `frontend/e2e/auth-and-nav.spec.ts`
-   - 现在写入 localStorage 时补了 `hydrated: true`
-   - 并保持 `GET /api/v1/auth/me` 的受控 stub，降低受 Zustand persist 初始态细节影响的概率
+3. 控制指标标签粒度：
+   - route 标签优先使用 Gin 的 `c.FullPath()` 路由模板
+   - unmatched 请求归一成 `route="unmatched"`
+   - 避免把原始动态 path、user、file path 等高基数字段打进 label
+
+4. 补 metrics 回归测试：
+   - 新增 `backend/internal/middleware/metrics_test.go`
+   - 新增 `backend/internal/api/router_metrics_test.go`
+   - 覆盖内容：
+     - 路由模板标签聚合
+     - unmatched 路由标签
+     - `/metrics` 端点暴露
+     - `/health` 请求后 metrics body 中可见 metrics 指标与 `/health` route label
+
+5. 顺手修了 router 在测试环境下的 logger 空指针问题：
+   - 修改 `backend/internal/api/router.go`
+   - 当 `RouterDeps.Logger == nil` 时，自动退到 `zap.NewNop()`
+   - 否则测试里 `Recover` / `AccessLog` 会因为 nil logger 直接 panic
 
 本轮修改文件
 
 - `.claude/change-cache.md`
-- `frontend/e2e/fixtures.ts`
-- `frontend/e2e/auth-and-nav.spec.ts`
-- `frontend/e2e/files.spec.ts`
+- `backend/go.mod`
+- `backend/go.sum`
+- `backend/internal/api/router.go`
+- `backend/internal/api/router_metrics_test.go`
+- `backend/internal/metrics/metrics.go`
+- `backend/internal/middleware/metrics.go`
+- `backend/internal/middleware/metrics_test.go`
 
 本地验证
 
 已通过：
-- `cd frontend && npm run test`
-- `npx playwright test --list`
+- `go mod tidy`
+- `go test ./internal/api ./internal/middleware`
+- `go test ./...`
 
-验证结果：
-- Vitest：6 个文件、24 个测试通过
-- Playwright：仍成功发现 3 个 e2e 用例
+当前收益
 
-当前判断
-
-- 这轮修的是 Playwright 场景逻辑本身最可能的失败点，尤其是 bootstrap admin 首次改密对文件场景前置数据的影响
-- 如果 `frontend-e2e` 仍失败，下一步就应该直接看 CI 里具体是哪一条 test case 红，而不是继续泛化调整 fixture 层
+- backend 现在已经具备最小 Prometheus 抓取面
+- 后续可以直接接 Prometheus / Grafana
+- 也为后面定位 backend↔agent↔db 这类问题提供了聚合观察入口，不再只靠 access log
 
 commit摘要
 
-- 计划提交：`test(frontend): harden playwright auth fixtures`
+- 计划提交：`feat(observability): add backend prometheus metrics`
 
 希望接下来的 AI 做什么
 
-1. 先 push 这次修复并看 `frontend-e2e` 是否转绿。
-2. 如果仍失败：
-   - 直接看 Playwright 失败的是哪条 case
-   - 优先抓对应 trace / html report / error message
-3. 如果通过：
-   - `P2-1` 的前端 e2e 可以认为已经从“栈已接入”推进到“独立 CI job 可运行”
-   - 后续可继续补更真实的低权限测试用户准备机制，或转向 backend + core-agent + postgres integration
+1. 先提交并推送这轮 backend metrics 改动。
+2. 然后根据你的节奏决定下一步主线：
+   - 继续补 backend ↔ agent 维度的 RPC / dependency metrics
+   - 或开始 P2-3，清理文档与 placeholder 痕迹
+3. 如果继续做观测，建议下一小步优先：
+   - 给 `/metrics` 增加更少量但更有价值的 app-specific 指标（如 agent 调用成功/失败计数）
+   - 暂时仍不要扩到 core-agent metrics 端口，避免范围一下变大
 
 by: claude-sonnet-4-6
