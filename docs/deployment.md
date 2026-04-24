@@ -62,6 +62,7 @@ Do not fall back to plain `docker compose up` / `make up`, or backend will lose 
 - Frontend: `5173`
 - Backend: `8080`
 - Core-agent gRPC: internal-only (`50051` in Compose network, not exposed on host by default)
+- Core-agent metrics: internal-only (`9108` in Compose network, not exposed on host by default)
 - PostgreSQL: internal-only (`5432` in Compose network, not exposed on host by default)
 - Redis: internal-only (`6379` in Compose network, not exposed on host by default)
 
@@ -80,6 +81,7 @@ Key settings in `.env`:
 - token lifetimes (`JWT_EXPIRE`, `JWT_REFRESH_EXPIRE`)
 - login attempt limiter mode and thresholds (`LOGIN_ATTEMPT_STORE`, `LOGIN_ATTEMPT_REDIS_PREFIX`, `LOGIN_*`)
 - core-agent safe-root and read/write limits
+- core-agent metrics endpoint config (`CORE_AGENT_METRICS_ENABLED`, `CORE_AGENT_METRICS_HOST`, `CORE_AGENT_METRICS_PORT`)
 - PostgreSQL + Redis connection info (`REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`, `REDIS_DB`)
 - frontend API base URL (`VITE_API_BASE_URL`, prefer empty for same-origin requests)
 - frontend Vite proxy target (`VITE_API_PROXY_TARGET`, defaults to backend service in Docker)
@@ -94,3 +96,4 @@ Key settings in `.env`:
 - Use persistent backup strategy for Postgres volumes.
 - Place backend/frontend behind HTTPS reverse proxy.
 - Restrict core-agent (`50051`) exposure to trusted network only.
+- Keep core-agent metrics endpoint (`CORE_AGENT_METRICS_HOST:CORE_AGENT_METRICS_PORT`, default `127.0.0.1:9108` in host mode) in loopback or trusted scrape networks.

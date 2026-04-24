@@ -62,6 +62,7 @@
 - Frontend：`5173`
 - Backend：`8080`
 - Core-agent gRPC：默认仅容器内部可见（Compose 网络内 `50051`，默认不暴露到宿主机）
+- Core-agent metrics：默认仅容器内部可见（Compose 网络内 `9108`，默认不暴露到宿主机）
 - PostgreSQL：默认仅容器内部可见（Compose 网络内 `5432`，默认不暴露到宿主机）
 - Redis：默认仅容器内部可见（Compose 网络内 `6379`，默认不暴露到宿主机）
 
@@ -80,6 +81,7 @@ PostgreSQL 首次初始化时，会加载以下 schema SQL：
 - 令牌有效期配置（`JWT_EXPIRE`、`JWT_REFRESH_EXPIRE`）
 - 登录防爆破模式与阈值（`LOGIN_ATTEMPT_STORE`、`LOGIN_ATTEMPT_REDIS_PREFIX`、`LOGIN_*`）
 - core-agent 安全根目录与读写大小限制
+- core-agent 指标端点配置（`CORE_AGENT_METRICS_ENABLED`、`CORE_AGENT_METRICS_HOST`、`CORE_AGENT_METRICS_PORT`）
 - PostgreSQL + Redis 连接参数（`REDIS_HOST`、`REDIS_PORT`、`REDIS_PASSWORD`、`REDIS_DB`）
 - frontend API 基地址（`VITE_API_BASE_URL`，推荐留空并走同源请求）
 - frontend 的 Vite 代理目标（`VITE_API_PROXY_TARGET`，Docker 下默认指向 backend 服务）
@@ -94,3 +96,4 @@ PostgreSQL 首次初始化时，会加载以下 schema SQL：
 - 为 Postgres 数据卷配置持久化备份策略。
 - 在 backend/frontend 前加 HTTPS 反向代理。
 - 仅在可信网络暴露 core-agent（`50051`）。
+- 将 core-agent metrics 端点（宿主机模式默认 `127.0.0.1:9108`）限制在本地或可信采集网络。

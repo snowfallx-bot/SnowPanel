@@ -16,6 +16,10 @@ backend 暴露 Prometheus 指标端点：
 
 - `GET /metrics`
 
+core-agent 在启用时也会暴露独立 Prometheus 端点：
+
+- `GET http://<CORE_AGENT_METRICS_HOST>:<CORE_AGENT_METRICS_PORT>/metrics`
+
 当前关键指标族包括：
 
 - `snowpanel_http_requests_total`
@@ -23,12 +27,20 @@ backend 暴露 Prometheus 指标端点：
 - `snowpanel_http_requests_in_flight`
 - `snowpanel_agent_requests_total`
 - `snowpanel_agent_request_duration_seconds`
+- `snowpanel_core_agent_grpc_requests_total`
+- `snowpanel_core_agent_grpc_request_duration_seconds`
+- `snowpanel_core_agent_grpc_requests_in_flight`
 
 其中 agent RPC 指标包含以下标签：
 
 - `rpc`
 - `outcome`（`success` / `error`）
 - `transport`（`true` / `false`）
+
+其中 core-agent gRPC 指标包含以下标签：
+
+- `grpc_method`
+- `outcome`（`ok` / `error`）
 
 ## 请求链路关联
 
@@ -52,10 +64,13 @@ backend 暴露 Prometheus 指标端点：
    - `snowpanel_http_request_duration_seconds`
    - `snowpanel_agent_request_duration_seconds`
    - `snowpanel_agent_requests_total{outcome="error",...}`
+5. 查看 core-agent 指标是否出现方法级热点：
+   - `snowpanel_core_agent_grpc_requests_total`
+   - `snowpanel_core_agent_grpc_request_duration_seconds`
+   - `snowpanel_core_agent_grpc_requests_in_flight`
 
 ## 当前缺口
 
 - 尚未接入完整 OpenTelemetry 管线。
 - 尚未接入分布式追踪后端（Jaeger/Tempo 等）。
-- core-agent 暂无独立 Prometheus 指标端点（目前通过 backend 侧 RPC 指标 + agent 日志进行观测）。
-
+- backend 与 core-agent 之间尚未形成统一 OTel collector/exporter 策略。

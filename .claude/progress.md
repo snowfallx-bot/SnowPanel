@@ -107,12 +107,11 @@ P2-2：补齐生产化观测能力
   - backend `/metrics`（Prometheus）已覆盖 HTTP 与 agent RPC 计数/时延（含 `rpc/outcome/transport` 标签）
   - backend request id / access log
   - health / readiness
-  - core-agent tracing 日志
+  - core-agent tracing 日志 + 独立 `/metrics` 端点（可输出 gRPC 请求总量/时延/in-flight）
   - audit logs 基础检索
   - `X-Request-ID` 已打通 backend -> gRPC metadata -> core-agent 日志（可按同一 request_id 联查）
   - 已新增 `docs/observability.md` / `docs/observability.zh-CN.md`，明确指标与排障路径
 - 仍缺：
-  - core-agent 独立 Prometheus 指标端点（当前仍以 backend 侧 agent RPC 指标 + agent 日志为主）
   - 统一 OTel pipeline / distributed tracing backend（Jaeger/Tempo 等）
   - 更标准化的 metrics + tracing 落地方案（采集、保留、告警基线）
 - 当前判断：进行中。

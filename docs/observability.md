@@ -16,6 +16,10 @@ Backend exposes Prometheus metrics at:
 
 - `GET /metrics`
 
+Core-agent also exposes a standalone Prometheus endpoint (when enabled):
+
+- `GET http://<CORE_AGENT_METRICS_HOST>:<CORE_AGENT_METRICS_PORT>/metrics`
+
 Current key metric families include:
 
 - `snowpanel_http_requests_total`
@@ -23,12 +27,20 @@ Current key metric families include:
 - `snowpanel_http_requests_in_flight`
 - `snowpanel_agent_requests_total`
 - `snowpanel_agent_request_duration_seconds`
+- `snowpanel_core_agent_grpc_requests_total`
+- `snowpanel_core_agent_grpc_request_duration_seconds`
+- `snowpanel_core_agent_grpc_requests_in_flight`
 
 Agent RPC metrics are labeled by:
 
 - `rpc`
 - `outcome` (`success` / `error`)
 - `transport` (`true` / `false`)
+
+Core-agent gRPC metrics are labeled by:
+
+- `grpc_method`
+- `outcome` (`ok` / `error`)
 
 ## Request Correlation
 
@@ -52,10 +64,13 @@ This allows a single request path to be traced from browser/API client logs to b
    - `snowpanel_http_request_duration_seconds`
    - `snowpanel_agent_request_duration_seconds`
    - `snowpanel_agent_requests_total{outcome="error",...}`
+5. Check core-agent metrics for method-level pressure:
+   - `snowpanel_core_agent_grpc_requests_total`
+   - `snowpanel_core_agent_grpc_request_duration_seconds`
+   - `snowpanel_core_agent_grpc_requests_in_flight`
 
 ## Current Gaps
 
 - No full OpenTelemetry pipeline yet.
 - No distributed trace backend (Jaeger/Tempo/etc.) yet.
-- No standalone Prometheus endpoint in core-agent yet (agent telemetry is currently surfaced via backend-side RPC metrics + agent logs).
-
+- No unified OTel collector/exporter strategy across backend + core-agent yet.

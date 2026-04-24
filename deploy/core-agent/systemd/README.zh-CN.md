@@ -25,6 +25,7 @@
 4. 验证：
    - `sudo systemctl status core-agent --no-pager`
    - `ss -lntp | grep 50051`
+   - `curl -fsS http://127.0.0.1:9108/metrics | head`
 
 ## backend 容器 + 宿主机 agent 运行方式
 
@@ -44,5 +45,6 @@
 ## 安全提示
 
 - 将 `50051` 端口限制在可信网络（防火墙/内网）内。
+- 将 metrics 端点（`CORE_AGENT_METRICS_HOST:CORE_AGENT_METRICS_PORT`，默认 `127.0.0.1:9108`）限制在本地回环或可信采集网络内。
 - 收紧 `CORE_AGENT_ALLOWED_ROOTS`、服务白名单、Cron 命令白名单。
 - 条件允许时将 `CORE_AGENT_HOST` 绑定到私网地址，而不是公网 `0.0.0.0`。

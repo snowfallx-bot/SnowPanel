@@ -12,81 +12,99 @@
 
 ============
 
-本轮继续推进 `P2-2`（生产可观测性），重点完成了“请求链路串联 + 指标维度增强 + 可观测文档落地”。
+本轮继续推进 `P2-2`，把上轮“链路串联”再向前推进成“core-agent 独立指标端点 + gRPC 方法级指标”。
 
 本次核心判断
 
-1. backend 侧已有 `/metrics`，但 agent RPC 指标缺少按 RPC 维度拆分，排障时不够直观。
-2. backend request-id 只在 HTTP 层可见，未进入 gRPC metadata，导致 backend 与 core-agent 的日志无法稳定按同一请求串联。
-3. 在不引入重型 OTel 基建前，先把 `X-Request-ID` 链路打通并固化排障手册，是当前最稳妥、收益最高的改动。
+1. 上轮已打通 request-id 到 core-agent，但仍缺 core-agent 自身可抓取指标端点，排障仍偏依赖日志。
+2. 现阶段先补 Prometheus 端点和方法级 gRPC 指标，能在不引入 OTel 大改的前提下显著提升定位效率。
+3. 由于本地环境无 `cargo`，Rust 编译正确性需要交给 CI 再确认。
 
 本轮实际改动
 
-1. backend request-id 上下文透传
-   - 新增 `backend/internal/requestctx/request_id.go`，统一 request-id 的 context 存取。
-   - `RequestID` middleware 现会把 request-id 写入 `c.Request.Context()`，不再只停留在 gin context。
+1. core-agent 新增 metrics server（独立 HTTP 端点）
+   - 新增模块：
+     - `core-agent/src/observability/mod.rs`
+     - `core-agent/src/observability/metrics.rs`
+   - 使用 Prometheus 默认 registry 暴露 `/metrics`。
+   - 新增指标：
+     - `snowpanel_core_agent_grpc_requests_total{grpc_method,outcome}`
+     - `snowpanel_core_agent_grpc_request_duration_seconds{grpc_method,outcome}`
+     - `snowpanel_core_agent_grpc_requests_in_flight{grpc_method}`
 
-2. backend -> core-agent gRPC metadata 透传
-   - `backend/internal/grpcclient/agent_client.go`：
-     - 在 `invoke()` 内从 context 读取 request-id，并注入 gRPC metadata `x-request-id`。
-     - 新增 `requestIDMetadataKey` 常量与 `withOutgoingRequestID()`。
-
-3. agent RPC 指标维度增强
-   - `backend/internal/metrics/metrics.go`：
-     - `snowpanel_agent_requests_total` 与 `snowpanel_agent_request_duration_seconds` 增加 `rpc` 标签。
-   - `backend/internal/grpcclient/agent_client.go`：
-     - `invoke()` 新增 `rpcName` 入参。
-     - 各 RPC 调用点都标注了固定 rpc 名称（如 `health.check`、`file.list`、`service.restart`、`docker.list_containers` 等）。
-
-4. core-agent 日志接入 request-id
+2. core-agent gRPC 请求接入指标采集
    - `core-agent/src/api/grpc_server.rs`：
-     - 所有 gRPC service 统一挂载 interceptor。
-     - interceptor 读取 metadata `x-request-id`，记录 `request_id` + `grpc_method` 日志字段，实现跨 backend/agent 日志联查。
+     - 增加 `observe_grpc_call()` 包装器。
+     - 关键 gRPC handler（health/system/files/services/docker/cron）都接入方法级计数与时延采集。
+     - 保留上轮 request-id 日志拦截逻辑。
 
-5. 测试补齐
-   - 新增 `backend/internal/middleware/request_id_test.go`：验证 request-id 已写入请求 context。
-   - `backend/internal/grpcclient/agent_client_contract_test.go` 新增用例：验证 gRPC metadata request-id 透传。
-   - `backend/internal/grpcclient/agent_client_metrics_test.go` 更新：校验 agent 指标新标签维度（含 rpc）。
+3. core-agent 启动流程支持并发运行 gRPC + metrics
+   - `core-agent/src/main.rs`：
+     - 新增 `mod observability`。
+     - `CORE_AGENT_METRICS_ENABLED=true` 时，`tokio::try_join!` 并发启动 gRPC server 与 metrics server。
 
-6. 文档落地
-   - 新增：
-     - `docs/observability.md`
-     - `docs/observability.zh-CN.md`
-   - 内容包括：指标说明、request-id 串联路径、快速排障流程、当前缺口。
-   - `progress.md` 的 `P2-2` 已更新为“进行中”，并同步新增能力与剩余缺口。
+4. core-agent 配置项扩展
+   - `core-agent/src/config/mod.rs` 新增：
+     - `CORE_AGENT_METRICS_ENABLED`（默认 `true`）
+     - `CORE_AGENT_METRICS_HOST`（默认 `127.0.0.1`）
+     - `CORE_AGENT_METRICS_PORT`（默认 `9108`）
+   - 新增 `metrics_address()`。
+
+5. 运行时配置与文档同步
+   - `core-agent/Cargo.toml` 增加依赖：`axum`、`prometheus`、`once_cell`。
+   - `.env.example` 增加 core-agent metrics 配置项。
+   - `docker-compose.yml` 为 core-agent 增加 metrics env 和内部 `expose: 9108`。
+   - `deploy/core-agent/systemd/core-agent.env.example` 增加 metrics 配置项。
+   - 文档更新：
+     - `docs/observability.md` / `docs/observability.zh-CN.md`
+     - `docs/deployment.md` / `docs/deployment.zh-CN.md`
+     - `deploy/core-agent/systemd/README.md` / `README.zh-CN.md`
+     - `deploy/one-click/ubuntu-25.10/README.md` / `README.zh-CN.md`
+   - `progress.md` 的 `P2-2` 已同步为“已有 core-agent 独立 metrics”。
 
 本轮修改文件
 
 - `.claude/change-cache.md`
 - `.claude/progress.md`
-- `backend/internal/requestctx/request_id.go`
-- `backend/internal/middleware/request_id.go`
-- `backend/internal/middleware/request_id_test.go`
-- `backend/internal/metrics/metrics.go`
-- `backend/internal/grpcclient/agent_client.go`
-- `backend/internal/grpcclient/agent_client_contract_test.go`
-- `backend/internal/grpcclient/agent_client_metrics_test.go`
+- `.env.example`
+- `core-agent/Cargo.toml`
+- `core-agent/src/config/mod.rs`
+- `core-agent/src/main.rs`
 - `core-agent/src/api/grpc_server.rs`
+- `core-agent/src/observability/mod.rs`
+- `core-agent/src/observability/metrics.rs`
+- `docker-compose.yml`
 - `docs/observability.md`
 - `docs/observability.zh-CN.md`
+- `docs/deployment.md`
+- `docs/deployment.zh-CN.md`
+- `deploy/core-agent/systemd/core-agent.env.example`
+- `deploy/core-agent/systemd/README.md`
+- `deploy/core-agent/systemd/README.zh-CN.md`
+- `deploy/one-click/ubuntu-25.10/README.md`
+- `deploy/one-click/ubuntu-25.10/README.zh-CN.md`
 
 本地验证
 
 - 已通过：
   - `go test ./internal/grpcclient ./internal/middleware ./internal/api`
-  - `go test ./internal/requestctx`
-- 当前环境缺少 `cargo`，无法本地执行 `core-agent` 的 `cargo fmt/cargo test`，该部分需依赖 CI 验证。
+- 未验证：
+  - `cargo fmt`
+  - `cargo test`
+  - 原因：当前环境无 `cargo`。
 
 commit摘要
 
-- 计划提交：`feat(observability): propagate request id across backend and core-agent`
+- 计划提交：`feat(core-agent): add standalone prometheus metrics endpoint`
 
 希望接下来的 AI 做什么
 
-1. 观察 CI 中 core-agent 编译/测试是否通过（重点关注 `with_interceptor` 兼容性）。
+1. 先在 CI 或具备 Rust 工具链环境验证 `core-agent` 编译与测试，重点关注：
+   - `axum` 新增依赖兼容性
+   - `grpc_server.rs` 中 `observe_grpc_call` 包装后的 trait 方法签名兼容性
 2. 若通过，继续推进 `P2-2` 剩余项：
-   - 评估是否为 core-agent 增加独立 `/metrics` 暴露。
-   - 设计 OTel/trace backend（Jaeger/Tempo）最小接入方案。
-3. 若 CI 报错，优先修正 core-agent interceptor 相关兼容问题，再继续 P2-2。
+   - 统一 OTel collector/exporter 方案
+   - metrics retention / alert baseline
+3. 若失败，优先修正 Rust 编译问题，再推进 OTel 设计。
 
 by: gpt-5.5

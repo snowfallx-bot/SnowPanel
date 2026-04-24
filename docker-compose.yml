@@ -42,6 +42,9 @@ services:
     environment:
       CORE_AGENT_HOST: 0.0.0.0
       CORE_AGENT_PORT: ${CORE_AGENT_PORT:-50051}
+      CORE_AGENT_METRICS_ENABLED: ${CORE_AGENT_METRICS_ENABLED:-true}
+      CORE_AGENT_METRICS_HOST: ${CORE_AGENT_METRICS_HOST:-0.0.0.0}
+      CORE_AGENT_METRICS_PORT: ${CORE_AGENT_METRICS_PORT:-9108}
       CORE_AGENT_ALLOWED_ROOTS: ${CORE_AGENT_ALLOWED_ROOTS:-/tmp,/var/tmp,/home,/workspace}
       CORE_AGENT_MAX_READ_BYTES: ${CORE_AGENT_MAX_READ_BYTES:-1048576}
       CORE_AGENT_MAX_WRITE_BYTES: ${CORE_AGENT_MAX_WRITE_BYTES:-1048576}
@@ -49,6 +52,7 @@ services:
       CORE_AGENT_CRON_ALLOWED_COMMANDS: ${CORE_AGENT_CRON_ALLOWED_COMMANDS:-backup,logrotate,cleanup}
     expose:
       - "50051"
+      - "9108"
     depends_on:
       postgres:
         condition: service_healthy

@@ -1,3 +1,4 @@
+use std::future::Future;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -35,6 +36,7 @@ use crate::api::proto::{
 use crate::cron::service::{CronError, CronService};
 use crate::docker::service::{DockerAction, DockerError, DockerService};
 use crate::file::service::FileService as FileOperatorService;
+use crate::observability::metrics;
 use crate::process::systemd_service::{ServiceAction, ServiceError, SystemdServiceManager};
 use crate::security::path_validator::PathValidator;
 use crate::service::system_info::SystemInfoService;
@@ -135,10 +137,13 @@ impl HealthService for HealthServiceImpl {
         &self,
         _request: Request<HealthCheckRequest>,
     ) -> Result<Response<HealthCheckResponse>, Status> {
-        Ok(Response::new(HealthCheckResponse {
-            error: Some(ok_error()),
-            status: "SERVING".to_string(),
-        }))
+        observe_grpc_call("/snowpanel.agent.v1.HealthService/Check", async move {
+            Ok(Response::new(HealthCheckResponse {
+                error: Some(ok_error()),
+                status: "SERVING".to_string(),
+            }))
+        })
+        .await
     }
 }
 
@@ -153,22 +158,28 @@ impl SystemService for SystemServiceImpl {
         &self,
         _request: Request<GetSystemOverviewRequest>,
     ) -> Result<Response<GetSystemOverviewResponse>, Status> {
-        let overview = self.system_info_service.get_overview();
-        Ok(Response::new(GetSystemOverviewResponse {
-            error: Some(ok_error()),
-            overview: Some(overview),
-        }))
+        observe_grpc_call("/snowpanel.agent.v1.SystemService/GetSystemOverview", async move {
+            let overview = self.system_info_service.get_overview();
+            Ok(Response::new(GetSystemOverviewResponse {
+                error: Some(ok_error()),
+                overview: Some(overview),
+            }))
+        })
+        .await
     }
 
     async fn get_realtime_resource(
         &self,
         _request: Request<GetRealtimeResourceRequest>,
     ) -> Result<Response<GetRealtimeResourceResponse>, Status> {
-        let resource = self.system_info_service.get_realtime_resource();
-        Ok(Response::new(GetRealtimeResourceResponse {
-            error: Some(ok_error()),
-            resource: Some(resource),
-        }))
+        observe_grpc_call("/snowpanel.agent.v1.SystemService/GetRealtimeResource", async move {
+            let resource = self.system_info_service.get_realtime_resource();
+            Ok(Response::new(GetRealtimeResourceResponse {
+                error: Some(ok_error()),
+                resource: Some(resource),
+            }))
+        })
+        .await
     }
 }
 
@@ -183,102 +194,126 @@ impl FileService for FileServiceImpl {
         &self,
         request: Request<ListFilesRequest>,
     ) -> Result<Response<ListFilesResponse>, Status> {
-        let payload = request.into_inner();
-        Ok(Response::new(
-            self.file_service.list_files(&payload.path, payload.safety),
-        ))
+        observe_grpc_call("/snowpanel.agent.v1.FileService/ListFiles", async move {
+            let payload = request.into_inner();
+            Ok(Response::new(
+                self.file_service.list_files(&payload.path, payload.safety),
+            ))
+        })
+        .await
     }
 
     async fn read_text_file(
         &self,
         request: Request<ReadTextFileRequest>,
     ) -> Result<Response<ReadTextFileResponse>, Status> {
-        let payload = request.into_inner();
-        Ok(Response::new(self.file_service.read_text_file(
-            &payload.path,
-            payload.max_bytes,
-            &payload.encoding,
-            payload.safety,
-        )))
+        observe_grpc_call("/snowpanel.agent.v1.FileService/ReadTextFile", async move {
+            let payload = request.into_inner();
+            Ok(Response::new(self.file_service.read_text_file(
+                &payload.path,
+                payload.max_bytes,
+                &payload.encoding,
+                payload.safety,
+            )))
+        })
+        .await
     }
 
     async fn read_file_chunk(
         &self,
         request: Request<ReadFileChunkRequest>,
     ) -> Result<Response<ReadFileChunkResponse>, Status> {
-        let payload = request.into_inner();
-        Ok(Response::new(self.file_service.read_file_chunk(
-            &payload.path,
-            payload.offset,
-            payload.limit,
-            payload.safety,
-        )))
+        observe_grpc_call("/snowpanel.agent.v1.FileService/ReadFileChunk", async move {
+            let payload = request.into_inner();
+            Ok(Response::new(self.file_service.read_file_chunk(
+                &payload.path,
+                payload.offset,
+                payload.limit,
+                payload.safety,
+            )))
+        })
+        .await
     }
 
     async fn write_text_file(
         &self,
         request: Request<WriteTextFileRequest>,
     ) -> Result<Response<WriteTextFileResponse>, Status> {
-        let payload = request.into_inner();
-        Ok(Response::new(self.file_service.write_text_file(
-            &payload.path,
-            &payload.content,
-            payload.create_if_not_exists,
-            payload.truncate,
-            &payload.encoding,
-            payload.safety,
-        )))
+        observe_grpc_call("/snowpanel.agent.v1.FileService/WriteTextFile", async move {
+            let payload = request.into_inner();
+            Ok(Response::new(self.file_service.write_text_file(
+                &payload.path,
+                &payload.content,
+                payload.create_if_not_exists,
+                payload.truncate,
+                &payload.encoding,
+                payload.safety,
+            )))
+        })
+        .await
     }
 
     async fn write_file_chunk(
         &self,
         request: Request<WriteFileChunkRequest>,
     ) -> Result<Response<WriteFileChunkResponse>, Status> {
-        let payload = request.into_inner();
-        Ok(Response::new(self.file_service.write_file_chunk(
-            &payload.path,
-            payload.offset,
-            &payload.chunk,
-            payload.create_if_not_exists,
-            payload.truncate,
-            payload.safety,
-        )))
+        observe_grpc_call("/snowpanel.agent.v1.FileService/WriteFileChunk", async move {
+            let payload = request.into_inner();
+            Ok(Response::new(self.file_service.write_file_chunk(
+                &payload.path,
+                payload.offset,
+                &payload.chunk,
+                payload.create_if_not_exists,
+                payload.truncate,
+                payload.safety,
+            )))
+        })
+        .await
     }
 
     async fn create_directory(
         &self,
         request: Request<CreateDirectoryRequest>,
     ) -> Result<Response<CreateDirectoryResponse>, Status> {
-        let payload = request.into_inner();
-        Ok(Response::new(self.file_service.create_directory(
-            &payload.path,
-            payload.create_parents,
-            payload.safety,
-        )))
+        observe_grpc_call("/snowpanel.agent.v1.FileService/CreateDirectory", async move {
+            let payload = request.into_inner();
+            Ok(Response::new(self.file_service.create_directory(
+                &payload.path,
+                payload.create_parents,
+                payload.safety,
+            )))
+        })
+        .await
     }
 
     async fn delete_file(
         &self,
         request: Request<DeleteFileRequest>,
     ) -> Result<Response<DeleteFileResponse>, Status> {
-        let payload = request.into_inner();
-        Ok(Response::new(self.file_service.delete_path(
-            &payload.path,
-            payload.recursive,
-            payload.safety,
-        )))
+        observe_grpc_call("/snowpanel.agent.v1.FileService/DeleteFile", async move {
+            let payload = request.into_inner();
+            Ok(Response::new(self.file_service.delete_path(
+                &payload.path,
+                payload.recursive,
+                payload.safety,
+            )))
+        })
+        .await
     }
 
     async fn rename_file(
         &self,
         request: Request<RenameFileRequest>,
     ) -> Result<Response<RenameFileResponse>, Status> {
-        let payload = request.into_inner();
-        Ok(Response::new(self.file_service.rename_file(
-            &payload.source_path,
-            &payload.target_path,
-            payload.safety,
-        )))
+        observe_grpc_call("/snowpanel.agent.v1.FileService/RenameFile", async move {
+            let payload = request.into_inner();
+            Ok(Response::new(self.file_service.rename_file(
+                &payload.source_path,
+                &payload.target_path,
+                payload.safety,
+            )))
+        })
+        .await
     }
 }
 
@@ -288,6 +323,20 @@ fn ok_error() -> Error {
         message: "ok".to_string(),
         detail: String::new(),
     }
+}
+
+async fn observe_grpc_call<T, F>(grpc_method: &str, call: F) -> Result<Response<T>, Status>
+where
+    F: Future<Output = Result<Response<T>, Status>>,
+{
+    let guard = metrics::start_grpc_call(grpc_method);
+    let result = call.await;
+    if result.is_ok() {
+        guard.finish("ok");
+    } else {
+        guard.finish("error");
+    }
+    result
 }
 
 fn request_logging_interceptor(request: Request<()>) -> Result<Request<()>, Status> {
@@ -336,46 +385,62 @@ impl ServiceManagerService for ServiceManagerServiceImpl {
         &self,
         request: Request<ListServicesRequest>,
     ) -> Result<Response<ListServicesResponse>, Status> {
-        let payload = request.into_inner();
-        let result = self.service_manager.list_services(&payload.keyword);
-        match result {
-            Ok(items) => Ok(Response::new(ListServicesResponse {
-                error: Some(ok_error()),
-                services: items
-                    .into_iter()
-                    .map(|item| ServiceInfo {
-                        name: item.name,
-                        display_name: item.display_name,
-                        status: item.status,
-                    })
-                    .collect::<Vec<_>>(),
-            })),
-            Err(err) => Ok(Response::new(ListServicesResponse {
-                error: Some(to_error(err)),
-                services: Vec::new(),
-            })),
-        }
+        observe_grpc_call(
+            "/snowpanel.agent.v1.ServiceManagerService/ListServices",
+            async move {
+            let payload = request.into_inner();
+            let result = self.service_manager.list_services(&payload.keyword);
+            match result {
+                Ok(items) => Ok(Response::new(ListServicesResponse {
+                    error: Some(ok_error()),
+                    services: items
+                        .into_iter()
+                        .map(|item| ServiceInfo {
+                            name: item.name,
+                            display_name: item.display_name,
+                            status: item.status,
+                        })
+                        .collect::<Vec<_>>(),
+                })),
+                Err(err) => Ok(Response::new(ListServicesResponse {
+                    error: Some(to_error(err)),
+                    services: Vec::new(),
+                })),
+            }
+        },
+        )
+        .await
     }
 
     async fn start_service(
         &self,
         request: Request<ServiceActionRequest>,
     ) -> Result<Response<ServiceActionResponse>, Status> {
-        self.handle_action(ServiceAction::Start, request.into_inner())
+        observe_grpc_call("/snowpanel.agent.v1.ServiceManagerService/StartService", async move {
+            self.handle_action(ServiceAction::Start, request.into_inner())
+        })
+        .await
     }
 
     async fn stop_service(
         &self,
         request: Request<ServiceActionRequest>,
     ) -> Result<Response<ServiceActionResponse>, Status> {
-        self.handle_action(ServiceAction::Stop, request.into_inner())
+        observe_grpc_call("/snowpanel.agent.v1.ServiceManagerService/StopService", async move {
+            self.handle_action(ServiceAction::Stop, request.into_inner())
+        })
+        .await
     }
 
     async fn restart_service(
         &self,
         request: Request<ServiceActionRequest>,
     ) -> Result<Response<ServiceActionResponse>, Status> {
-        self.handle_action(ServiceAction::Restart, request.into_inner())
+        observe_grpc_call(
+            "/snowpanel.agent.v1.ServiceManagerService/RestartService",
+            async move { self.handle_action(ServiceAction::Restart, request.into_inner()) },
+        )
+        .await
     }
 }
 
@@ -420,74 +485,89 @@ impl DockerGrpcService for DockerServiceImpl {
         &self,
         _request: Request<ListDockerContainersRequest>,
     ) -> Result<Response<ListDockerContainersResponse>, Status> {
-        let result = self.docker_service.list_containers().await;
-        match result {
-            Ok(containers) => Ok(Response::new(ListDockerContainersResponse {
-                error: Some(ok_error()),
-                containers: containers
-                    .into_iter()
-                    .map(|item| DockerContainerInfo {
-                        id: item.id,
-                        name: item.name,
-                        image: item.image,
-                        state: item.state,
-                        status: item.status,
-                    })
-                    .collect::<Vec<_>>(),
-            })),
-            Err(err) => Ok(Response::new(ListDockerContainersResponse {
-                error: Some(to_docker_error(err)),
-                containers: Vec::new(),
-            })),
-        }
+        observe_grpc_call("/snowpanel.agent.v1.DockerService/ListContainers", async move {
+            let result = self.docker_service.list_containers().await;
+            match result {
+                Ok(containers) => Ok(Response::new(ListDockerContainersResponse {
+                    error: Some(ok_error()),
+                    containers: containers
+                        .into_iter()
+                        .map(|item| DockerContainerInfo {
+                            id: item.id,
+                            name: item.name,
+                            image: item.image,
+                            state: item.state,
+                            status: item.status,
+                        })
+                        .collect::<Vec<_>>(),
+                })),
+                Err(err) => Ok(Response::new(ListDockerContainersResponse {
+                    error: Some(to_docker_error(err)),
+                    containers: Vec::new(),
+                })),
+            }
+        })
+        .await
     }
 
     async fn start_container(
         &self,
         request: Request<DockerContainerActionRequest>,
     ) -> Result<Response<DockerContainerActionResponse>, Status> {
-        self.handle_action(DockerAction::Start, request.into_inner())
-            .await
+        observe_grpc_call("/snowpanel.agent.v1.DockerService/StartContainer", async move {
+            self.handle_action(DockerAction::Start, request.into_inner())
+                .await
+        })
+        .await
     }
 
     async fn stop_container(
         &self,
         request: Request<DockerContainerActionRequest>,
     ) -> Result<Response<DockerContainerActionResponse>, Status> {
-        self.handle_action(DockerAction::Stop, request.into_inner())
-            .await
+        observe_grpc_call("/snowpanel.agent.v1.DockerService/StopContainer", async move {
+            self.handle_action(DockerAction::Stop, request.into_inner())
+                .await
+        })
+        .await
     }
 
     async fn restart_container(
         &self,
         request: Request<DockerContainerActionRequest>,
     ) -> Result<Response<DockerContainerActionResponse>, Status> {
-        self.handle_action(DockerAction::Restart, request.into_inner())
-            .await
+        observe_grpc_call("/snowpanel.agent.v1.DockerService/RestartContainer", async move {
+            self.handle_action(DockerAction::Restart, request.into_inner())
+                .await
+        })
+        .await
     }
 
     async fn list_images(
         &self,
         _request: Request<ListDockerImagesRequest>,
     ) -> Result<Response<ListDockerImagesResponse>, Status> {
-        let result = self.docker_service.list_images().await;
-        match result {
-            Ok(images) => Ok(Response::new(ListDockerImagesResponse {
-                error: Some(ok_error()),
-                images: images
-                    .into_iter()
-                    .map(|item| DockerImageInfo {
-                        id: item.id,
-                        repo_tags: item.repo_tags,
-                        size: item.size,
-                    })
-                    .collect::<Vec<_>>(),
-            })),
-            Err(err) => Ok(Response::new(ListDockerImagesResponse {
-                error: Some(to_docker_error(err)),
-                images: Vec::new(),
-            })),
-        }
+        observe_grpc_call("/snowpanel.agent.v1.DockerService/ListImages", async move {
+            let result = self.docker_service.list_images().await;
+            match result {
+                Ok(images) => Ok(Response::new(ListDockerImagesResponse {
+                    error: Some(ok_error()),
+                    images: images
+                        .into_iter()
+                        .map(|item| DockerImageInfo {
+                            id: item.id,
+                            repo_tags: item.repo_tags,
+                            size: item.size,
+                        })
+                        .collect::<Vec<_>>(),
+                })),
+                Err(err) => Ok(Response::new(ListDockerImagesResponse {
+                    error: Some(to_docker_error(err)),
+                    images: Vec::new(),
+                })),
+            }
+        })
+        .await
     }
 }
 
@@ -532,101 +612,116 @@ impl CronGrpcService for CronServiceImpl {
         &self,
         _request: Request<ListCronTasksRequest>,
     ) -> Result<Response<ListCronTasksResponse>, Status> {
-        let result = self.cron_service.list_tasks();
-        match result {
-            Ok(tasks) => Ok(Response::new(ListCronTasksResponse {
-                error: Some(ok_error()),
-                tasks: tasks
-                    .into_iter()
-                    .map(to_proto_cron_task)
-                    .collect::<Vec<_>>(),
-            })),
-            Err(err) => Ok(Response::new(ListCronTasksResponse {
-                error: Some(to_cron_error(err)),
-                tasks: Vec::new(),
-            })),
-        }
+        observe_grpc_call("/snowpanel.agent.v1.CronService/ListCronTasks", async move {
+            let result = self.cron_service.list_tasks();
+            match result {
+                Ok(tasks) => Ok(Response::new(ListCronTasksResponse {
+                    error: Some(ok_error()),
+                    tasks: tasks
+                        .into_iter()
+                        .map(to_proto_cron_task)
+                        .collect::<Vec<_>>(),
+                })),
+                Err(err) => Ok(Response::new(ListCronTasksResponse {
+                    error: Some(to_cron_error(err)),
+                    tasks: Vec::new(),
+                })),
+            }
+        })
+        .await
     }
 
     async fn create_cron_task(
         &self,
         request: Request<CreateCronTaskRequest>,
     ) -> Result<Response<CreateCronTaskResponse>, Status> {
-        let payload = request.into_inner();
-        let result =
-            self.cron_service
-                .create_task(&payload.expression, &payload.command, payload.enabled);
+        observe_grpc_call("/snowpanel.agent.v1.CronService/CreateCronTask", async move {
+            let payload = request.into_inner();
+            let result =
+                self.cron_service
+                    .create_task(&payload.expression, &payload.command, payload.enabled);
 
-        match result {
-            Ok(task) => Ok(Response::new(CreateCronTaskResponse {
-                error: Some(ok_error()),
-                task: Some(to_proto_cron_task(task)),
-            })),
-            Err(err) => Ok(Response::new(CreateCronTaskResponse {
-                error: Some(to_cron_error(err)),
-                task: None,
-            })),
-        }
+            match result {
+                Ok(task) => Ok(Response::new(CreateCronTaskResponse {
+                    error: Some(ok_error()),
+                    task: Some(to_proto_cron_task(task)),
+                })),
+                Err(err) => Ok(Response::new(CreateCronTaskResponse {
+                    error: Some(to_cron_error(err)),
+                    task: None,
+                })),
+            }
+        })
+        .await
     }
 
     async fn update_cron_task(
         &self,
         request: Request<UpdateCronTaskRequest>,
     ) -> Result<Response<UpdateCronTaskResponse>, Status> {
-        let payload = request.into_inner();
-        let result = self.cron_service.update_task(
-            &payload.id,
-            &payload.expression,
-            &payload.command,
-            payload.enabled,
-        );
+        observe_grpc_call("/snowpanel.agent.v1.CronService/UpdateCronTask", async move {
+            let payload = request.into_inner();
+            let result = self.cron_service.update_task(
+                &payload.id,
+                &payload.expression,
+                &payload.command,
+                payload.enabled,
+            );
 
-        match result {
-            Ok(task) => Ok(Response::new(UpdateCronTaskResponse {
-                error: Some(ok_error()),
-                task: Some(to_proto_cron_task(task)),
-            })),
-            Err(err) => Ok(Response::new(UpdateCronTaskResponse {
-                error: Some(to_cron_error(err)),
-                task: None,
-            })),
-        }
+            match result {
+                Ok(task) => Ok(Response::new(UpdateCronTaskResponse {
+                    error: Some(ok_error()),
+                    task: Some(to_proto_cron_task(task)),
+                })),
+                Err(err) => Ok(Response::new(UpdateCronTaskResponse {
+                    error: Some(to_cron_error(err)),
+                    task: None,
+                })),
+            }
+        })
+        .await
     }
 
     async fn delete_cron_task(
         &self,
         request: Request<DeleteCronTaskRequest>,
     ) -> Result<Response<DeleteCronTaskResponse>, Status> {
-        let payload = request.into_inner();
-        let result = self.cron_service.delete_task(&payload.id);
-        match result {
-            Ok(()) => Ok(Response::new(DeleteCronTaskResponse {
-                error: Some(ok_error()),
-                id: payload.id,
-            })),
-            Err(err) => Ok(Response::new(DeleteCronTaskResponse {
-                error: Some(to_cron_error(err)),
-                id: String::new(),
-            })),
-        }
+        observe_grpc_call("/snowpanel.agent.v1.CronService/DeleteCronTask", async move {
+            let payload = request.into_inner();
+            let result = self.cron_service.delete_task(&payload.id);
+            match result {
+                Ok(()) => Ok(Response::new(DeleteCronTaskResponse {
+                    error: Some(ok_error()),
+                    id: payload.id,
+                })),
+                Err(err) => Ok(Response::new(DeleteCronTaskResponse {
+                    error: Some(to_cron_error(err)),
+                    id: String::new(),
+                })),
+            }
+        })
+        .await
     }
 
     async fn set_cron_task_enabled(
         &self,
         request: Request<SetCronTaskEnabledRequest>,
     ) -> Result<Response<SetCronTaskEnabledResponse>, Status> {
-        let payload = request.into_inner();
-        let result = self.cron_service.set_enabled(&payload.id, payload.enabled);
-        match result {
-            Ok(task) => Ok(Response::new(SetCronTaskEnabledResponse {
-                error: Some(ok_error()),
-                task: Some(to_proto_cron_task(task)),
-            })),
-            Err(err) => Ok(Response::new(SetCronTaskEnabledResponse {
-                error: Some(to_cron_error(err)),
-                task: None,
-            })),
-        }
+        observe_grpc_call("/snowpanel.agent.v1.CronService/SetCronTaskEnabled", async move {
+            let payload = request.into_inner();
+            let result = self.cron_service.set_enabled(&payload.id, payload.enabled);
+            match result {
+                Ok(task) => Ok(Response::new(SetCronTaskEnabledResponse {
+                    error: Some(ok_error()),
+                    task: Some(to_proto_cron_task(task)),
+                })),
+                Err(err) => Ok(Response::new(SetCronTaskEnabledResponse {
+                    error: Some(to_cron_error(err)),
+                    task: None,
+                })),
+            }
+        })
+        .await
     }
 }
 
