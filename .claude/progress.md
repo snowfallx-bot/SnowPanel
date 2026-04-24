@@ -11,7 +11,6 @@
 - RBAC 已落地到 DB 角色/权限模型，session 校验已能感知权限变更和用户禁用。
 - 异步任务已接入真实操作，文件模块已补到下载/上传/重命名/分块读写/二进制提示。
 - 主要剩余工作集中在：
-  - `P2-1` 测试矩阵补齐
   - `P2-2` 生产观测能力
   - `P2-3` 文档与原型痕迹清理
 
@@ -93,19 +92,15 @@
   - 安全校验包含 safe roots / dangerous path / encoding / size 等错误分型。
 - 当前判断：按原验收标准可视为完成。
 
-P2-1：补齐测试矩阵，不要只停留在零散 unit test
-- 当前已有：
-  - backend unit tests
-  - backend + fake agent integration-style tests
-  - cron / auth / path traversal 等安全相关测试
-  - frontend vitest 单测
-  - CI workflow 已增加基于 compose 的 smoke integration，覆盖 login / 强制改密 / refresh rotation / dashboard / files / logout 主链路
-- 明显缺失：
-  - proto contract tests
-  - 更系统的 backend + core-agent + postgres 真实 integration 测试覆盖（目前仍以 smoke 主链路为主）
-  - 前端 e2e（登录 / 文件浏览 / 权限隐藏）
-  - 更完整的 CI 分层矩阵（如将 smoke 与更重的 integration/e2e 继续分层）
-- 当前判断：未完成。
+~~P2-1：补齐测试矩阵，不要只停留在零散 unit test~~
+- 已完成：
+  - backend unit tests、backend + fake agent integration-style tests、cron/auth/path traversal 安全测试已稳定运行。
+  - proto contract tests 已纳入 CI（`proto-contract` job）。
+  - compose smoke integration 已覆盖 login / 强制改密 / refresh rotation / dashboard / files / logout 主链路。
+  - frontend e2e（登录 / 文件浏览 / 权限隐藏）已纳入 CI 并通过。
+  - 新增 `backend-integration` CI job，补齐 backend + core-agent + postgres 真实链路覆盖，包含 services/docker/cron/tasks/audit 多模块契约与异步任务落库校验。
+  - CI 分层已形成：`compose-smoke`（基础主链路）→ `backend-integration`（后端深链路）+ `frontend-e2e`（前端端到端）。
+- 当前判断：可视为完成。
 
 P2-2：补齐生产化观测能力
 - 当前已有：
@@ -129,11 +124,9 @@ P2-3：清理“原型痕迹”和重复逻辑
 
 【建议剩余执行顺序】
 
-1. 先做 `P2-1`
-   - 补真实 integration 和关键 e2e
-2. 再做 `P2-2`
+1. 先做 `P2-2`
    - metrics / tracing / 统一链路观测
-3. 最后做 `P2-3`
+2. 再做 `P2-3`
    - 文档与代码占位痕迹清理
 
 【不要先做的事】
