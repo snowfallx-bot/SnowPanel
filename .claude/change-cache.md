@@ -12,69 +12,57 @@
 
 ============
 
-本轮是根据你贴回来的 `compose-smoke` 失败日志做针对性修复。失败根因不是 smoke 脚本本身，而是后端/agent 在 CI 容器环境下的两个真实兼容性问题。
+本轮继续根据你贴回来的 `compose-smoke` 失败结果排查 backend readiness 超时。经过对 smoke 脚本、backend 监听配置和 compose 端口映射的交叉检查，确认这次超时的更直接根因不是 `/ready` 逻辑，而是 backend 容器监听端口与 compose published target 端口不一致。
 
 本次核心完成项
 
-1. 修复 PostgreSQL migration 中的保留字问题：
-   - 修改 `backend/migrations/0001_init_schema.up.sql`
-   - `databases` 表中的列名从 `collation` 改为 `db_collation`
-   - 根因是 PostgreSQL 16 下 `collation` 作为关键字导致 migration 初始化在 `CREATE TABLE databases` 阶段报语法错误，数据库初始化半途失败
+1. 修复 backend 端口映射：
+   - 修改 `docker-compose.yml`
+   - backend 的 ports 从：
+     - `${BACKEND_PORT:-8080}:8080`
+   - 改为：
+     - `${BACKEND_PORT:-8080}:${BACKEND_PORT:-8080}`
 
-2. 同步 GORM model 映射：
-   - 修改 `backend/internal/model/schema.go`
-   - `Database.Collation` 的列映射从 `column:collation` 改为 `column:db_collation`
-   - 保持对外 JSON 字段仍为 `collation`，只修数据库列名，不扩大 API 影响面
+2. 根因说明：
+   - `scripts/ci/compose-smoke.ps1` 会设置：
+     - `BACKEND_PORT=18080`
+   - backend 容器内也会读取该环境变量并监听 `0.0.0.0:18080`
+   - 但 compose 之前始终把宿主机 `18080` 映射到容器 `8080`
+   - 于是宿主机访问 `http://127.0.0.1:18080/ready` 时，实际容器内没有进程在 `8080` 上监听，表现为 readiness 一直请求失败超时
 
-3. 修复 core-agent 在无 Docker socket 时直接崩溃的问题：
-   - 修改 `core-agent/src/docker/service.rs`
-   - 之前 `DockerService::new()` 在 `/var/run/docker.sock` 不存在时直接返回错误，导致整个 gRPC server 启动失败，进而让 backend readiness 超时
-   - 现在改成：
-     - agent 启动时允许 Docker 能力处于 unavailable 状态
-     - `DockerService` 内部持有 `Option<Docker>`
-     - 若 socket 不存在，则 Docker 相关 RPC 返回结构化 `6000 docker unavailable` 错误
-     - 但不会阻断 Health / Dashboard / Files / Auth 这条 smoke 主链路的启动和联调
+3. 本地验证：
+   - 用 `BACKEND_PORT=18080 docker compose config` 验证 backend port mapping 已展开为 target/published 都是 `18080`
+   - 继续跑了 backend health handler 相关测试，未受影响
 
 本轮修改文件
 
 - `.claude/change-cache.md`
-- `backend/migrations/0001_init_schema.up.sql`
-- `backend/internal/model/schema.go`
-- `core-agent/src/docker/service.rs`
+- `docker-compose.yml`
 
 本地验证
 
 已通过：
-- `cd backend && go test ./...`
+- `BACKEND_PORT=18080 docker compose config`（确认 backend 端口映射展开正确）
+- `cd backend && go test ./internal/api/handler`
 
-环境限制：
-- 当前本机 shell 环境没有 Rust 工具链，`cargo test` 无法本地执行
-- 因此 core-agent 的最终验证将依赖 GitHub Actions 的 `core-agent` / `compose-smoke` job
+补充说明
 
-根因结论
-
-1. `compose-smoke` 中 postgres 初始化失败：
-   - 由 migration 里 `collation` 列名触发
-2. `compose-smoke` 中 core-agent 持续重启：
-   - 由 CI 容器环境没有 `/var/run/docker.sock`，而 agent 把 Docker 初始化失败视为致命错误触发
-3. backend readiness 超时：
-   - 本质上是因为 backend 依赖的 agent 没成功起来，而不是 backend 自己没启动
+- 我本地最开始尝试直接跑 `./scripts/ci/compose-smoke.ps1`，因为是在 bash 中执行 PowerShell 脚本，失败信息不具参考价值，所以后续主要依据：
+  - smoke 脚本中的环境变量注入
+  - backend main 的监听逻辑
+  - compose config 展开结果
+  来收敛问题
 
 commit摘要
 
-- 计划提交：`fix(ci): unblock smoke without docker socket`
+- 计划提交：`fix(compose): align backend published port with runtime config`
 
 希望接下来的 AI 做什么
 
-1. 先 push 这轮修复并观察 GitHub Actions：
-   - `backend`
-   - `core-agent`
-   - `compose-smoke`
-2. 如果 `compose-smoke` 仍失败，优先看：
-   - backend `/ready` 是否仍要求 agent 的 Docker 能力可用
-   - smoke 脚本是否还有对数据库初始化状态的隐式假设
-3. 如果 smoke 转绿，下一步继续回到 `P2-1`：
-   - 补更系统的 integration
-   - 或补 frontend e2e
+1. 先 push 这次端口映射修复，观察 `compose-smoke` 是否继续往后推进。
+2. 如果 smoke 仍失败，下一优先级是：
+   - frontend 代理目标是否与 backend 容器端口保持一致
+   - `/ready` 是否还被其他依赖拖成 503
+3. 如果 smoke 转绿，就继续回到 `P2-1` 后续项，而不是继续在 smoke 脚本上打转。
 
 by: claude-sonnet-4-6
