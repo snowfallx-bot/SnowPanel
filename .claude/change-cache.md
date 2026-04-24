@@ -12,74 +12,61 @@
 
 ============
 
-本轮继续在上一轮 Playwright e2e 基建之上推进 `P2-1`，目标是把前端 e2e 接进独立的 CI job，而不是把浏览器测试继续塞回已有 `compose-smoke`。
+本轮是根据你贴回来的 `frontend-e2e` CI 失败结果，继续修 Playwright 场景本身的稳定性问题。当前症状不是 CI job wiring 挂了，而是 `npm run test:e2e` 中至少有一条场景失败。
 
 本次核心完成项
 
-1. 新增独立 frontend e2e 运行脚本：
-   - 新增 `scripts/ci/frontend-e2e.ps1`
-   - 该脚本会：
-     - 用独立 project name 起 `postgres + redis + core-agent + backend + frontend`
-     - 复用 smoke 同一套端口、JWT secret、bootstrap password 约定
-     - 等待 backend `/ready` 和 frontend 启动成功
-     - 进入 `frontend/` 执行 `npm run test:e2e`
-     - 失败时自动输出 compose `ps` 和 `logs`
-     - 收尾时执行 `docker compose down -v --remove-orphans`
+1. 修正 bootstrap admin 在 e2e 中的密码流转逻辑：
+   - 修改 `frontend/e2e/fixtures.ts`
+   - 新增 `loginViaApi()` 辅助
+   - 把“首次登录要改密”和“已经改过密的后续登录”两种情况显式分开处理
+   - 之前的逻辑会优先用主密码登录，再在 UI 里尝试 fallback；但文件场景在 API 预置数据时直接优先使用了 fallback/旋转后密码，这在全新环境下容易直接失败
 
-2. 把 Playwright 接入独立 CI job：
-   - 修改 `.github/workflows/ci.yml`
-   - 新增 `frontend-e2e` job
-   - job 依赖：
-     - `backend`
-     - `core-agent`
-     - `frontend`
-     - `compose-smoke`
-   - job 会：
-     - `npm ci`
-     - `npx playwright install --with-deps chromium`
-     - 执行 `./scripts/ci/frontend-e2e.ps1`
+2. 修正文件页 e2e 的前置数据准备：
+   - 修改 `frontend/e2e/files.spec.ts`
+   - 现在预置 fixture 文件前，会先通过 `loginViaApi()` 拿到一份稳定可用的 access token
+   - 如果 admin 首次登录需要改密，则会先通过 API 完成改密，再继续写入 fixture 文件
+   - 避免了“预置文件阶段就因为密码状态不一致而失败”的问题
 
-3. 保持 CI 分层清晰：
-   - `compose-smoke` 仍负责 API / auth / files 主链路 smoke
-   - `frontend-e2e` 负责浏览器级回归
-   - 没有把 Playwright 回塞进 smoke 脚本，避免职责混杂
+3. 提高权限导航隐藏场景的持久化状态稳定性：
+   - 修改 `frontend/e2e/auth-and-nav.spec.ts`
+   - 现在写入 localStorage 时补了 `hydrated: true`
+   - 并保持 `GET /api/v1/auth/me` 的受控 stub，降低受 Zustand persist 初始态细节影响的概率
 
 本轮修改文件
 
 - `.claude/change-cache.md`
-- `.github/workflows/ci.yml`
-- `scripts/ci/frontend-e2e.ps1`
+- `frontend/e2e/fixtures.ts`
+- `frontend/e2e/auth-and-nav.spec.ts`
+- `frontend/e2e/files.spec.ts`
 
 本地验证
 
 已通过：
 - `cd frontend && npm run test`
 - `npx playwright test --list`
-- `frontend-e2e.ps1` PowerShell 语法解析检查
 
 验证结果：
 - Vitest：6 个文件、24 个测试通过
-- Playwright：成功发现 3 个 e2e 用例
-- `frontend-e2e.ps1`：PowerShell parser 返回 `ok`
+- Playwright：仍成功发现 3 个 e2e 用例
 
-当前限制
+当前判断
 
-- 本轮没有在本机完整执行 Linux compose + Playwright 闭环，最终验收依赖 GitHub Actions 上的 `frontend-e2e` job
-- 该 job 当前仍复用真实 Linux `/tmp` 路径和 compose 环境，这是符合仓库目标运行面的
+- 这轮修的是 Playwright 场景逻辑本身最可能的失败点，尤其是 bootstrap admin 首次改密对文件场景前置数据的影响
+- 如果 `frontend-e2e` 仍失败，下一步就应该直接看 CI 里具体是哪一条 test case 红，而不是继续泛化调整 fixture 层
 
 commit摘要
 
-- 计划提交：`test(ci): add dedicated frontend e2e job`
+- 计划提交：`test(frontend): harden playwright auth fixtures`
 
 希望接下来的 AI 做什么
 
-1. 先观察 `frontend-e2e` 首次 CI 运行结果。
-2. 如果失败：
-   - 优先看 Playwright 浏览器依赖是否安装齐全
-   - 再看 `frontend-e2e.ps1` 的服务等待与环境变量注入
-   - 再看具体是哪条 e2e 场景失败（登录 / 权限导航 / 文件页）
+1. 先 push 这次修复并看 `frontend-e2e` 是否转绿。
+2. 如果仍失败：
+   - 直接看 Playwright 失败的是哪条 case
+   - 优先抓对应 trace / html report / error message
 3. 如果通过：
-   - `P2-1` 可以基本从“只有 smoke 没有浏览器回归”提升到“有独立前端 e2e 层”
-   - 下一步可转向更系统的 backend + core-agent + postgres integration，或进入 `P2-2`
+   - `P2-1` 的前端 e2e 可以认为已经从“栈已接入”推进到“独立 CI job 可运行”
+   - 后续可继续补更真实的低权限测试用户准备机制，或转向 backend + core-agent + postgres integration
 
 by: claude-sonnet-4-6

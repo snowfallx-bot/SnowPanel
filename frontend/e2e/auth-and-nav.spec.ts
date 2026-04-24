@@ -9,6 +9,29 @@ test.describe("authentication and navigation", () => {
   });
 
   test("hides unauthorized navigation entries for a limited session", async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem(
+        "snowpanel-auth",
+        JSON.stringify({
+          state: {
+            hydrated: true,
+            token: "test-token",
+            refreshToken: null,
+            user: {
+              id: 999,
+              username: "viewer",
+              email: "viewer@example.com",
+              status: 1,
+              roles: ["operator"],
+              permissions: ["dashboard.read"],
+              must_change_password: false
+            }
+          },
+          version: 0
+        })
+      );
+    });
+
     await page.route("**/api/v1/auth/me", async (route) => {
       await route.fulfill({
         status: 200,
@@ -27,28 +50,6 @@ test.describe("authentication and navigation", () => {
           }
         })
       });
-    });
-
-    await page.addInitScript(() => {
-      localStorage.setItem(
-        "snowpanel-auth",
-        JSON.stringify({
-          state: {
-            token: "test-token",
-            refreshToken: null,
-            user: {
-              id: 999,
-              username: "viewer",
-              email: "viewer@example.com",
-              status: 1,
-              roles: ["operator"],
-              permissions: ["dashboard.read"],
-              must_change_password: false
-            }
-          },
-          version: 0
-        })
-      );
     });
 
     await page.goto("/dashboard");
