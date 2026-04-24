@@ -12,91 +12,56 @@
 
 ============
 
-本轮接手后，继续按 `.claude/progress.md` 推进 `P2-1`，重点不是再扩 smoke，而是把“proto 契约层”补上一道更靠前的测试与 CI 保护。
+本轮是在上一轮 `feat(proto): add contract tests and CI integration for proto generation` 已经推送之后，继续根据你返回的 GitHub Actions 日志修正 `proto-contract` 暴露出的 pb.go 生成产物漂移。
 
 本次核心完成项
 
-1. 新增 backend 侧 proto contract tests：
-   - 新增 `backend/internal/grpcclient/agent_client_contract_test.go`
-   - 这组测试直接复用生成后的 Go proto types 和真实 gRPC server/client 通路，不引入新工具链
-   - 当前覆盖点：
-     - `HealthService.Check`
-     - `SystemService.GetRealtimeResource`
-     - `FileService.ListFiles`
-     - 结构化 `error.code/message/detail` 的 `AgentError` 映射
-     - gRPC transport error -> `AgentError` 映射
-     - 生成后的 Go proto descriptor 中关键 message / service 是否存在（`PathSafetyContext`、`HealthService`、`SystemService`、`FileService`）
+1. 根据 CI 实际 diff，同步了 Go proto generated stubs：
+   - 修改 `backend/internal/grpcclient/pb/proto/agent/v1/agent.pb.go`
+   - 修改 `backend/internal/grpcclient/pb/proto/agent/v1/agent_grpc.pb.go`
+   - 对齐到 CI runner 上 `protoc v4.23.4` + `protoc-gen-go v1.36.1` / `protoc-gen-go-grpc v1.5.1` 的生成结果
 
-2. 统一 Go proto 生成入口：
-   - 修改 `Makefile`
-   - 新增 `proto-go` 目标
-   - 约定 Go stubs 统一生成到 backend 实际消费的位置：
-     - `backend/internal/grpcclient/pb/proto/agent/v1/agent.pb.go`
-     - `backend/internal/grpcclient/pb/proto/agent/v1/agent_grpc.pb.go`
+2. 本次对齐的关键变化包括：
+   - generated header 中的版本信息不再是 `(unknown)`，而是显式记录 `protoc v4.23.4`
+   - `agent.pb.go` 的 raw descriptor 由 `string([]byte{...})` 切为 `[]byte{...}`
+   - 去掉旧生成产物里依赖的 `unsafe` 转换写法
+   - `file_proto_agent_v1_agent_proto_rawDescData` 初始化和 `TypeBuilder.RawDescriptor` 写法与 CI 生成结果保持一致
+   - `init` 尾部增加 `file_proto_agent_v1_agent_proto_rawDesc = nil`
 
-3. 修正文档中的 proto 生成说明：
-   - 修改 `proto/README.md`
-   - 不再让文档误导到“生成到 proto 目录旁边”
-   - 文档现在优先指向 `make proto-go`，并给出与实际产物路径一致的 raw `protoc` 命令
-
-4. 把 proto 契约检查接入 CI：
-   - 修改 `.github/workflows/ci.yml`
-   - 新增 `proto-contract` job
-   - job 会：
-     - 安装 `protoc`
-     - 安装 `protoc-gen-go` / `protoc-gen-go-grpc`
-     - 执行 `make proto-go`
-     - 用 `git diff --exit-code` 校验生成产物是否已同步提交
-   - `compose-smoke` 现在依赖：
-     - `backend`
-     - `core-agent`
-     - `frontend`
-     - `proto-contract`
+3. 处理了一次手工同步时引入的临时编译错误：
+   - 修正了 `agent.pb.go` 中多余的 `)`
+   - 清除了残留 `unsafe` 引用
+   - 最终已恢复为可编译状态
 
 本轮修改文件
 
 - `.claude/change-cache.md`
-- `.github/workflows/ci.yml`
-- `Makefile`
-- `proto/README.md`
-- `backend/internal/grpcclient/agent_client_contract_test.go`
+- `backend/internal/grpcclient/pb/proto/agent/v1/agent.pb.go`
+- `backend/internal/grpcclient/pb/proto/agent/v1/agent_grpc.pb.go`
 
 本地验证
 
-1. 已通过：
-   - `cd backend && go test ./...`
-   - `go test ./internal/grpcclient -run 'Proto|Health|ListFiles' -v`
+已通过：
+- `cd backend && go test ./internal/grpcclient ./internal/service`
 
-2. 当前环境限制：
-   - 本机缺少 `protoc`，`protoc --version` 返回 command not found
-   - 因此 `make proto-go` 无法在本机直接执行
-   - 这部分真实验证将依赖新加的 GitHub Actions `proto-contract` job
+当前状态
 
-3. 当前本地 diff 现状：
-   - `git diff --stat` 显示改动集中在：
-     - `.github/workflows/ci.yml`
-     - `Makefile`
-     - `proto/README.md`
-   - 新增的 `backend/internal/grpcclient/agent_client_contract_test.go` 已参与并通过 backend 测试
+- `git status` 只剩两个 pb.go 文件待提交
+- 这轮修完后，repo 中 Go generated stubs 已与 CI 首次运行暴露出的 diff 对齐
+- 下一步应该立刻提交并推送，让 `proto-contract` 重新跑，确认工作流绿灯
 
 commit摘要
 
-- 计划提交：`test(proto): add contract coverage and generated stub check`
+- 计划提交：`fix(proto): sync generated Go stubs with CI toolchain`
 
 希望接下来的 AI 做什么
 
-1. 优先观察 GitHub Actions 上新增的 `proto-contract` 首次运行结果：
-   - 重点看 `arduino/setup-protoc@v3`
-   - 重点看 `make proto-go` 在 Ubuntu runner 上是否能正确生成到目标路径
-   - 重点看 `git diff --exit-code` 是否暴露出 repo 内现有 pb.go 与 proto 的偏差
-
-2. 如果 CI 暴露出生成差异：
-   - 不要先改 schema
-   - 先把生成产物重新生成并提交，确认只是产物漂移还是工具版本差异
-
-3. 如果 `proto-contract` 跑通，下一步建议继续补 `P2-1`：
-   - 更系统的 backend + core-agent + postgres integration 覆盖
-   - frontend e2e（登录 / 权限隐藏 / 文件浏览）
-   - 然后再考虑是否需要引入更重的 proto 规则工具（如 Buf），而不是现在就上
+1. 先确认这次 push 后 `proto-contract` 是否转绿。
+2. 如果仍失败，优先看：
+   - CI 使用的 `protoc` / `protoc-gen-go` 版本是否与仓库约定一致
+   - `make proto-go` 在 runner 上是否还会产生额外非版本头部差异
+3. 如果 `proto-contract` 转绿，再继续推进 `P2-1` 的下一块：
+   - 更系统的 backend + core-agent + postgres integration
+   - 或 frontend e2e
 
 by: claude-sonnet-4-6
