@@ -16,9 +16,11 @@ var (
 )
 
 type Set struct {
-	HTTPRequestsTotal   *prometheus.CounterVec
-	HTTPRequestDuration *prometheus.HistogramVec
+	HTTPRequestsTotal    *prometheus.CounterVec
+	HTTPRequestDuration  *prometheus.HistogramVec
 	HTTPRequestsInFlight prometheus.Gauge
+	AgentRequestsTotal   *prometheus.CounterVec
+	AgentRequestDuration *prometheus.HistogramVec
 }
 
 func Default() *Set {
@@ -57,6 +59,25 @@ func New(registerer prometheus.Registerer) *Set {
 				Help:      "Current number of in-flight HTTP requests.",
 			},
 		),
+		AgentRequestsTotal: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Namespace: Namespace,
+				Subsystem: "agent",
+				Name:      "requests_total",
+				Help:      "Total number of core-agent RPC requests attempted by the backend.",
+			},
+			[]string{"outcome", "transport"},
+		),
+		AgentRequestDuration: prometheus.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Namespace: Namespace,
+				Subsystem: "agent",
+				Name:      "request_duration_seconds",
+				Help:      "Latency of core-agent RPC requests attempted by the backend.",
+				Buckets:   prometheus.DefBuckets,
+			},
+			[]string{"outcome", "transport"},
+		),
 	}
 
 	if registerer != nil {
@@ -64,6 +85,8 @@ func New(registerer prometheus.Registerer) *Set {
 			metrics.HTTPRequestsTotal,
 			metrics.HTTPRequestDuration,
 			metrics.HTTPRequestsInFlight,
+			metrics.AgentRequestsTotal,
+			metrics.AgentRequestDuration,
 		)
 	}
 
@@ -77,4 +100,22 @@ func (s *Set) ObserveHTTPRequest(method, route string, statusCode int, duration 
 	status := strconv.Itoa(statusCode)
 	s.HTTPRequestsTotal.WithLabelValues(method, route, status).Inc()
 	s.HTTPRequestDuration.WithLabelValues(method, route).Observe(duration.Seconds())
+}
+
+func (s *Set) ObserveAgentRequest(transport bool, err error, duration time.Duration) {
+	if s == nil {
+		return
+	}
+
+	outcome := "success"
+	if err != nil {
+		outcome = "error"
+	}
+	transportLabel := "false"
+	if transport {
+		transportLabel = "true"
+	}
+
+	s.AgentRequestsTotal.WithLabelValues(outcome, transportLabel).Inc()
+	s.AgentRequestDuration.WithLabelValues(outcome, transportLabel).Observe(duration.Seconds())
 }

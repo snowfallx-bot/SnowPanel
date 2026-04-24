@@ -9,6 +9,7 @@ import (
 	"time"
 
 	agentv1 "github.com/snowfallx-bot/SnowPanel/backend/internal/grpcclient/pb/proto/agent/v1"
+	appmetrics "github.com/snowfallx-bot/SnowPanel/backend/internal/metrics"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -19,6 +20,8 @@ const (
 	agentUnavailableCode    int32 = 3001
 	agentInvalidPayloadCode int32 = 3002
 )
+
+var agentMetrics = appmetrics.Default()
 
 type AgentError struct {
 	Code     int32
@@ -960,6 +963,7 @@ func (c *Client) runDockerAction(
 }
 
 func (c *Client) invoke(ctx context.Context, call func(context.Context, *grpc.ClientConn) error) error {
+	startedAt := time.Now()
 	callCtx := ctx
 	cancel := func() {}
 	if c.timeout > 0 {
@@ -974,18 +978,24 @@ func (c *Client) invoke(ctx context.Context, call func(context.Context, *grpc.Cl
 		grpc.WithBlock(),
 	)
 	if err != nil {
-		return transportError(err)
+		transportErr := transportError(err)
+		agentMetrics.ObserveAgentRequest(true, transportErr, time.Since(startedAt))
+		return transportErr
 	}
 	defer conn.Close()
 
 	if err := call(callCtx, conn); err != nil {
 		var agentErr *AgentError
 		if errors.As(err, &agentErr) {
+			agentMetrics.ObserveAgentRequest(agentErr.IsTransport(), agentErr, time.Since(startedAt))
 			return agentErr
 		}
-		return transportError(err)
+		transportErr := transportError(err)
+		agentMetrics.ObserveAgentRequest(true, transportErr, time.Since(startedAt))
+		return transportErr
 	}
 
+	agentMetrics.ObserveAgentRequest(false, nil, time.Since(startedAt))
 	return nil
 }
 
