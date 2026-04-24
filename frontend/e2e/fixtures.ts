@@ -25,6 +25,7 @@ export async function loginAndMaybeRotate(page: Page, session: AuthSession) {
   await submitLogin(page, session.username, session.primaryPassword);
 
   const passwordGate = page.getByRole("heading", { name: /password change required/i });
+  const shellMarker = page.getByText(/linux panel prototype/i);
   if (session.rotatedPassword && (await passwordGate.isVisible().catch(() => false))) {
     await page.getByLabel(/current password/i).fill(session.primaryPassword);
     await page.getByLabel(/^new password$/i).fill(session.rotatedPassword);
@@ -36,12 +37,17 @@ export async function loginAndMaybeRotate(page: Page, session: AuthSession) {
 
   if (session.fallbackPassword) {
     const invalidCredential = page.getByText(/invalid credentials|invalid credential/i);
+    await Promise.race([
+      shellMarker.waitFor({ state: "visible", timeout: 4_000 }).catch(() => undefined),
+      invalidCredential.waitFor({ state: "visible", timeout: 4_000 }).catch(() => undefined)
+    ]);
+
     if (await invalidCredential.isVisible().catch(() => false)) {
       await submitLogin(page, session.username, session.fallbackPassword);
     }
   }
 
-  await expect(page.getByText(/linux panel prototype/i)).toBeVisible();
+  await expect(shellMarker).toBeVisible();
 }
 
 export async function loginViaApi(

@@ -106,6 +106,11 @@ try {
     return $response.StatusCode -eq 200
   }
 
+  Wait-UntilReady -Description "frontend proxy health" -Check {
+    $proxyHealth = Invoke-JsonRequest -Method "GET" -Uri "$FrontendBaseUrl/health"
+    return $proxyHealth.code -eq 0 -and $proxyHealth.data.checks.database -eq "up" -and $proxyHealth.data.checks.agent -eq "up"
+  }
+
   Push-Location frontend
   try {
     $env:PLAYWRIGHT_BASE_URL = $FrontendBaseUrl

@@ -151,3 +151,13 @@ jobs:
       - name: Run Frontend E2E
         shell: pwsh
         run: ./scripts/ci/frontend-e2e.ps1
+
+      - name: Upload Frontend E2E Artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-e2e-artifacts
+          path: |
+            frontend/playwright-report
+            frontend/test-results
+          if-no-files-found: ignore
