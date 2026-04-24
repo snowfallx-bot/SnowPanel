@@ -1,4 +1,7 @@
-.PHONY: up down logs up-host-agent down-host-agent logs-host-agent backend agent frontend lint test
+.PHONY: up down logs up-host-agent down-host-agent logs-host-agent backend agent frontend lint test proto-go
+
+PROTO_SRC := proto/agent/v1/agent.proto
+PROTO_GO_OUT := backend/internal/grpcclient/pb
 
 up:
 	docker compose up -d --build
@@ -26,6 +29,13 @@ agent:
 
 frontend:
 	cd frontend && npm run dev
+
+proto-go:
+	protoc \
+	  --proto_path=. \
+	  --go_out=paths=source_relative:$(PROTO_GO_OUT) \
+	  --go-grpc_out=paths=source_relative:$(PROTO_GO_OUT) \
+	  $(PROTO_SRC)
 
 lint:
 	cd backend && go vet ./...

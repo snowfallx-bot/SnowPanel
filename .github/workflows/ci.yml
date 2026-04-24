@@ -77,12 +77,41 @@ jobs:
         working-directory: frontend
         run: npm run build
 
+  proto-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.25.x"
+          cache: true
+          cache-dependency-path: backend/go.sum
+
+      - name: Setup Protoc
+        uses: arduino/setup-protoc@v3
+
+      - name: Install Go Proto Generators
+        working-directory: backend
+        run: |
+          GOBIN="$PWD/bin" go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.1
+          GOBIN="$PWD/bin" go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.5.1
+
+      - name: Regenerate Go Proto Stubs
+        run: PATH="$PWD/backend/bin:$PATH" make proto-go
+
+      - name: Verify Generated Proto Stubs Are Current
+        run: git diff --exit-code -- backend/internal/grpcclient/pb/proto/agent/v1/agent.pb.go backend/internal/grpcclient/pb/proto/agent/v1/agent_grpc.pb.go
+
   compose-smoke:
     runs-on: ubuntu-latest
     needs:
       - backend
       - core-agent
       - frontend
+      - proto-contract
     timeout-minutes: 30
     steps:
       - name: Checkout

@@ -13,13 +13,24 @@ Prerequisites:
 - `protoc-gen-go`
 - `protoc-gen-go-grpc`
 
-Command:
+Recommended command from the repository root:
+
+```bash
+make proto-go
+```
+
+This generates the checked-in Go stubs consumed by the backend under:
+
+- `backend/internal/grpcclient/pb/proto/agent/v1/agent.pb.go`
+- `backend/internal/grpcclient/pb/proto/agent/v1/agent_grpc.pb.go`
+
+Equivalent raw command:
 
 ```bash
 protoc \
   --proto_path=. \
-  --go_out=. \
-  --go-grpc_out=. \
+  --go_out=paths=source_relative:backend/internal/grpcclient/pb \
+  --go-grpc_out=paths=source_relative:backend/internal/grpcclient/pb \
   proto/agent/v1/agent.proto
 ```
 

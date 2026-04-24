@@ -12,79 +12,91 @@
 
 ============
 
-本轮继续按照 `.claude/progress.md` 推进 `P2-1`，没有去扩页面或做 UI，而是把现有 CI 从“单测 + build”为主，往“真实 compose 主链路 smoke integration”推进了一步。
+本轮接手后，继续按 `.claude/progress.md` 推进 `P2-1`，重点不是再扩 smoke，而是把“proto 契约层”补上一道更靠前的测试与 CI 保护。
 
 本次核心完成项
 
-1. 新增 compose 级冒烟脚本：
-   - 新增 `scripts/ci/compose-smoke.ps1`
-   - 这是一个跨平台 PowerShell 7 脚本，目标是给 GitHub Actions 的 Ubuntu runner 直接跑
-   - 脚本会：
-     - 用 production 模式起 `postgres + redis + core-agent + backend + frontend`
-     - 显式注入强 `JWT_SECRET`
-     - 显式注入强 `DEFAULT_ADMIN_PASSWORD`
-     - 把 `LOGIN_ATTEMPT_STORE` 切到 `redis`
-     - 等待 backend `/ready` 和 frontend 启动成功
+1. 新增 backend 侧 proto contract tests：
+   - 新增 `backend/internal/grpcclient/agent_client_contract_test.go`
+   - 这组测试直接复用生成后的 Go proto types 和真实 gRPC server/client 通路，不引入新工具链
+   - 当前覆盖点：
+     - `HealthService.Check`
+     - `SystemService.GetRealtimeResource`
+     - `FileService.ListFiles`
+     - 结构化 `error.code/message/detail` 的 `AgentError` 映射
+     - gRPC transport error -> `AgentError` 映射
+     - 生成后的 Go proto descriptor 中关键 message / service 是否存在（`PathSafetyContext`、`HealthService`、`SystemService`、`FileService`）
 
-2. 这条 smoke 覆盖的主链路：
-   - 通过 frontend 同源代理登录 `POST /api/v1/auth/login`
-   - 断言 bootstrap admin 首次登录 `must_change_password=true`
-   - 断言改密前访问 `/api/v1/dashboard/summary` 会被 `403` 拦下
-   - 调 `/api/v1/auth/change-password` 完成首次改密
-   - 调 `/api/v1/auth/refresh` 验证 refresh rotation
-   - 验证旧 refresh token 会失效
-   - 调 `/api/v1/dashboard/summary` 验证 backend ↔ core-agent 主链路
-   - 调 `/api/v1/files/list`
-   - 调 `/api/v1/files/write` / `read` / `rename` / `delete`
-   - 调 `/api/v1/auth/logout`
-   - 验证 logout 后 access token / refresh token 都失效
+2. 统一 Go proto 生成入口：
+   - 修改 `Makefile`
+   - 新增 `proto-go` 目标
+   - 约定 Go stubs 统一生成到 backend 实际消费的位置：
+     - `backend/internal/grpcclient/pb/proto/agent/v1/agent.pb.go`
+     - `backend/internal/grpcclient/pb/proto/agent/v1/agent_grpc.pb.go`
 
-3. 把 smoke 接进 CI：
-   - 更新 `.github/workflows/ci.yml`
-   - 原来的 `container-build` job 被替换成 `compose-smoke`
-   - `compose-smoke` 依赖：
+3. 修正文档中的 proto 生成说明：
+   - 修改 `proto/README.md`
+   - 不再让文档误导到“生成到 proto 目录旁边”
+   - 文档现在优先指向 `make proto-go`，并给出与实际产物路径一致的 raw `protoc` 命令
+
+4. 把 proto 契约检查接入 CI：
+   - 修改 `.github/workflows/ci.yml`
+   - 新增 `proto-contract` job
+   - job 会：
+     - 安装 `protoc`
+     - 安装 `protoc-gen-go` / `protoc-gen-go-grpc`
+     - 执行 `make proto-go`
+     - 用 `git diff --exit-code` 校验生成产物是否已同步提交
+   - `compose-smoke` 现在依赖：
      - `backend`
      - `core-agent`
      - `frontend`
-   - 这样 CI 现在形成了更清晰的一层：
-     - 单元/组件测试先跑
-     - 然后再跑 compose 级真实主链路 smoke
-
-4. 同步进度文档：
-   - 更新 `.claude/progress.md`
-   - `P2-1` 仍未划掉，但“当前已有”现在明确包含：
-     - compose-based smoke integration
-   - “明显缺失”改成更准确的说法：
-     - 仍缺 proto contract tests
-     - 仍缺更系统的 backend + core-agent + postgres integration 覆盖
-     - 仍缺前端 e2e
-     - 仍缺更完整的 CI 分层矩阵
+     - `proto-contract`
 
 本轮修改文件
 
 - `.claude/change-cache.md`
-- `.claude/progress.md`
 - `.github/workflows/ci.yml`
-- `scripts/ci/compose-smoke.ps1`
+- `Makefile`
+- `proto/README.md`
+- `backend/internal/grpcclient/agent_client_contract_test.go`
 
 本地验证
 
-- 已用 PowerShell parser 对 `scripts/ci/compose-smoke.ps1` 做语法解析，未发现语法错误
-- 已人工复查 workflow 与脚本逻辑链路
-- 当前本机没有 `docker` / `bash`，所以无法在本地实际起 compose 执行 smoke
-- 因此这轮最关键的真实执行验证将依赖 GitHub Actions 里的 `compose-smoke` job
+1. 已通过：
+   - `cd backend && go test ./...`
+   - `go test ./internal/grpcclient -run 'Proto|Health|ListFiles' -v`
+
+2. 当前环境限制：
+   - 本机缺少 `protoc`，`protoc --version` 返回 command not found
+   - 因此 `make proto-go` 无法在本机直接执行
+   - 这部分真实验证将依赖新加的 GitHub Actions `proto-contract` job
+
+3. 当前本地 diff 现状：
+   - `git diff --stat` 显示改动集中在：
+     - `.github/workflows/ci.yml`
+     - `Makefile`
+     - `proto/README.md`
+   - 新增的 `backend/internal/grpcclient/agent_client_contract_test.go` 已参与并通过 backend 测试
 
 commit摘要
 
-- 计划提交：`test(ci): add compose smoke coverage`
+- 计划提交：`test(proto): add contract coverage and generated stub check`
 
 希望接下来的 AI 做什么
 
-1. 下一步先观察 `compose-smoke` 在 CI 上的第一次真实运行结果，优先修复任何环境相关或接口断言问题。
-2. 在此基础上继续补 `P2-1` 剩余缺口，优先级建议：
-   - proto contract tests
-   - 更系统的 backend + core-agent + postgres integration tests
-   - 前端 e2e（登录 / 权限隐藏 / 文件浏览）
-3. 后续如果要扩 CI 分层，建议把“轻量 smoke”和“更重的 integration/e2e”拆成独立 job，而不是把所有断言继续塞进同一个脚本。
+1. 优先观察 GitHub Actions 上新增的 `proto-contract` 首次运行结果：
+   - 重点看 `arduino/setup-protoc@v3`
+   - 重点看 `make proto-go` 在 Ubuntu runner 上是否能正确生成到目标路径
+   - 重点看 `git diff --exit-code` 是否暴露出 repo 内现有 pb.go 与 proto 的偏差
 
-by: gpt-5.4
+2. 如果 CI 暴露出生成差异：
+   - 不要先改 schema
+   - 先把生成产物重新生成并提交，确认只是产物漂移还是工具版本差异
+
+3. 如果 `proto-contract` 跑通，下一步建议继续补 `P2-1`：
+   - 更系统的 backend + core-agent + postgres integration 覆盖
+   - frontend e2e（登录 / 权限隐藏 / 文件浏览）
+   - 然后再考虑是否需要引入更重的 proto 规则工具（如 Buf），而不是现在就上
+
+by: claude-sonnet-4-6
