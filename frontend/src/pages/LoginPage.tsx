@@ -59,16 +59,22 @@ export function LoginPage() {
         <CardContent>
           <form className="space-y-4" onSubmit={onSubmit}>
             <div className="space-y-1">
-              <label className="text-sm font-medium text-slate-700">Username</label>
+              <label className="text-sm font-medium text-slate-700" htmlFor="login-username">
+                Username
+              </label>
               <Input
+                id="login-username"
                 placeholder="Enter your username"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
               />
             </div>
             <div className="space-y-1">
-              <label className="text-sm font-medium text-slate-700">Password</label>
+              <label className="text-sm font-medium text-slate-700" htmlFor="login-password">
+                Password
+              </label>
               <Input
+                id="login-password"
                 type="password"
                 placeholder="Enter your password"
                 value={password}

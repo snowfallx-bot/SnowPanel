@@ -485,6 +485,7 @@ export function FilesPage() {
             <CardContent className="space-y-3">
               <form className="flex gap-2" onSubmit={handleCreateDirectory}>
                 <Input
+                  aria-label="New directory name"
                   onChange={(event) => setMkdirName(event.target.value)}
                   placeholder="new-folder-name"
                   value={mkdirName}

@@ -91,6 +91,7 @@ export function FileEditorPanel({
         )}
         {!binary && (
           <textarea
+            aria-label="File editor"
             className="min-h-[320px] w-full rounded-md border border-slate-300 p-3 font-mono text-sm"
             onChange={(event) => setDraft(event.target.value)}
             value={draft}

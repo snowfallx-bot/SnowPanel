@@ -66,7 +66,12 @@ export function FileTable({
                   <input checked={selected} onChange={() => onToggleSelect(entry)} type="checkbox" />
                 </td>
                 <td className="px-4 py-3">
-                  <button className="font-medium text-panel-700 hover:underline" onClick={() => onOpen(entry)} type="button">
+                  <button
+                    aria-label={`Open ${entry.name}`}
+                    className="font-medium text-panel-700 hover:underline"
+                    onClick={() => onOpen(entry)}
+                    type="button"
+                  >
                     {entry.name}
                   </button>
                 </td>
