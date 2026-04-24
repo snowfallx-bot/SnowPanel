@@ -99,12 +99,12 @@ P2-1：补齐测试矩阵，不要只停留在零散 unit test
   - backend + fake agent integration-style tests
   - cron / auth / path traversal 等安全相关测试
   - frontend vitest 单测
-  - CI workflow 基础构建
+  - CI workflow 已增加基于 compose 的 smoke integration，覆盖 login / 强制改密 / refresh rotation / dashboard / files / logout 主链路
 - 明显缺失：
   - proto contract tests
-  - backend + core-agent + postgres 的真实 integration tests
+  - 更系统的 backend + core-agent + postgres 真实 integration 测试覆盖（目前仍以 smoke 主链路为主）
   - 前端 e2e（登录 / 文件浏览 / 权限隐藏）
-  - 更完整的 CI 分层矩阵（integration / smoke e2e）
+  - 更完整的 CI 分层矩阵（如将 smoke 与更重的 integration/e2e 继续分层）
 - 当前判断：未完成。
 
 P2-2：补齐生产化观测能力
