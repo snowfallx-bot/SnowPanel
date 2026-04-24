@@ -1,4 +1,4 @@
-.PHONY: up down logs up-host-agent down-host-agent logs-host-agent backend agent frontend lint test proto-go
+.PHONY: up down logs up-host-agent down-host-agent logs-host-agent up-observability down-observability logs-observability up-host-agent-observability down-host-agent-observability logs-host-agent-observability backend agent frontend lint test proto-go
 
 PROTO_SRC := proto/agent/v1/agent.proto
 PROTO_GO_OUT := backend/internal/grpcclient/pb
@@ -20,6 +20,24 @@ down-host-agent:
 
 logs-host-agent:
 	docker compose -f docker-compose.yml -f docker-compose.host-agent.yml logs -f --tail=200
+
+up-observability:
+	docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d --build
+
+down-observability:
+	docker compose -f docker-compose.yml -f docker-compose.observability.yml down
+
+logs-observability:
+	docker compose -f docker-compose.yml -f docker-compose.observability.yml logs -f --tail=200 prometheus
+
+up-host-agent-observability:
+	docker compose -f docker-compose.yml -f docker-compose.host-agent.yml -f docker-compose.observability.yml up -d --build
+
+down-host-agent-observability:
+	docker compose -f docker-compose.yml -f docker-compose.host-agent.yml -f docker-compose.observability.yml down
+
+logs-host-agent-observability:
+	docker compose -f docker-compose.yml -f docker-compose.host-agent.yml -f docker-compose.observability.yml logs -f --tail=200 prometheus
 
 backend:
 	cd backend && go run ./cmd/server

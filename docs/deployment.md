@@ -57,6 +57,22 @@ For later rebuilds and log inspection in host-agent mode, keep using:
 
 Do not fall back to plain `docker compose up` / `make up`, or backend will lose the host-agent override and reconnect to the disabled containerized `core-agent`.
 
+## Optional: Observability Baseline
+
+Run app stack with Prometheus baseline:
+
+- Compose mode: `make up-observability`
+- Host-agent mode: `make up-host-agent-observability`
+
+Prometheus UI:
+
+- `http://127.0.0.1:${PROMETHEUS_PORT:-9090}`
+
+Stop:
+
+- Compose mode: `make down-observability`
+- Host-agent mode: `make down-host-agent-observability`
+
 ## Port Defaults (Prototype Compose)
 
 - Frontend: `5173`

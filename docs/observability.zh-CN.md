@@ -42,6 +42,33 @@ core-agent 在启用时也会暴露独立 Prometheus 端点：
 - `grpc_method`
 - `outcome`（`ok` / `error`）
 
+## Prometheus 基线栈
+
+仓库已提供可直接落地的 Prometheus 基线部署：
+
+- Compose 覆盖文件：`docker-compose.observability.yml`
+- 抓取配置：`deploy/observability/prometheus/prometheus.yml`
+- 告警规则：`deploy/observability/prometheus/alerts/snowpanel-alerts.yml`
+
+启动方式：
+
+- Compose 模式：`make up-observability`
+- 宿主机 Agent 模式：`make up-host-agent-observability`
+
+查看 Prometheus：
+
+- `http://127.0.0.1:${PROMETHEUS_PORT:-9090}`
+
+停止方式：
+
+- Compose 模式：`make down-observability`
+- 宿主机 Agent 模式：`make down-host-agent-observability`
+
+说明：
+
+- 基线抓取目标默认假设 backend `:8080` 与 core-agent metrics `:9108`。
+- 若你的运行端口不同，请同步修改 `deploy/observability/prometheus/prometheus.yml`。
+
 ## 请求链路关联
 
 当前已支持 request-id 从 backend 透传到 core-agent：
@@ -68,6 +95,18 @@ core-agent 在启用时也会暴露独立 Prometheus 端点：
    - `snowpanel_core_agent_grpc_requests_total`
    - `snowpanel_core_agent_grpc_request_duration_seconds`
    - `snowpanel_core_agent_grpc_requests_in_flight`
+
+## 基线告警项
+
+默认告警包括：
+
+- `SnowPanelBackendDown`
+- `SnowPanelCoreAgentMetricsDown`
+- `SnowPanelBackendP95LatencyHigh`
+- `SnowPanelCoreAgentP95LatencyHigh`
+- `SnowPanelBackendAgentTransportErrorsHigh`
+- `SnowPanelCoreAgentGrpcErrorRateHigh`
+- `SnowPanelCoreAgentInFlightHigh`
 
 ## 当前缺口
 

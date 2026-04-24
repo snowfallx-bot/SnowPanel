@@ -42,6 +42,33 @@ Core-agent gRPC metrics are labeled by:
 - `grpc_method`
 - `outcome` (`ok` / `error`)
 
+## Prometheus Baseline Stack
+
+Repository now includes a baseline Prometheus deployment:
+
+- Compose override: `docker-compose.observability.yml`
+- Prometheus scrape config: `deploy/observability/prometheus/prometheus.yml`
+- Alert rules: `deploy/observability/prometheus/alerts/snowpanel-alerts.yml`
+
+Start baseline stack:
+
+- Compose mode: `make up-observability`
+- Host-agent mode: `make up-host-agent-observability`
+
+Inspect Prometheus:
+
+- `http://127.0.0.1:${PROMETHEUS_PORT:-9090}`
+
+Stop:
+
+- Compose mode: `make down-observability`
+- Host-agent mode: `make down-host-agent-observability`
+
+Notes:
+
+- Baseline scrape targets assume backend `:8080` and core-agent metrics `:9108`.
+- If your runtime ports differ, update `deploy/observability/prometheus/prometheus.yml` accordingly.
+
 ## Request Correlation
 
 SnowPanel now propagates request IDs through the backend to core-agent:
@@ -68,6 +95,18 @@ This allows a single request path to be traced from browser/API client logs to b
    - `snowpanel_core_agent_grpc_requests_total`
    - `snowpanel_core_agent_grpc_request_duration_seconds`
    - `snowpanel_core_agent_grpc_requests_in_flight`
+
+## Baseline Alerts
+
+Default alerts include:
+
+- `SnowPanelBackendDown`
+- `SnowPanelCoreAgentMetricsDown`
+- `SnowPanelBackendP95LatencyHigh`
+- `SnowPanelCoreAgentP95LatencyHigh`
+- `SnowPanelBackendAgentTransportErrorsHigh`
+- `SnowPanelCoreAgentGrpcErrorRateHigh`
+- `SnowPanelCoreAgentInFlightHigh`
 
 ## Current Gaps
 

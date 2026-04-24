@@ -12,99 +12,81 @@
 
 ============
 
-本轮继续推进 `P2-2`，把上轮“链路串联”再向前推进成“core-agent 独立指标端点 + gRPC 方法级指标”。
+本轮继续推进 `P2-2`，把可观测性从“可采指标”推进到“可落地报警”。
 
 本次核心判断
 
-1. 上轮已打通 request-id 到 core-agent，但仍缺 core-agent 自身可抓取指标端点，排障仍偏依赖日志。
-2. 现阶段先补 Prometheus 端点和方法级 gRPC 指标，能在不引入 OTel 大改的前提下显著提升定位效率。
-3. 由于本地环境无 `cargo`，Rust 编译正确性需要交给 CI 再确认。
+1. 目前 backend/core-agent 都有 metrics，但缺统一抓取入口和默认告警规则，现场排障仍依赖人工看图。
+2. 在 OTel 大改前，先落 Prometheus 基线 stack 与 alert rules，能最快形成生产可执行的观测闭环。
 
 本轮实际改动
 
-1. core-agent 新增 metrics server（独立 HTTP 端点）
-   - 新增模块：
-     - `core-agent/src/observability/mod.rs`
-     - `core-agent/src/observability/metrics.rs`
-   - 使用 Prometheus 默认 registry 暴露 `/metrics`。
-   - 新增指标：
-     - `snowpanel_core_agent_grpc_requests_total{grpc_method,outcome}`
-     - `snowpanel_core_agent_grpc_request_duration_seconds{grpc_method,outcome}`
-     - `snowpanel_core_agent_grpc_requests_in_flight{grpc_method}`
+1. 新增 observability compose 覆盖
+   - `docker-compose.observability.yml`
+   - 提供 `prometheus` 服务、持久卷、端口映射（默认 `9090`），并支持抓取 host-agent（`host.docker.internal`）。
 
-2. core-agent gRPC 请求接入指标采集
-   - `core-agent/src/api/grpc_server.rs`：
-     - 增加 `observe_grpc_call()` 包装器。
-     - 关键 gRPC handler（health/system/files/services/docker/cron）都接入方法级计数与时延采集。
-     - 保留上轮 request-id 日志拦截逻辑。
+2. 新增 Prometheus 基线配置与告警
+   - `deploy/observability/prometheus/prometheus.yml`
+   - `deploy/observability/prometheus/alerts/snowpanel-alerts.yml`
+   - 默认抓取目标：
+     - `snowpanel-backend` -> `backend:8080/metrics`
+     - `snowpanel-core-agent-compose` -> `core-agent:9108/metrics`
+     - `snowpanel-core-agent-host` -> `host.docker.internal:9108/metrics`
+   - 基线告警：
+     - `SnowPanelBackendDown`
+     - `SnowPanelCoreAgentMetricsDown`
+     - `SnowPanelBackendP95LatencyHigh`
+     - `SnowPanelCoreAgentP95LatencyHigh`
+     - `SnowPanelBackendAgentTransportErrorsHigh`
+     - `SnowPanelCoreAgentGrpcErrorRateHigh`
+     - `SnowPanelCoreAgentInFlightHigh`
 
-3. core-agent 启动流程支持并发运行 gRPC + metrics
-   - `core-agent/src/main.rs`：
-     - 新增 `mod observability`。
-     - `CORE_AGENT_METRICS_ENABLED=true` 时，`tokio::try_join!` 并发启动 gRPC server 与 metrics server。
+3. Makefile 增加 observability 相关目标
+   - `up-observability` / `down-observability` / `logs-observability`
+   - `up-host-agent-observability` / `down-host-agent-observability` / `logs-host-agent-observability`
 
-4. core-agent 配置项扩展
-   - `core-agent/src/config/mod.rs` 新增：
-     - `CORE_AGENT_METRICS_ENABLED`（默认 `true`）
-     - `CORE_AGENT_METRICS_HOST`（默认 `127.0.0.1`）
-     - `CORE_AGENT_METRICS_PORT`（默认 `9108`）
-   - 新增 `metrics_address()`。
-
-5. 运行时配置与文档同步
-   - `core-agent/Cargo.toml` 增加依赖：`axum`、`prometheus`、`once_cell`。
-   - `.env.example` 增加 core-agent metrics 配置项。
-   - `docker-compose.yml` 为 core-agent 增加 metrics env 和内部 `expose: 9108`。
-   - `deploy/core-agent/systemd/core-agent.env.example` 增加 metrics 配置项。
-   - 文档更新：
+4. 配置与文档同步
+   - `.env.example` 增加 `PROMETHEUS_PORT=9090`
+   - 更新文档：
      - `docs/observability.md` / `docs/observability.zh-CN.md`
      - `docs/deployment.md` / `docs/deployment.zh-CN.md`
-     - `deploy/core-agent/systemd/README.md` / `README.zh-CN.md`
-     - `deploy/one-click/ubuntu-25.10/README.md` / `README.zh-CN.md`
-   - `progress.md` 的 `P2-2` 已同步为“已有 core-agent 独立 metrics”。
+   - 更新进度状态：
+     - `progress.md` 标注“Prometheus 基线部署 + 基线告警规则”已完成，`P2-2` 仍进行中（OTel/Alertmanager/SLO 阈值校准未完成）。
 
 本轮修改文件
 
 - `.claude/change-cache.md`
 - `.claude/progress.md`
 - `.env.example`
-- `core-agent/Cargo.toml`
-- `core-agent/src/config/mod.rs`
-- `core-agent/src/main.rs`
-- `core-agent/src/api/grpc_server.rs`
-- `core-agent/src/observability/mod.rs`
-- `core-agent/src/observability/metrics.rs`
-- `docker-compose.yml`
+- `Makefile`
+- `docker-compose.observability.yml`
+- `deploy/observability/prometheus/prometheus.yml`
+- `deploy/observability/prometheus/alerts/snowpanel-alerts.yml`
 - `docs/observability.md`
 - `docs/observability.zh-CN.md`
 - `docs/deployment.md`
 - `docs/deployment.zh-CN.md`
-- `deploy/core-agent/systemd/core-agent.env.example`
-- `deploy/core-agent/systemd/README.md`
-- `deploy/core-agent/systemd/README.zh-CN.md`
-- `deploy/one-click/ubuntu-25.10/README.md`
-- `deploy/one-click/ubuntu-25.10/README.zh-CN.md`
 
 本地验证
 
 - 已通过：
   - `go test ./internal/grpcclient ./internal/middleware ./internal/api`
-- 未验证：
-  - `cargo fmt`
-  - `cargo test`
-  - 原因：当前环境无 `cargo`。
+- 未做：
+  - docker compose 实际启动验证（当前环境无 docker）
+  - rust 侧编译验证（当前环境无 cargo）
 
 commit摘要
 
-- 计划提交：`feat(core-agent): add standalone prometheus metrics endpoint`
+- 计划提交：`feat(observability): add prometheus baseline stack and alert rules`
 
 希望接下来的 AI 做什么
 
-1. 先在 CI 或具备 Rust 工具链环境验证 `core-agent` 编译与测试，重点关注：
-   - `axum` 新增依赖兼容性
-   - `grpc_server.rs` 中 `observe_grpc_call` 包装后的 trait 方法签名兼容性
-2. 若通过，继续推进 `P2-2` 剩余项：
-   - 统一 OTel collector/exporter 方案
-   - metrics retention / alert baseline
-3. 若失败，优先修正 Rust 编译问题，再推进 OTel 设计。
+1. 在具备 docker 的环境启动：
+   - `make up-observability` 或 `make up-host-agent-observability`
+   - 验证 Prometheus targets 与 alerts 载入状态。
+2. 根据真实运行数据校准告警阈值（p95、错误率、in-flight）。
+3. 继续 `P2-2` 剩余项：
+   - 接入 Alertmanager（通知路由）
+   - 设计 OTel collector/exporter（backend + core-agent 统一）
 
 by: gpt-5.5

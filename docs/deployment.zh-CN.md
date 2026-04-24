@@ -57,6 +57,22 @@
 
 不要再退回普通 `docker compose up` / `make up`，否则 backend 会丢失 host-agent 覆盖，重新连回已禁用的容器版 `core-agent`。
 
+## 可选：可观测性基线
+
+以 Prometheus 基线一起启动应用栈：
+
+- Compose 模式：`make up-observability`
+- 宿主机 Agent 模式：`make up-host-agent-observability`
+
+Prometheus UI：
+
+- `http://127.0.0.1:${PROMETHEUS_PORT:-9090}`
+
+停止：
+
+- Compose 模式：`make down-observability`
+- 宿主机 Agent 模式：`make down-host-agent-observability`
+
 ## 默认端口（Compose 原型）
 
 - Frontend：`5173`

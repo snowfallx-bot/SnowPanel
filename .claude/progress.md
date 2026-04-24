@@ -108,12 +108,14 @@ P2-2：补齐生产化观测能力
   - backend request id / access log
   - health / readiness
   - core-agent tracing 日志 + 独立 `/metrics` 端点（可输出 gRPC 请求总量/时延/in-flight）
+  - Prometheus 基线部署与抓取配置（`docker-compose.observability.yml` + `deploy/observability/prometheus/prometheus.yml`）
+  - Prometheus 基线告警规则（backend down、agent down、p95 高延迟、agent 错误率与并发 in-flight）
   - audit logs 基础检索
   - `X-Request-ID` 已打通 backend -> gRPC metadata -> core-agent 日志（可按同一 request_id 联查）
   - 已新增 `docs/observability.md` / `docs/observability.zh-CN.md`，明确指标与排障路径
 - 仍缺：
   - 统一 OTel pipeline / distributed tracing backend（Jaeger/Tempo 等）
-  - 更标准化的 metrics + tracing 落地方案（采集、保留、告警基线）
+  - metrics 与 alert 的生产化落地（Alertmanager 路由、通知渠道、SLO/SLI 阈值校准）
 - 当前判断：进行中。
 
 P2-3：清理“原型痕迹”和重复逻辑

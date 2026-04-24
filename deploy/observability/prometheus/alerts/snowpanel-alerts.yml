@@ -1,0 +1,69 @@
+groups:
+  - name: snowpanel-health
+    rules:
+      - alert: SnowPanelBackendDown
+        expr: up{job="snowpanel-backend"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "SnowPanel backend is down"
+          description: "Prometheus cannot scrape backend /metrics for 2 minutes."
+
+      - alert: SnowPanelCoreAgentMetricsDown
+        expr: sum(up{job=~"snowpanel-core-agent-compose|snowpanel-core-agent-host"}) == 0
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "SnowPanel core-agent metrics endpoint is down"
+          description: "Neither compose-mode nor host-mode core-agent metrics endpoint is reachable."
+
+  - name: snowpanel-latency
+    rules:
+      - alert: SnowPanelBackendP95LatencyHigh
+        expr: histogram_quantile(0.95, sum(rate(snowpanel_http_request_duration_seconds_bucket{route!="unmatched"}[5m])) by (le)) > 1.5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "SnowPanel backend p95 latency is high"
+          description: "Backend p95 request latency has been above 1.5s for 10 minutes."
+
+      - alert: SnowPanelCoreAgentP95LatencyHigh
+        expr: histogram_quantile(0.95, sum(rate(snowpanel_core_agent_grpc_request_duration_seconds_bucket[5m])) by (le)) > 1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "SnowPanel core-agent gRPC p95 latency is high"
+          description: "Core-agent gRPC p95 latency has been above 1s for 10 minutes."
+
+  - name: snowpanel-error-rate
+    rules:
+      - alert: SnowPanelBackendAgentTransportErrorsHigh
+        expr: sum(rate(snowpanel_agent_requests_total{outcome="error",transport="true"}[5m])) > 0.1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Backend to core-agent transport errors are elevated"
+          description: "Backend reports sustained transport-level core-agent errors (>0.1 req/s) for 10 minutes."
+
+      - alert: SnowPanelCoreAgentGrpcErrorRateHigh
+        expr: sum(rate(snowpanel_core_agent_grpc_requests_total{outcome="error"}[5m])) / clamp_min(sum(rate(snowpanel_core_agent_grpc_requests_total[5m])), 0.001) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Core-agent gRPC error rate is high"
+          description: "Core-agent gRPC error ratio has exceeded 5% for 10 minutes."
+
+      - alert: SnowPanelCoreAgentInFlightHigh
+        expr: max(snowpanel_core_agent_grpc_requests_in_flight) > 50
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Core-agent in-flight requests are high"
+          description: "Core-agent concurrent in-flight gRPC requests exceeded 50 for 10 minutes."
