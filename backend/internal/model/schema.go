@@ -199,7 +199,7 @@ type Database struct {
 	Name       string    `json:"name" gorm:"column:name;size:128;not null"`
 	Owner      string    `json:"owner" gorm:"column:owner;size:128;not null"`
 	Charset    string    `json:"charset" gorm:"column:charset;size:32;not null"`
-	Collation  string    `json:"collation" gorm:"column:collation;size:64;not null"`
+	Collation  string    `json:"collation" gorm:"column:db_collation;size:64;not null"`
 	CreatedAt  time.Time `json:"created_at" gorm:"column:created_at;autoCreateTime"`
 	UpdatedAt  time.Time `json:"updated_at" gorm:"column:updated_at;autoUpdateTime"`
 }

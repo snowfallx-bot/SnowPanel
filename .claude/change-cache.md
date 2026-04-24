@@ -12,56 +12,69 @@
 
 ============
 
-本轮是在上一轮 `feat(proto): add contract tests and CI integration for proto generation` 已经推送之后，继续根据你返回的 GitHub Actions 日志修正 `proto-contract` 暴露出的 pb.go 生成产物漂移。
+本轮是根据你贴回来的 `compose-smoke` 失败日志做针对性修复。失败根因不是 smoke 脚本本身，而是后端/agent 在 CI 容器环境下的两个真实兼容性问题。
 
 本次核心完成项
 
-1. 根据 CI 实际 diff，同步了 Go proto generated stubs：
-   - 修改 `backend/internal/grpcclient/pb/proto/agent/v1/agent.pb.go`
-   - 修改 `backend/internal/grpcclient/pb/proto/agent/v1/agent_grpc.pb.go`
-   - 对齐到 CI runner 上 `protoc v4.23.4` + `protoc-gen-go v1.36.1` / `protoc-gen-go-grpc v1.5.1` 的生成结果
+1. 修复 PostgreSQL migration 中的保留字问题：
+   - 修改 `backend/migrations/0001_init_schema.up.sql`
+   - `databases` 表中的列名从 `collation` 改为 `db_collation`
+   - 根因是 PostgreSQL 16 下 `collation` 作为关键字导致 migration 初始化在 `CREATE TABLE databases` 阶段报语法错误，数据库初始化半途失败
 
-2. 本次对齐的关键变化包括：
-   - generated header 中的版本信息不再是 `(unknown)`，而是显式记录 `protoc v4.23.4`
-   - `agent.pb.go` 的 raw descriptor 由 `string([]byte{...})` 切为 `[]byte{...}`
-   - 去掉旧生成产物里依赖的 `unsafe` 转换写法
-   - `file_proto_agent_v1_agent_proto_rawDescData` 初始化和 `TypeBuilder.RawDescriptor` 写法与 CI 生成结果保持一致
-   - `init` 尾部增加 `file_proto_agent_v1_agent_proto_rawDesc = nil`
+2. 同步 GORM model 映射：
+   - 修改 `backend/internal/model/schema.go`
+   - `Database.Collation` 的列映射从 `column:collation` 改为 `column:db_collation`
+   - 保持对外 JSON 字段仍为 `collation`，只修数据库列名，不扩大 API 影响面
 
-3. 处理了一次手工同步时引入的临时编译错误：
-   - 修正了 `agent.pb.go` 中多余的 `)`
-   - 清除了残留 `unsafe` 引用
-   - 最终已恢复为可编译状态
+3. 修复 core-agent 在无 Docker socket 时直接崩溃的问题：
+   - 修改 `core-agent/src/docker/service.rs`
+   - 之前 `DockerService::new()` 在 `/var/run/docker.sock` 不存在时直接返回错误，导致整个 gRPC server 启动失败，进而让 backend readiness 超时
+   - 现在改成：
+     - agent 启动时允许 Docker 能力处于 unavailable 状态
+     - `DockerService` 内部持有 `Option<Docker>`
+     - 若 socket 不存在，则 Docker 相关 RPC 返回结构化 `6000 docker unavailable` 错误
+     - 但不会阻断 Health / Dashboard / Files / Auth 这条 smoke 主链路的启动和联调
 
 本轮修改文件
 
 - `.claude/change-cache.md`
-- `backend/internal/grpcclient/pb/proto/agent/v1/agent.pb.go`
-- `backend/internal/grpcclient/pb/proto/agent/v1/agent_grpc.pb.go`
+- `backend/migrations/0001_init_schema.up.sql`
+- `backend/internal/model/schema.go`
+- `core-agent/src/docker/service.rs`
 
 本地验证
 
 已通过：
-- `cd backend && go test ./internal/grpcclient ./internal/service`
+- `cd backend && go test ./...`
 
-当前状态
+环境限制：
+- 当前本机 shell 环境没有 Rust 工具链，`cargo test` 无法本地执行
+- 因此 core-agent 的最终验证将依赖 GitHub Actions 的 `core-agent` / `compose-smoke` job
 
-- `git status` 只剩两个 pb.go 文件待提交
-- 这轮修完后，repo 中 Go generated stubs 已与 CI 首次运行暴露出的 diff 对齐
-- 下一步应该立刻提交并推送，让 `proto-contract` 重新跑，确认工作流绿灯
+根因结论
+
+1. `compose-smoke` 中 postgres 初始化失败：
+   - 由 migration 里 `collation` 列名触发
+2. `compose-smoke` 中 core-agent 持续重启：
+   - 由 CI 容器环境没有 `/var/run/docker.sock`，而 agent 把 Docker 初始化失败视为致命错误触发
+3. backend readiness 超时：
+   - 本质上是因为 backend 依赖的 agent 没成功起来，而不是 backend 自己没启动
 
 commit摘要
 
-- 计划提交：`fix(proto): sync generated Go stubs with CI toolchain`
+- 计划提交：`fix(ci): unblock smoke without docker socket`
 
 希望接下来的 AI 做什么
 
-1. 先确认这次 push 后 `proto-contract` 是否转绿。
-2. 如果仍失败，优先看：
-   - CI 使用的 `protoc` / `protoc-gen-go` 版本是否与仓库约定一致
-   - `make proto-go` 在 runner 上是否还会产生额外非版本头部差异
-3. 如果 `proto-contract` 转绿，再继续推进 `P2-1` 的下一块：
-   - 更系统的 backend + core-agent + postgres integration
-   - 或 frontend e2e
+1. 先 push 这轮修复并观察 GitHub Actions：
+   - `backend`
+   - `core-agent`
+   - `compose-smoke`
+2. 如果 `compose-smoke` 仍失败，优先看：
+   - backend `/ready` 是否仍要求 agent 的 Docker 能力可用
+   - smoke 脚本是否还有对数据库初始化状态的隐式假设
+3. 如果 smoke 转绿，下一步继续回到 `P2-1`：
+   - 补更系统的 integration
+   - 或补 frontend e2e
 
 by: claude-sonnet-4-6

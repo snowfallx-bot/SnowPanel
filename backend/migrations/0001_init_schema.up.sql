@@ -175,7 +175,7 @@ CREATE TABLE IF NOT EXISTS databases (
     name VARCHAR(128) NOT NULL,
     owner VARCHAR(128) NOT NULL DEFAULT '',
     charset VARCHAR(32) NOT NULL DEFAULT '',
-    collation VARCHAR(64) NOT NULL DEFAULT '',
+    db_collation VARCHAR(64) NOT NULL DEFAULT '',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (instance_id, name)

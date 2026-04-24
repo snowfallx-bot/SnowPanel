@@ -44,18 +44,17 @@ pub enum DockerAction {
 
 #[derive(Clone)]
 pub struct DockerService {
-    docker: Docker,
+    docker: Option<Docker>,
 }
 
 impl DockerService {
     pub fn new() -> Result<Self, DockerError> {
-        let docker = Docker::connect_with_local_defaults().map_err(|err| DockerError {
-            code: 6000,
-            message: "docker init failed".to_string(),
-            detail: err.to_string(),
-        })?;
-
-        Ok(Self { docker })
+        match Docker::connect_with_local_defaults() {
+            Ok(docker) => Ok(Self {
+                docker: Some(docker),
+            }),
+            Err(_) => Ok(Self { docker: None }),
+        }
     }
 
     pub async fn list_containers(&self) -> Result<Vec<ContainerInfo>, DockerError> {
@@ -64,7 +63,7 @@ impl DockerService {
             ..Default::default()
         };
         let items = self
-            .docker
+            .docker_client()?
             .list_containers(Some(options))
             .await
             .map_err(|err| DockerError::command_failed(format!("list containers failed: {err}")))?;
@@ -93,7 +92,7 @@ impl DockerService {
         };
 
         let items = self
-            .docker
+            .docker_client()?
             .list_images(Some(options))
             .await
             .map_err(|err| DockerError::command_failed(format!("list images failed: {err}")))?;
@@ -117,20 +116,16 @@ impl DockerService {
         container_id: &str,
     ) -> Result<ContainerInfo, DockerError> {
         let id = normalize_container_id(container_id)?;
+        let docker = self.docker_client()?;
 
         match action {
-            DockerAction::Start => self
-                .docker
-                .start_container::<String>(&id, None)
-                .await
-                .map_err(|err| {
-                    DockerError::command_failed(format!("start container '{id}' failed: {err}"))
-                })?,
-            DockerAction::Stop => self.docker.stop_container(&id, None).await.map_err(|err| {
+            DockerAction::Start => docker.start_container::<String>(&id, None).await.map_err(|err| {
+                DockerError::command_failed(format!("start container '{id}' failed: {err}"))
+            })?,
+            DockerAction::Stop => docker.stop_container(&id, None).await.map_err(|err| {
                 DockerError::command_failed(format!("stop container '{id}' failed: {err}"))
             })?,
-            DockerAction::Restart => self
-                .docker
+            DockerAction::Restart => docker
                 .restart_container(&id, None::<RestartContainerOptions>)
                 .await
                 .map_err(|err| {
@@ -143,7 +138,7 @@ impl DockerService {
 
     async fn inspect_container(&self, id: &str) -> Result<ContainerInfo, DockerError> {
         let details = self
-            .docker
+            .docker_client()?
             .inspect_container(id, None)
             .await
             .map_err(|err| {
@@ -175,9 +170,21 @@ impl DockerService {
                 .unwrap_or_default(),
         })
     }
+
+    fn docker_client(&self) -> Result<&Docker, DockerError> {
+        self.docker.as_ref().ok_or_else(DockerError::unavailable)
+    }
 }
 
 impl DockerError {
+    fn unavailable() -> Self {
+        Self {
+            code: 6000,
+            message: "docker unavailable".to_string(),
+            detail: "Docker socket not found: /var/run/docker.sock".to_string(),
+        }
+    }
+
     fn bad_request(detail: String) -> Self {
         Self {
             code: 6001,
