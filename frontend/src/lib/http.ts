@@ -110,6 +110,12 @@ export function describeApiError(error: unknown, fallback: string): ApiErrorDisp
         hint: "Check backend health, reverse proxy configuration, and server load."
       };
     }
+    if (/network error|failed to fetch|load failed|request failed/i.test(message)) {
+      return {
+        message: "Unable to reach the SnowPanel API.",
+        hint: "Check frontend proxy settings, backend port exposure, and browser network access."
+      };
+    }
     return { message };
   }
 

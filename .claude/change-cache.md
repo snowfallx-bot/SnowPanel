@@ -12,70 +12,81 @@
 
 ============
 
-本轮没有继续推进业务代码，而是把协作文档 `.claude/progress.md` 从“旧阶段判断 + 原始愿景清单”重写成了“截至 2026-04-24 的真实状态版”，避免后续 agent 继续基于过期假设判断优先级。
+本轮把 `.claude/progress.md` 里悬而未决的 `P1-2` 正式收尾，重点不是加新页面，而是把“前端权限感知 + session 管理”补成可交付状态，并把 token 存储策略形成明确文档结论。
 
 本次核心完成项
 
-1. 重写 `progress.md` 的整体结构：
-   - 保留原始优先级原则：主链路闭环 > 安全收口 > 权限模型 > 测试补齐
-   - 删除已经过时的“项目现状判断”
-   - 改成：
-     - 当前状态摘要
-     - 各 P0 / P1 / P2 项完成情况
-     - 剩余执行顺序
-     - 不要先做的事
+1. 收紧 `ProtectedRoute` 的 session 校验行为：
+   - 在已有 token 但 `getMe()` 尚未成功前，不再先渲染受保护内容，避免使用本地残留用户态短暂漏出页面。
+   - 对 `401/403` 继续做统一清凭据并跳登录。
+   - 对非鉴权失败（如网络/代理/backend 不可达）展示可重试的 session 错误态，而不是只停留在空白/卡住。
 
-2. 按当前仓库真实状态重新标记完成项：
-   - 已划掉：
-     - `P0-1`
-     - `P0-2`
-     - `P0-3`
-     - `P0-4`
-     - `P1-1`
-     - `P1-3`
-     - `P1-4`
-   - 保留未划掉：
-     - `P1-2`
-     - `P2-1`
-     - `P2-2`
-     - `P2-3`
+2. 补前端回归测试，覆盖 `P1-2` 关键路径：
+   - 新增 `frontend/src/routes/ProtectedRoute.test.tsx`
+     - 无 token 跳登录
+     - `getMe()` 完成前不渲染受保护内容
+     - `401` 清 session
+     - 非鉴权失败可重试
+     - 权限不足时跳转到可访问页面
+   - 新增 `frontend/src/layouts/AppLayout.test.tsx`
+     - 导航只展示有权限的模块
+     - 首次登录强制改密并刷新本地 session
+     - backend logout 失败时仍清本地凭据
 
-3. 对未完成项补了更准确的“为什么还不能划掉”：
-   - `P1-2`：
-     - 前端权限感知、session 校验、refresh rotation、401 统一处理其实大部分已完成
-     - 但 token 仍在前端存储中，是否切到 httpOnly cookie 还没有明确决议
-     - 这一块的自动化测试也还不够系统
-   - `P2-1`：
-     - 仍缺 proto contract tests、真实 backend+core-agent+postgres integration、前端 e2e、CI 分层矩阵
-   - `P2-2`：
-     - 当前只有 request id / access log / health-readiness / tracing 基础，缺 metrics/OTel
-   - `P2-3`：
-     - 文档里仍有过期描述，代码里也还有少量占位痕迹
+3. 顺手补了两处前端收口细节：
+   - `frontend/src/layouts/AppLayout.tsx`
+     - 给强制改密表单的 password 输入加了 `id/htmlFor`
+     - `nav` 增加了 `aria-label`
+   - `frontend/src/lib/http.ts`
+     - `describeApiError()` 现在会把普通 `Error("Network Error")` 也统一映射成可执行提示，不再只对 `ApiError` 生效
 
-4. 把“接下来该做什么”重新排序为真实剩余路径：
-   - 先收尾 `P1-2`
-   - 再补 `P2-1`
-   - 再做 `P2-2`
-   - 最后做 `P2-3`
+4. 形成 token 存储策略的明确决议并写入文档：
+   - 更新 `docs/security.md`
+   - 更新 `docs/security.zh-CN.md`
+   - 明确结论：
+     - 当前阶段继续使用前端持久化 bearer token + refresh token
+     - 不把迁移到 httpOnly cookie 作为当前发布前阻塞项
+     - 若以后迁移，必须连同 backend 安全 cookie、CSRF、防代理/域名策略和浏览器/API client 回归测试一起推进
+
+5. 更新协作文档：
+   - `.claude/progress.md` 现已将 `P1-2` 划为完成
+   - 剩余优先级改为：
+     - `P2-1` 测试矩阵补齐
+     - `P2-2` 生产观测能力
+     - `P2-3` 文档与原型痕迹清理
 
 本轮修改文件
 
 - `.claude/progress.md`
 - `.claude/change-cache.md`
+- `docs/security.md`
+- `docs/security.zh-CN.md`
+- `frontend/src/layouts/AppLayout.tsx`
+- `frontend/src/layouts/AppLayout.test.tsx`
+- `frontend/src/lib/http.ts`
+- `frontend/src/routes/ProtectedRoute.tsx`
+- `frontend/src/routes/ProtectedRoute.test.tsx`
 
 本地验证
 
-- 已根据仓库当前代码、文档、测试与部署资产逐项核对 `progress.md` 中的 P0 / P1 / P2 条目。
-- 当前工作区仅包含协作文档变更，没有业务代码改动。
+- `frontend` 下 `npm exec tsc -b` 通过
+- `frontend` 下 `npm exec vite build` 通过
+- `vitest` 仍未稳定跑通：
+  - 先是本机缺少 `rolldown` 可选原生绑定
+  - 补绑定后又撞上本机 Node `20.18.0` 与 `vitest/jsdom` 依赖链的运行时兼容问题
+  - 当前判断：这是本机依赖环境问题，不是这轮业务代码本身的编译/构建问题
 
 commit摘要
 
-- 未提交（本轮仅更新协作文档）
+- 计划提交：`fix(frontend): finalize p1-2 session guardrails`
 
 希望接下来的 AI 做什么
 
-1. 以新的 `progress.md` 作为唯一进度判断基线，不要再沿用旧的“主链路未打通”判断。
-2. 如果继续开发，实现优先级应从 `P1-2` 开始，而不是回头重复做已完成的 P0/P1。
-3. 若后续决定推进 httpOnly cookie 方案，请把它当成 `P1-2` 的正式收尾项，连同测试与迁移影响一起落地。
+1. 以后请以最新 `.claude/progress.md` 为准，不要再把 `P1-2` 当作未完成事项重复分析。
+2. 下一优先级直接进入 `P2-1`：
+   - 优先考虑 proto contract tests
+   - backend + core-agent + postgres 真实 integration tests
+   - 前端关键 e2e（登录 / 权限隐藏 / 文件浏览）
+3. 如果要继续补前端测试，优先解决当前本机 `vitest/jsdom` 与 Node 版本/依赖链兼容问题，再扩大覆盖面。
 
 by: gpt-5.4

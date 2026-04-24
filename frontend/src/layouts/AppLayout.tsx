@@ -87,7 +87,7 @@ export function AppLayout() {
     <div className="min-h-screen bg-slate-100 text-slate-900 md:grid md:grid-cols-[240px_1fr]">
       <aside className="border-r border-slate-200 bg-panel-900 px-5 py-6 text-panel-50">
         <h1 className="mb-5 text-xl font-semibold">SnowPanel</h1>
-        <nav>
+        <nav aria-label="Primary">
           {visibleNavItems.map((item) => (
             <NavLink
               key={item.to}
@@ -133,24 +133,39 @@ export function AppLayout() {
             <CardContent>
               <form className="space-y-3" onSubmit={handlePasswordChange}>
                 <div className="space-y-1">
-                  <label className="text-sm font-medium text-slate-700">Current Password</label>
+                  <label
+                    className="text-sm font-medium text-slate-700"
+                    htmlFor="current-password"
+                  >
+                    Current Password
+                  </label>
                   <Input
+                    id="current-password"
                     type="password"
                     value={currentPassword}
                     onChange={(event) => setCurrentPassword(event.target.value)}
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-sm font-medium text-slate-700">New Password</label>
+                  <label className="text-sm font-medium text-slate-700" htmlFor="new-password">
+                    New Password
+                  </label>
                   <Input
+                    id="new-password"
                     type="password"
                     value={newPassword}
                     onChange={(event) => setNewPassword(event.target.value)}
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-sm font-medium text-slate-700">Confirm New Password</label>
+                  <label
+                    className="text-sm font-medium text-slate-700"
+                    htmlFor="confirm-new-password"
+                  >
+                    Confirm New Password
+                  </label>
                   <Input
+                    id="confirm-new-password"
                     type="password"
                     value={confirmPassword}
                     onChange={(event) => setConfirmPassword(event.target.value)}

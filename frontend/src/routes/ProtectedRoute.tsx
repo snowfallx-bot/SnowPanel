@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { getMe } from "@/api/auth";
-import { ApiError } from "@/lib/http";
+import { QueryErrorCard } from "@/components/ui/query-error-card";
+import { ApiError, ApiErrorDisplay, describeApiError } from "@/lib/http";
 import { useAuthStore } from "@/store/auth-store";
 
 const routePermissionRules: Array<{ prefix: string; permission: string }> = [
@@ -32,23 +33,30 @@ export function ProtectedRoute() {
   const clearAuth = useAuthStore((state) => state.clearAuth);
   const location = useLocation();
   const [checkingSession, setCheckingSession] = useState(false);
+  const [validatedToken, setValidatedToken] = useState<string | null>(null);
+  const [sessionError, setSessionError] = useState<ApiErrorDisplay | null>(null);
+  const [sessionRetryKey, setSessionRetryKey] = useState(0);
 
   useEffect(() => {
     let alive = true;
     if (!hydrated || !token) {
       setCheckingSession(false);
+      setValidatedToken(null);
+      setSessionError(null);
       return () => {
         alive = false;
       };
     }
 
     setCheckingSession(true);
+    setSessionError(null);
     getMe()
       .then((profile) => {
         if (!alive) {
           return;
         }
         setAuth(token, profile, refreshToken);
+        setValidatedToken(token);
       })
       .catch((error: unknown) => {
         if (!alive) {
@@ -57,7 +65,10 @@ export function ProtectedRoute() {
         const status = error instanceof ApiError ? error.status : undefined;
         if (status === 401 || status === 403) {
           clearAuth();
+          setValidatedToken(null);
+          return;
         }
+        setSessionError(describeApiError(error, "Failed to validate session."));
       })
       .finally(() => {
         if (alive) {
@@ -68,12 +79,13 @@ export function ProtectedRoute() {
     return () => {
       alive = false;
     };
-  }, [hydrated, token, refreshToken, setAuth, clearAuth]);
+  }, [hydrated, token, refreshToken, setAuth, clearAuth, sessionRetryKey]);
 
   const requiredPermission = useMemo(
     () => requiredPermissionForPath(location.pathname),
     [location.pathname]
   );
+  const needsSessionValidation = Boolean(token) && validatedToken !== token;
 
   const hasPermission = useMemo(() => {
     if (!requiredPermission) {
@@ -89,10 +101,26 @@ export function ProtectedRoute() {
     return null;
   }
 
-  if (checkingSession) {
+  if (checkingSession || (needsSessionValidation && !sessionError)) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-100 text-slate-600">
         Validating session...
+      </div>
+    );
+  }
+
+  if (needsSessionValidation && sessionError) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-100 p-4">
+        <div className="w-full max-w-lg">
+          <QueryErrorCard
+            title="Unable to validate session"
+            message={sessionError.message}
+            hint={sessionError.hint}
+            onRetry={() => setSessionRetryKey((current) => current + 1)}
+            retryLabel="Retry validation"
+          />
+        </div>
       </div>
     );
   }

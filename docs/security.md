@@ -28,6 +28,9 @@ Language: **English** | [简体中文](security.zh-CN.md)
 - Backend also validates a token RBAC checksum against current DB roles/permissions, so role/permission changes force re-authentication.
 - Access/refresh token pair is supported; `/auth/refresh` rotates both tokens and advances session timestamp.
 - `/auth/logout` revokes current logical session by rotating session timestamp.
+- Current decision (2026-04-24): SnowPanel keeps access/refresh tokens in the persisted frontend auth store instead of migrating to httpOnly cookies yet.
+- Rationale: the current same-origin proxy setup, non-browser API clients, and existing backend bearer-token flow stay simpler this way, while DB-backed session validation, refresh rotation, forced password change, and `401` redirect handling already provide the intended session-control guarantees.
+- Revisit cookie migration only after backend-issued secure cookies, CSRF protection, and trusted reverse-proxy/domain handling are designed together and covered by browser + API-client regression tests.
 - Login endpoint has brute-force protection keyed by `username + client IP`.
 - Default mode is in-memory (`LOGIN_ATTEMPT_STORE=memory`); distributed mode can be enabled with Redis (`LOGIN_ATTEMPT_STORE=redis` + shared `REDIS_*` config).
 - Repeated failures within `LOGIN_FAILURE_WINDOW` trigger temporary lockout (`429`) for `LOGIN_LOCK_DURATION`.
