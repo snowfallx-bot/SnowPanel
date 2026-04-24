@@ -119,9 +119,14 @@ impl DockerService {
         let docker = self.docker_client()?;
 
         match action {
-            DockerAction::Start => docker.start_container::<String>(&id, None).await.map_err(|err| {
-                DockerError::command_failed(format!("start container '{id}' failed: {err}"))
-            })?,
+            DockerAction::Start => {
+                docker
+                    .start_container::<String>(&id, None)
+                    .await
+                    .map_err(|err| {
+                        DockerError::command_failed(format!("start container '{id}' failed: {err}"))
+                    })?
+            }
             DockerAction::Stop => docker.stop_container(&id, None).await.map_err(|err| {
                 DockerError::command_failed(format!("stop container '{id}' failed: {err}"))
             })?,
