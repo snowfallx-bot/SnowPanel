@@ -72,7 +72,7 @@ SnowPanel 是一个 Linux 服务器运维面板，采用 Vibe Coding 而成。
 1. 仅启动依赖：
    - 安全默认（不向宿主机暴露 DB/Redis 端口）：`docker compose up -d postgres redis`
    - 本地二进制调试（按需暴露 DB/Redis 端口）：`docker compose -f docker-compose.yml -f docker-compose.local.yml up -d postgres redis`
-   - backend 容器 + 宿主机 core-agent：`docker compose -f docker-compose.yml -f docker-compose.host-agent.yml up -d --build`
+   - backend 容器 + 宿主机 core-agent：`make up-host-agent`
 2. 分别启动各服务：
    - `make agent`
    - `make backend`
@@ -81,8 +81,11 @@ SnowPanel 是一个 Linux 服务器运维面板，采用 Vibe Coding 而成。
 常用命令：
 
 - `make up`: 构建并启动所有服务
+- `make up-host-agent`: 以宿主机 Agent 覆盖模式启动 backend/frontend/postgres/redis
 - `make down`: 停止所有服务
+- `make down-host-agent`: 停止宿主机 Agent 覆盖模式的 compose 栈
 - `make logs`: 查看 compose 日志
+- `make logs-host-agent`: 查看宿主机 Agent 覆盖模式的 compose 日志
 - `make lint`: 运行基础静态检查
 - `make test`: backend/core-agent 测试 + frontend test/build 检查
 

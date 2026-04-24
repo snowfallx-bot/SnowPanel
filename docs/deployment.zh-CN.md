@@ -45,10 +45,17 @@
    - `cp .env.example .env`
    - 将 `AGENT_TARGET` 指向宿主机可访问地址（例如 backend 在 Docker 中时可用 `host.docker.internal:50051`）
 3. 使用宿主机 agent 覆盖配置启动 backend/frontend 与依赖：
-   - `docker compose -f docker-compose.yml -f docker-compose.host-agent.yml up -d --build`
+   - `make up-host-agent`
 4. 验证：
    - `curl http://127.0.0.1:8080/health`
    - `curl http://127.0.0.1:8080/ready`
+
+后续如果需要在宿主机 Agent 模式下重建或看日志，请持续使用：
+
+- `make up-host-agent`
+- `make logs-host-agent`
+
+不要再退回普通 `docker compose up` / `make up`，否则 backend 会丢失 host-agent 覆盖，重新连回已禁用的容器版 `core-agent`。
 
 ## 默认端口（Compose 原型）
 

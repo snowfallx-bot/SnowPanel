@@ -30,9 +30,16 @@ This folder provides a baseline host deployment template for running `core-agent
 
 When backend runs in Docker but `core-agent` runs on host, use:
 
-- `docker compose -f docker-compose.yml -f docker-compose.host-agent.yml up -d --build`
+- `make up-host-agent`
 
 This override points backend to `host.docker.internal:50051` and disables the containerized `core-agent` service by default.
+
+For later rebuilds or log inspection, keep using:
+
+- `make up-host-agent`
+- `make logs-host-agent`
+
+Do not fall back to plain `docker compose up` / `make up`, or backend will reconnect to the containerized `core-agent` instead of the host systemd service.
 
 ## Security Notes
 

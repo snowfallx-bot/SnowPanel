@@ -70,7 +70,7 @@ SnowPanel is a Linux server ops panel built with Vibe Coding.
 1. Start dependencies only:
    - secure default (no host DB/Redis ports): `docker compose up -d postgres redis`
    - optional local binary workflow (publish DB/Redis ports): `docker compose -f docker-compose.yml -f docker-compose.local.yml up -d postgres redis`
-   - backend in Docker + host-installed core-agent: `docker compose -f docker-compose.yml -f docker-compose.host-agent.yml up -d --build`
+   - backend in Docker + host-installed core-agent: `make up-host-agent`
 2. Run each service locally:
    - `make agent`
    - `make backend`
@@ -79,8 +79,11 @@ SnowPanel is a Linux server ops panel built with Vibe Coding.
 Common commands:
 
 - `make up`: start all services with build
+- `make up-host-agent`: start backend/frontend/postgres/redis with the host-agent compose override
 - `make down`: stop all services
+- `make down-host-agent`: stop the host-agent compose stack
 - `make logs`: tail compose logs
+- `make logs-host-agent`: tail logs for the host-agent compose stack
 - `make lint`: baseline static checks
 - `make test`: backend/core-agent tests + frontend test/build checks
 

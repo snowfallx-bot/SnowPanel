@@ -32,13 +32,18 @@ When you want local binaries + containerized dependencies:
      `docker compose -f docker-compose.yml -f docker-compose.local.yml up -d postgres redis`
 2. Choose one runtime flow:
    - all-local binaries: `make agent`, `make backend`, `make frontend`
-   - backend in Docker + host-installed core-agent: `docker compose -f docker-compose.yml -f docker-compose.host-agent.yml up -d --build`
+   - backend in Docker + host-installed core-agent: `make up-host-agent`
 
 ## Useful Commands
 
 - `make logs`: tail compose logs
+- `make logs-host-agent`: tail logs for the host-agent compose stack
 - `make lint`: baseline static checks (`go vet`, `cargo fmt --check`, frontend build)
 - `make test`: backend tests + rust tests + frontend test/build flow
+
+## Host-Agent Note
+
+If you are using the host-agent runtime mode, keep using `make up-host-agent` / `make logs-host-agent` for rebuilds and diagnostics. Falling back to plain `docker compose up` or `make up` will drop `docker-compose.host-agent.yml` and point backend back at the containerized `core-agent`.
 
 ## Test Coverage Scope
 

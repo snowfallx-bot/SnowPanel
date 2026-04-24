@@ -45,10 +45,17 @@ This project ships with a development-oriented compose stack including:
    - `cp .env.example .env`
    - set `AGENT_TARGET` to host-accessible address (for example `host.docker.internal:50051` when backend runs in Docker)
 3. Start backend/frontend + dependencies with host-agent override:
-   - `docker compose -f docker-compose.yml -f docker-compose.host-agent.yml up -d --build`
+   - `make up-host-agent`
 4. Verify:
    - `curl http://127.0.0.1:8080/health`
    - `curl http://127.0.0.1:8080/ready`
+
+For later rebuilds and log inspection in host-agent mode, keep using:
+
+- `make up-host-agent`
+- `make logs-host-agent`
+
+Do not fall back to plain `docker compose up` / `make up`, or backend will lose the host-agent override and reconnect to the disabled containerized `core-agent`.
 
 ## Port Defaults (Prototype Compose)
 

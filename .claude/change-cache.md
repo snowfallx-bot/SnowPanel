@@ -12,97 +12,80 @@
 
 ============
 
-本轮针对“前端页面能打开，但输入正确 admin 密码后返回 `network error`”继续补了一层后端跨域兜底，避免旧前端配置仍直连 `:8080` 时被浏览器拦掉。
+本轮在远程登录恢复之后，继续把“宿主机 Agent 模式下误用普通 compose 重建，导致 backend 丢失 override、面板功能全部转圈”的坑做成可复用的防呆，并顺手把前端在后端/agent 异常时的长时间转圈体验收敛掉。
 
 本次核心完成项
 
-1. 前端 API 访问策略调整：
-   - `frontend/src/lib/http.ts`
-     - `VITE_API_BASE_URL` 为空或 `/` 时，默认走同源请求，而不是回退到 `http://127.0.0.1:8080`
-     - 目的：避免用户从自己电脑浏览器访问服务器前端时，请求被错误发到“用户自己机器的 127.0.0.1”
-   - `frontend/vite.config.ts`
-     - 改为从 `vite` 导入 `defineConfig/loadEnv`
-     - 新增 Vite 代理：
-       - `/api` -> backend
-       - `/health` -> backend
-       - `/ready` -> backend
-     - 代理目标来自 `VITE_API_PROXY_TARGET`，默认 `http://127.0.0.1:8080`
+1. 新增 host-agent 专用 `make` 目标（`Makefile`）：
+   - `make up-host-agent`
+   - `make down-host-agent`
+   - `make logs-host-agent`
+   - 目的：把 `docker compose -f docker-compose.yml -f docker-compose.host-agent.yml ...` 固化成固定入口，避免后续手工命令漏掉 override
 
-2. Docker / 安装器默认配置修正：
-   - `docker-compose.yml`
-     - `VITE_API_BASE_URL` 默认改为空
-     - 新增 `VITE_API_PROXY_TARGET=${VITE_API_PROXY_TARGET:-http://backend:8080}`
-   - `.env.example`
-     - `VITE_API_BASE_URL=`
-     - `VITE_API_PROXY_TARGET=http://127.0.0.1:8080`
-   - `deploy/one-click/ubuntu-25.10/install.sh`
-     - 版本更新为 `0.5.2`
-     - 安装器生成 `.env` 时：
-       - `VITE_API_BASE_URL` 置空
-       - `VITE_API_PROXY_TARGET` 设为 `http://backend:8080`
-     - 这样一键安装后的远程浏览器登录不再误指向本机 `127.0.0.1`
-
-3. Backend CORS 兜底：
-   - `backend/internal/middleware/cors.go`
-     - 新增全局 CORS 中间件
-     - 对带 `Origin` 的请求回显 `Access-Control-Allow-Origin`
-     - 允许 `Authorization`、`Content-Type` 等常用头
-     - 自动处理 `OPTIONS` 预检为 `204`
-   - `backend/internal/api/router.go`
-     - 全局接入 `middleware.CORS()`
-   - `backend/internal/middleware/cors_test.go`
-     - 新增预检与普通请求场景测试
-   - 目的：
-     - 即使当前线上 frontend 仍在直连 `http://<server>:8080`
-     - backend 也不会因为缺少 CORS 而在浏览器里表现为 `network error`
-
-4. 文档同步：
-   - 更新 `frontend/README.md`
+2. 文档统一切换到 host-agent 专用命令，并明确写出反例：
+   - 更新 `README.md`
+   - 更新 `README.zh-CN.md`
+   - 更新 `docs/development.md`
+   - 更新 `docs/development.zh-CN.md`
    - 更新 `docs/deployment.md`
    - 更新 `docs/deployment.zh-CN.md`
+   - 更新 `deploy/core-agent/systemd/README.md`
+   - 更新 `deploy/core-agent/systemd/README.zh-CN.md`
    - 更新 `deploy/one-click/ubuntu-25.10/README.md`
    - 更新 `deploy/one-click/ubuntu-25.10/README.zh-CN.md`
-   - 新增说明：frontend 默认走同源 API + Vite proxy，避免远程登录 `network error`
+   - 核心新增说明：
+     - 宿主机 Agent 模式后续重建/看日志请使用 `make up-host-agent` / `make logs-host-agent`
+     - 不要退回普通 `docker compose up` / `make up`
+     - 否则 backend 会丢掉 `docker-compose.host-agent.yml`，重新连回被禁用的容器版 `core-agent`
+
+3. 前端查询默认策略改为更快失败（`frontend/src/main.tsx`）：
+   - 为 React Query 配置全局 `QueryClient` 默认项
+   - 当接口返回 `ApiError` 且已有明确 HTTP 状态码或业务错误码时，不再反复重试
+   - 其他未知错误最多仅重试 1 次
+   - mutation 默认不重试
+   - 目的：避免宿主机 agent 不通、backend 返回明确错误时，页面长时间停留在“Loading...”
+
+4. 线上现状和根因已沉淀到文档：
+   - 用户已可正常登录面板
+   - 宿主机 `core-agent` 已成功监听 `0.0.0.0:50051`
+   - 页面“持续 loading”根因已定位为：
+     - 手工重建时使用了普通 compose
+     - 导致 backend 容器内 `AGENT_TARGET=core-agent:50051`
+     - 而不是预期的 `host.docker.internal:50051`
 
 本轮修改文件
 
-- `frontend/src/lib/http.ts`
-- `frontend/vite.config.ts`
-- `docker-compose.yml`
-- `.env.example`
-- `deploy/one-click/ubuntu-25.10/install.sh`
-- `frontend/README.md`
+- `Makefile`
+- `README.md`
+- `README.zh-CN.md`
+- `docs/development.md`
+- `docs/development.zh-CN.md`
 - `docs/deployment.md`
 - `docs/deployment.zh-CN.md`
+- `deploy/core-agent/systemd/README.md`
+- `deploy/core-agent/systemd/README.zh-CN.md`
 - `deploy/one-click/ubuntu-25.10/README.md`
 - `deploy/one-click/ubuntu-25.10/README.zh-CN.md`
-- `backend/internal/middleware/cors.go`
-- `backend/internal/middleware/cors_test.go`
-- `backend/internal/api/router.go`
+- `frontend/src/main.tsx`
 - `.claude/change-cache.md`
 
 本地验证
 
-- `bash -n deploy/one-click/ubuntu-25.10/install.sh` 通过。
-- `npm exec tsc -b`（`frontend/`）通过。
-- `npm exec vite build`（`frontend/`）通过。
-- Go 工具链当前环境不可用，未执行 backend 单测；已完成 CORS 中间件 diff 复核。
-- `npm test` 未通过，但失败原因是当前 Windows/npm 环境下 `rolldown` 可选原生绑定缺失，与本次改动无直接关系。
+- 已完成 `git diff` 复核。
+- 已完成 `frontend` 下 `npm exec tsc -b`。
+- 已完成 `frontend` 下 `npm exec vite build`。
+- 当前环境没有 `make` 可执行文件，未做 `make` 目标级验证。
 
 commit摘要
 
-待提交：
-- `fix(frontend): use same-origin api proxy for remote login`
-- `fix(backend): allow cors preflight for browser api access`
+- `docs(host-agent): harden host-agent rebuild flow`
 
 希望接下来的 AI 做什么
 
-1. 在服务器上 `git pull` 后重建 frontend，确认远程浏览器登录不再出现 `network error`。
-2. 同时重建 backend，使新的 CORS 中间件生效。
-3. 若用户需要立刻恢复，可直接在 `/opt/snowpanel/.env` 中设置：
-   - `VITE_API_BASE_URL=`
-   - `VITE_API_PROXY_TARGET=http://backend:8080`
-   然后重建 frontend 容器。
-4. 若后续考虑去掉 Vite dev server 作为运行时，再把这套同源代理迁到 Nginx/Caddy 等正式反向代理。
+1. 确认这轮 Makefile + 文档 + frontend 查询策略改动已经提交到远端后，再继续做下一步体验优化。
+2. 用户服务器后续重建时统一改用：
+   - `make up-host-agent`
+   - `make logs-host-agent`
+3. 如果后续仍反馈某些页面“无报错但长时间空白”，可继续把各页面的 error state 显式化，而不是只依赖全局 query retry 收敛。
 
 by: gpt-5.4

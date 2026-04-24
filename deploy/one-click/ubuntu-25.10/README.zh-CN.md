@@ -75,5 +75,6 @@ sudo bash install.sh --postgres-image postgres:16 --redis-image redis:7
 - 进入正式生产前，请复核并收紧：
   - `/etc/snowpanel/core-agent.env`
   - `${INSTALL_DIR}/.env`
+- 一键安装完成后，如果要重建或查看应用栈日志，请使用 `make up-host-agent` / `make logs-host-agent`。不要退回普通 `docker compose up` / `make up`，否则 backend 会丢失 `docker-compose.host-agent.yml` 覆盖，重新连回已禁用的容器版 `core-agent`。
 - 如果 backend 健康检查失败，脚本退出前会自动输出 `docker compose ps`、backend 日志以及 `core-agent` 的状态与日志，便于直接定位原因。
 - 对外开放前请先限制 backend/core-agent 端口访问范围。

@@ -30,9 +30,16 @@
 
 当 backend 在 Docker 中运行、`core-agent` 在宿主机运行时，使用：
 
-- `docker compose -f docker-compose.yml -f docker-compose.host-agent.yml up -d --build`
+- `make up-host-agent`
 
 该覆盖文件会将 backend 指向 `host.docker.internal:50051`，并默认禁用容器版 `core-agent` 服务。
+
+后续如果需要重建或查看日志，也请持续使用：
+
+- `make up-host-agent`
+- `make logs-host-agent`
+
+不要再退回普通 `docker compose up` / `make up`，否则 backend 会重新连回容器版 `core-agent`，而不是宿主机 systemd 服务。
 
 ## 安全提示
 

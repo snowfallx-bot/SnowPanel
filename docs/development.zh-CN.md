@@ -32,13 +32,18 @@
      `docker compose -f docker-compose.yml -f docker-compose.local.yml up -d postgres redis`
 2. 选择一种运行方式：
    - 全本地二进制：`make agent`、`make backend`、`make frontend`
-   - backend 容器 + 宿主机 core-agent：`docker compose -f docker-compose.yml -f docker-compose.host-agent.yml up -d --build`
+   - backend 容器 + 宿主机 core-agent：`make up-host-agent`
 
 ## 常用命令
 
 - `make logs`：查看 compose 日志
+- `make logs-host-agent`：查看宿主机 Agent 覆盖模式的 compose 日志
 - `make lint`：基础静态检查（`go vet`、`cargo fmt --check`、frontend build）
 - `make test`：backend 测试 + rust 测试 + frontend test/build 流程
+
+## 宿主机 Agent 模式提示
+
+如果你使用的是宿主机 Agent 运行模式，后续重建和排障请持续使用 `make up-host-agent` / `make logs-host-agent`。如果误用普通 `docker compose up` 或 `make up`，会丢掉 `docker-compose.host-agent.yml` 覆盖，backend 也会重新指回容器内的 `core-agent`。
 
 ## 测试覆盖范围
 

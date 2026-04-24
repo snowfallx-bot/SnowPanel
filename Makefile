@@ -1,4 +1,4 @@
-.PHONY: up down logs backend agent frontend lint test
+.PHONY: up down logs up-host-agent down-host-agent logs-host-agent backend agent frontend lint test
 
 up:
 	docker compose up -d --build
@@ -8,6 +8,15 @@ down:
 
 logs:
 	docker compose logs -f --tail=200
+
+up-host-agent:
+	docker compose -f docker-compose.yml -f docker-compose.host-agent.yml up -d --build
+
+down-host-agent:
+	docker compose -f docker-compose.yml -f docker-compose.host-agent.yml down
+
+logs-host-agent:
+	docker compose -f docker-compose.yml -f docker-compose.host-agent.yml logs -f --tail=200
 
 backend:
 	cd backend && go run ./cmd/server

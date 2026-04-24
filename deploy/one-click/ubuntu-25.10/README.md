@@ -75,5 +75,6 @@ The installer configures frontend API access in same-origin mode by default and 
 - For production tests, review and tighten:
   - `/etc/snowpanel/core-agent.env`
   - `${INSTALL_DIR}/.env`
+- After one-click install, rebuild or inspect the app stack with `make up-host-agent` / `make logs-host-agent`. Do not fall back to plain `docker compose up` / `make up`, or backend will lose `docker-compose.host-agent.yml` and reconnect to the disabled containerized `core-agent`.
 - If backend health verification fails, the installer now prints `docker compose ps`, backend logs, and `core-agent` status/logs automatically before exiting.
 - Restrict network access to backend/core-agent ports before internet exposure.
