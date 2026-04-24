@@ -12,75 +12,70 @@
 
 ============
 
-本轮继续沿着“登录虽恢复，但 agent/backend 异常时前端页面仍容易表现为长时间空白或用户感知不明确”的方向推进，把核心页面的 query 失败状态显式化，并统一补上就地重试入口。
+本轮没有继续推进业务代码，而是把协作文档 `.claude/progress.md` 从“旧阶段判断 + 原始愿景清单”重写成了“截至 2026-04-24 的真实状态版”，避免后续 agent 继续基于过期假设判断优先级。
 
 本次核心完成项
 
-1. 新增共享查询错误卡片组件（`frontend/src/components/ui/query-error-card.tsx`）：
-   - 统一展示错误标题、错误正文、可选排障提示、`Retry` 按钮
-   - 避免每个页面各自写一套红字提示，交互和视觉都更一致
+1. 重写 `progress.md` 的整体结构：
+   - 保留原始优先级原则：主链路闭环 > 安全收口 > 权限模型 > 测试补齐
+   - 删除已经过时的“项目现状判断”
+   - 改成：
+     - 当前状态摘要
+     - 各 P0 / P1 / P2 项完成情况
+     - 剩余执行顺序
+     - 不要先做的事
 
-2. 新增通用 API 错误文案映射（`frontend/src/lib/http.ts`）：
-   - 新增 `describeApiError`
-   - 对以下场景给出更可执行的前端提示：
-     - `3001` / `503`：`core-agent` 不可用
-     - `401`：会话失效
-     - `403`：权限不足
-     - `404`：前后端版本/路由不匹配，或代理目标错误
-     - `5xx`：backend 内部错误
-     - timeout / network error：API 不可达
+2. 按当前仓库真实状态重新标记完成项：
+   - 已划掉：
+     - `P0-1`
+     - `P0-2`
+     - `P0-3`
+     - `P0-4`
+     - `P1-1`
+     - `P1-3`
+     - `P1-4`
+   - 保留未划掉：
+     - `P1-2`
+     - `P2-1`
+     - `P2-2`
+     - `P2-3`
 
-3. 将核心页面的列表/详情查询切换为显式错误态：
-   - 更新 `frontend/src/pages/DashboardPage.tsx`
-   - 更新 `frontend/src/pages/ServicesPage.tsx`
-   - 更新 `frontend/src/pages/DockerPage.tsx`
-   - 更新 `frontend/src/pages/FilesPage.tsx`
-   - 更新 `frontend/src/pages/CronPage.tsx`
-   - 更新 `frontend/src/pages/TasksPage.tsx`
-   - 更新 `frontend/src/pages/AuditLogsPage.tsx`
-   - 主要变化：
-     - query 失败时不再主要依赖页面底部 `message`
-     - 改为在对应内容区直接展示错误卡片
-     - 支持页面内直接点击 `Retry`
-     - Docker / Tasks 这类双查询页面会分别在各自区块展示错误，不互相遮挡
+3. 对未完成项补了更准确的“为什么还不能划掉”：
+   - `P1-2`：
+     - 前端权限感知、session 校验、refresh rotation、401 统一处理其实大部分已完成
+     - 但 token 仍在前端存储中，是否切到 httpOnly cookie 还没有明确决议
+     - 这一块的自动化测试也还不够系统
+   - `P2-1`：
+     - 仍缺 proto contract tests、真实 backend+core-agent+postgres integration、前端 e2e、CI 分层矩阵
+   - `P2-2`：
+     - 当前只有 request id / access log / health-readiness / tracing 基础，缺 metrics/OTel
+   - `P2-3`：
+     - 文档里仍有过期描述，代码里也还有少量占位痕迹
 
-4. 补充测试覆盖：
-   - 新增 `frontend/src/lib/http.test.ts`
-   - 更新 `frontend/src/pages/CronPage.test.tsx`
-   - 覆盖点：
-     - 通用错误映射文案
-     - cron 列表首次失败后，点击 `Retry` 能恢复为正常列表
+4. 把“接下来该做什么”重新排序为真实剩余路径：
+   - 先收尾 `P1-2`
+   - 再补 `P2-1`
+   - 再做 `P2-2`
+   - 最后做 `P2-3`
 
 本轮修改文件
 
-- `frontend/src/components/ui/query-error-card.tsx`
-- `frontend/src/lib/http.ts`
-- `frontend/src/lib/http.test.ts`
-- `frontend/src/pages/DashboardPage.tsx`
-- `frontend/src/pages/ServicesPage.tsx`
-- `frontend/src/pages/DockerPage.tsx`
-- `frontend/src/pages/FilesPage.tsx`
-- `frontend/src/pages/CronPage.tsx`
-- `frontend/src/pages/CronPage.test.tsx`
-- `frontend/src/pages/TasksPage.tsx`
-- `frontend/src/pages/AuditLogsPage.tsx`
+- `.claude/progress.md`
 - `.claude/change-cache.md`
 
 本地验证
 
-- 已完成 `frontend` 下 `npm exec tsc -b`。
-- 已完成 `frontend` 下 `npm exec vite build`。
-- `npm exec vitest run` 仍因当前 Windows/npm 环境缺少 `rolldown` 可选原生绑定而失败，错误与本次代码逻辑无直接关系。
-- 已完成 `git diff` 复核。
+- 已根据仓库当前代码、文档、测试与部署资产逐项核对 `progress.md` 中的 P0 / P1 / P2 条目。
+- 当前工作区仅包含协作文档变更，没有业务代码改动。
 
 commit摘要
 
-- `fix(frontend): surface actionable query error states`
+- 未提交（本轮仅更新协作文档）
 
 希望接下来的 AI 做什么
 
-1. 将这轮前端错误态改动提交并推送到远端。
-2. 如果用户继续反馈“页面不再转圈，但不知道下一步怎么修”，可把错误卡片里的 hint 再细化为按页面区分的排障建议。
-3. 等本地依赖问题解决后，补跑 `vitest`，确保新加的错误态测试在 CI/本地环境都稳定通过。
+1. 以新的 `progress.md` 作为唯一进度判断基线，不要再沿用旧的“主链路未打通”判断。
+2. 如果继续开发，实现优先级应从 `P1-2` 开始，而不是回头重复做已完成的 P0/P1。
+3. 若后续决定推进 httpOnly cookie 方案，请把它当成 `P1-2` 的正式收尾项，连同测试与迁移影响一起落地。
 
 by: gpt-5.4

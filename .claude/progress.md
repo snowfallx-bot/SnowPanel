@@ -1,208 +1,152 @@
 请作为接手 SnowPanel 的 agent，优先按“主链路闭环 > 安全收口 > 权限模型 > 测试补齐”的顺序推进，不要先做 UI 美化，也不要先加新页面。
 
-【项目现状判断】
-这是一个“骨架已经搭起来，但宿主机控制主链路还没真正打通”的原型项目。
-最大问题不在页面数量，而在以下 4 点：
-1. backend -> core-agent 的 gRPC 还是占位实现，导致 Dashboard / Files / Services / Docker / Cron 这条链路名义上存在、实际上没闭环。
-2. core-agent 被放在普通容器里运行，但它的实现却依赖宿主机级 systemctl / crontab / Docker socket，这和当前 compose 拓扑不匹配。
-3. 安全仍然是开发态：默认 admin / 默认 JWT secret / 关键内部服务端口默认暴露。
-4. cron.manage 现在实质上等于“可计划执行任意 shell 命令”，和“避免任意命令执行”的目标冲突。
+更新时间：2026-04-24
 
-【先做的事（P0）】
+【当前状态摘要】
 
-P0-1：把 backend 的 gRPC 客户端从占位实现改成真实实现
-- 涉及文件：
-  - backend/internal/grpcclient/agent_client.go
-  - backend/cmd/server/main.go
-  - core-agent/src/api/grpc_server.rs
-  - proto/*
-- 要求：
-  - 用 proto 生成的 client/server 类型替换 backend 里手写的占位 struct/interface。
-  - 真正连上 core-agent，完成：
-    - GetSystemOverview
-    - GetRealtimeResource
-    - List/Read/Write/Mkdir/Delete files
-    - List/Start/Stop/Restart services
-    - Docker list/start/stop/restart/images
-    - Cron list/create/update/delete/enable/disable
-  - 做统一错误映射：gRPC error / proto error / HTTP error code 要可追踪。
-  - 加最少一条 backend + agent 的集成测试，不要只保留 unit test。
-- 验收标准：
-  - backend 启动后，`/api/v1/dashboard/summary` 不再返回 not implemented。
-  - Files / Services / Docker / Cron 至少各有 1 条 happy path 集成测试。
-  - 删除 backend 里现有的 `ErrNotImplemented` 路径。
+- backend ↔ core-agent 的真实 gRPC 主链路已经打通，Dashboard / Files / Services / Docker / Cron 不再依赖占位实现。
+- 推荐生产运行形态已经切到 host-agent：`core-agent` 作为宿主机 systemd service，backend/frontend/postgres/redis 仍走 compose。
+- 默认高危入口已收口：生产环境强制强 `JWT_SECRET`、bootstrap admin 强密码、首次登录强制改密、内部端口默认不对宿主机暴露。
+- cron 不再允许任意 shell 命令，已改成 allowlist 模板并阻止常见 shell metacharacters。
+- RBAC 已落地到 DB 角色/权限模型，session 校验已能感知权限变更和用户禁用。
+- 异步任务已接入真实操作，文件模块已补到下载/上传/重命名/分块读写/二进制提示。
+- 主要剩余工作集中在：
+  - `P1-2` 收尾
+  - `P2-1` 测试矩阵补齐
+  - `P2-2` 生产观测能力
+  - `P2-3` 文档与原型痕迹清理
 
-P0-2：重新定义 core-agent 的运行方式，不要继续“普通容器里控制宿主机”
-- 涉及文件：
-  - docker-compose.yml
-  - core-agent/Dockerfile
-  - core-agent/src/process/systemd_service.rs
-  - core-agent/src/cron/service.rs
-  - core-agent/src/docker/service.rs
-- 要求：
-  - 二选一并落地：
-    A. 推荐：core-agent 改为宿主机 systemd service 部署，backend 通过内网 gRPC 访问；
-    B. 备选：保留容器，但明确挂载 /var/run/docker.sock、需要的宿主机路径、必要 namespace/capabilities，并把风险写清楚。
-  - 当前 compose 里 core-agent 没有 docker.sock、也不是 host systemd/crontab 环境，服务管理/cron/容器管理从设计上就不成立；必须先修正运行形态。
-  - 50051 不要默认暴露到宿主机公网可达面。
-- 验收标准：
-  - 在真实目标环境里可以成功：
-    - 读取宿主机 system info
-    - 列出并操作宿主机 Docker container
-    - 列出并操作宿主机 systemd service
-    - 读写目标 cron
-  - 给出明确部署文档：dev 和 prod 两套运行方式。
+【完成情况】
 
-P0-3：先把开发态默认凭据和端口暴露收口
-- 涉及文件：
-  - .env.example
-  - docker-compose.yml
-  - frontend/src/pages/LoginPage.tsx
-  - backend/internal/service/auth_service.go
-- 要求：
-  - 移除/禁止默认 `admin / admin123456` 作为长期可登录凭据。
-  - 首次启动可以 bootstrap admin，但必须：
-    - 仅首次生效
-    - 强制改密
-    - 生产环境必须显式提供强密码或随机生成
-  - `JWT_SECRET=change-me-in-production` 不能作为默认生产可运行值。
-  - Postgres / Redis / core-agent 端口默认不要对宿主机暴露；只保留 frontend/backend 必要端口。
-  - 登录页不要预填生产危险默认密码。
-- 验收标准：
-  - 无用户时可初始化首个管理员，但不能长期沿用弱口令。
-  - dev/prod 配置分离，prod 启动时若密钥弱或未配置应直接 fail fast。
-  - compose 默认对外只暴露必须端口。
+~~P0-1：把 backend 的 gRPC 客户端从占位实现改成真实实现~~
+- 已完成：
+  - backend 使用 proto 生成的 gRPC client 调 core-agent。
+  - core-agent 已提供真实 gRPC server 实现。
+  - backend 侧已有统一 agent error -> HTTP/app error 映射。
+  - 已有 backend + fake agent 的 happy path 集成测试，覆盖 Dashboard / Files / Services / Docker / Cron。
+- 当前判断：可视为完成。
 
-P0-4：重做 cron 权限模型，禁止“任意命令调度”
-- 涉及文件：
-  - core-agent/src/cron/service.rs
-  - backend/internal/service/cron_service.go
-  - backend/internal/api/router.go
-- 要求：
-  - 当前 `validate_command()` 只限制换行和长度，等于允许具备 `cron.manage` 的用户计划执行任意命令，这个要收掉。
-  - 改为以下任一方案：
-    A. 只允许执行预注册 job（如 backup/logrotate/cleanup）；
-    B. 只允许执行白名单脚本目录中的脚本，且参数单独校验；
-    C. 至少引入 command allowlist + shell metacharacter 禁止 + 审计明细。
-  - 把文档里“无任意命令执行 API”和实际能力对齐。
-- 验收标准：
-  - 不能再通过 cron API 注入任意 shell 命令。
-  - 有安全回归测试，覆盖危险字符、管道、重定向、子命令等场景。
-  - 审计日志里能明确记录 cron 任务模板/脚本/参数。
+~~P0-2：重新定义 core-agent 的运行方式，不要继续“普通容器里控制宿主机”~~
+- 已完成：
+  - 已提供 `docker-compose.host-agent.yml`。
+  - 已提供 host systemd 部署模板与文档。
+  - Ubuntu 25.10 一键安装脚本默认按 host-agent 模式部署。
+  - `50051` 在默认 compose 下仅 internal expose，不默认暴露到宿主机公网。
+  - dev / prod 两套运行方式文档已明确区分。
+- 当前判断：可视为完成。
 
-【第二批（P1）】
+~~P0-3：先把开发态默认凭据和端口暴露收口~~
+- 已完成：
+  - 登录页不再预填危险默认密码。
+  - `.env.example` 不再提供生产可直接运行的弱 `JWT_SECRET`。
+  - 生产环境下弱/空 `JWT_SECRET` 会 fail fast。
+  - 生产环境下 `BOOTSTRAP_ADMIN=true` 时必须提供强密码。
+  - development 下可自动生成一次性 bootstrap 密码。
+  - bootstrap admin 首次登录会被要求强制改密。
+  - Postgres / Redis / core-agent 默认只 `expose`，不映射宿主机端口。
+- 当前判断：可视为完成。
 
-P1-1：把权限模型从“按用户名硬编码”升级成真实 RBAC
-- 涉及文件：
-  - backend/internal/service/auth_service.go
-  - backend/internal/middleware/permission.go
-  - backend/internal/model/*
-  - backend/migrations/*
-- 要求：
-  - 不要再用 `username == "admin"` 直接给超级权限。
-  - 增加 roles / permissions / user_roles 等表。
-  - token claims 从 DB 权限生成。
-  - 支持禁用用户、角色变更后 session 失效/重签。
-- 验收标准：
-  - “admin 账号名”不再是权限判断条件。
-  - 新建 operator 角色后，可通过 DB 配置权限而不是改代码。
+~~P0-4：重做 cron 权限模型，禁止“任意命令调度”~~
+- 已完成：
+  - core-agent 侧 `validate_command()` 已切到 allowlist 校验。
+  - 已阻止常见 shell metacharacters、管道、重定向、子命令注入。
+  - 文档与 API 说明已改成 command template key，而不是任意 shell 文本。
+  - cron handler 已记录审计摘要。
+  - 安全回归测试已覆盖危险命令输入。
+- 当前判断：可视为完成。
+
+~~P1-1：把权限模型从“按用户名硬编码”升级成真实 RBAC~~
+- 已完成：
+  - migrations 中已有 `roles` / `permissions` / `role_permissions` / `user_roles`。
+  - token claims 已从 DB RBAC 生成。
+  - permission middleware 走权限名校验，不再依赖 `username == "admin"`。
+  - `ValidateSession()` 已校验用户状态、session issued time、RBAC checksum。
+  - 用户禁用、角色权限变化后，旧 session 会失效。
+- 当前判断：可视为完成。
 
 P1-2：让前端权限感知和 session 管理真正成立
-- 涉及文件：
-  - frontend/src/routes/ProtectedRoute.tsx
-  - frontend/src/layouts/AppLayout.tsx
-  - frontend/src/store/auth-store.ts
-  - frontend/src/lib/http.ts
-  - frontend/src/api/auth.ts
-- 要求：
-  - 页面守卫不能只看 token 是否存在，启动时要做一次 `getMe()` / session 校验。
-  - 菜单按权限动态展示，不要给无权限用户展示所有模块入口。
-  - 401 时不仅清 token，还要有统一重定向和提示。
-  - 优先考虑 refresh token + session revocation；至少为 token 过期/失效做完整处理。
-  - 评估是否把 token 从 localStorage 改成更安全的 httpOnly cookie 方案。
-- 验收标准：
+- 已完成：
+  - `ProtectedRoute` 启动时会调用 `getMe()` 做 session 校验。
+  - `AppLayout` 已按权限动态展示菜单入口。
+  - `401` 时前端会统一清理凭据、写入提示并跳转登录页。
+  - refresh token 已接入，后端也支持 refresh rotation / session 校验。
   - 非 admin 用户不会看到无权限模块入口。
-  - 刷新页面后能正确恢复合法 session，非法/过期 session 会被清理并跳转登录页。
+- 尚未完全收口：
+  - token 仍存于前端存储中，尚未切到 httpOnly cookie。
+  - `progress` 原要求里“评估是否改成 httpOnly cookie”尚未形成明确结论或文档决议。
+  - 这一块的自动化测试覆盖还不够系统。
+- 当前判断：部分完成，先不要划掉。
 
-P1-3：把“异步任务”从 demo 变成真正的后台作业框架
-- 涉及文件：
-  - backend/internal/service/task_service.go
-  - backend/internal/api/router.go
-  - frontend/src/pages/TasksPage.tsx
-- 要求：
-  - 当前任务系统只有 `CreateDemoTask`，请接入真实场景：
-    - 备份
-    - 大文件操作
-    - 服务批量动作
-    - 容器镜像拉取/重启
-  - 支持取消、失败重试、进度、日志流。
-- 验收标准：
-  - 至少 1~2 个真实操作通过 task 框架异步执行，而不是 demo mock。
+~~P1-3：把“异步任务”从 demo 变成真正的后台作业框架~~
+- 已完成：
+  - 已移除 demo task 方向，当前任务系统已接入真实操作。
+  - backend task service 支持真实的 docker restart / service restart。
+  - 已支持取消、失败重试、进度、日志记录与详情查看。
+  - 前端 `TasksPage` 已对接真实任务列表与详情。
+- 当前判断：按原验收标准可视为完成。
 
-P1-4：把文件模块补到“能用于真实运维”的程度
-- 涉及文件：
-  - frontend/src/pages/FilesPage.tsx
-  - core-agent/src/file/service.rs
-- 要求：
-  - 现在读文件固定 1MB、文本扩展名白名单较硬、无下载/上传/重命名/权限信息/二进制处理。
-  - 先补最实用的：
-    - 下载
-    - 上传
-    - 重命名
-    - 明确的二进制文件提示
-    - 大文件分块/分页读取
-    - 更细的错误提示
-- 验收标准：
-  - 不会因为大文件/二进制文件把 UI 直接搞坏。
-  - 文件操作失败时能给出可理解的原因。
-
-【第三批（P2）】
+~~P1-4：把文件模块补到“能用于真实运维”的程度~~
+- 已完成：
+  - 已支持下载、上传、重命名。
+  - 已有明确二进制文件提示。
+  - backend/core-agent 已支持大文件分块下载与上传。
+  - 前端支持 preview limit 调整、下载/上传进度和更细错误提示。
+  - 安全校验包含 safe roots / dangerous path / encoding / size 等错误分型。
+- 当前判断：按原验收标准可视为完成。
 
 P2-1：补齐测试矩阵，不要只停留在零散 unit test
-- 现状判断：
-  - 已有一些点状测试，但覆盖面明显不够，尤其缺 backend+agent+db 的 integration 和前端 e2e。
-- 要求：
-  - 增加：
-    - proto contract tests
-    - backend + core-agent + postgres 的 integration tests
-    - auth / permission / path traversal / cron 安全回归测试
-    - 前端登录 + 文件浏览 + 权限隐藏的 e2e
-- 验收标准：
-  - CI 至少覆盖：build、lint、unit、integration、关键 e2e smoke。
+- 当前已有：
+  - backend unit tests
+  - backend + fake agent integration-style tests
+  - cron / auth / path traversal 等安全相关测试
+  - frontend vitest 单测
+  - CI workflow 基础构建
+- 明显缺失：
+  - proto contract tests
+  - backend + core-agent + postgres 的真实 integration tests
+  - 前端 e2e（登录 / 文件浏览 / 权限隐藏）
+  - 更完整的 CI 分层矩阵（integration / smoke e2e）
+- 当前判断：未完成。
 
 P2-2：补齐生产化观测能力
-- 涉及方向：
-  - request id 串联
-  - metrics
-  - tracing
-  - health/readiness
-  - audit 检索维度
-- 要求：
-  - 现在 access log 有基础日志，但还不够生产排障。
-  - 给 backend/core-agent 增加 Prometheus metrics 或 OTel 方案。
-- 验收标准：
-  - 能定位一次用户操作跨 frontend/backend/agent 的链路。
+- 当前已有：
+  - backend request id
+  - access log
+  - health / readiness
+  - core-agent tracing 日志
+  - audit logs 基础检索
+- 仍缺：
+  - Prometheus metrics 或 OTel
+  - 更完整的 frontend/backend/agent 链路串联
+  - 面向生产排障的统一 tracing / metrics 方案
+- 当前判断：未完成。
 
 P2-3：清理“原型痕迹”和重复逻辑
-- 涉及点：
-  - 各 service 层里那些 no-op `emitAudit` 可以删除或统一接入真正审计，避免 handler 记录一套、service 预留一套。
-  - 把 docs 里“未来计划”和当前已实现能力重新对齐。
-- 验收标准：
-  - 代码里不再保留误导性的占位逻辑或重复抽象。
+- 当前问题：
+  - `backend/README.md` 仍有关于 grpc transport placeholder 的过时描述。
+  - 部分文档判断已明显落后于当前实现。
+  - 代码中仍有少量占位痕迹，例如 `tail_logs_placeholder`。
+- 当前判断：未完成。
 
-【执行顺序建议】
-1. 先做 P0-2（确定 agent 的真实运行形态）
-2. 再做 P0-1（打通真实 gRPC）
-3. 然后做 P0-3 / P0-4（安全收口）
-4. 再做 P1-1 / P1-2（RBAC + session）
-5. 最后做 P1-3 / P1-4 / P2（真实任务、文件能力、测试与观测）
+【建议剩余执行顺序】
+
+1. 先收尾 `P1-2`
+   - 明确 token 存储策略是否迁移到 httpOnly cookie
+   - 补 session / permission 前端回归测试
+2. 再做 `P2-1`
+   - 补真实 integration 和关键 e2e
+3. 再做 `P2-2`
+   - metrics / tracing / 统一链路观测
+4. 最后做 `P2-3`
+   - 文档与代码占位痕迹清理
 
 【不要先做的事】
+
 - 不要先改配色/组件库/动画。
 - 不要先扩页面数量。
 - 不要先做“品牌官网式 README 美化”。
-- 不要在主链路没闭环前就宣称可用于宿主机运维。
+- 不要在 `P2` 未补齐前就把项目描述成“生产就绪”。
 
 【一句话结论】
-这个仓库“有继续做下去的价值”，但当前最值得改进的不是功能广度，而是：
-“把 backend ↔ core-agent ↔ 宿主机 这条控制链真正跑通，并把默认高危入口全部收口”。
+
+这个仓库已经从“主链路没打通的原型”推进到了“主链路、安全收口、RBAC、真实任务/文件能力基本完成”的阶段；接下来最值得投入的方向，是把 session 收尾、测试矩阵补齐，并补上生产观测能力。
