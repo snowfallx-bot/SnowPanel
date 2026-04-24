@@ -66,7 +66,7 @@ func New(registerer prometheus.Registerer) *Set {
 				Name:      "requests_total",
 				Help:      "Total number of core-agent RPC requests attempted by the backend.",
 			},
-			[]string{"outcome", "transport"},
+			[]string{"rpc", "outcome", "transport"},
 		),
 		AgentRequestDuration: prometheus.NewHistogramVec(
 			prometheus.HistogramOpts{
@@ -76,7 +76,7 @@ func New(registerer prometheus.Registerer) *Set {
 				Help:      "Latency of core-agent RPC requests attempted by the backend.",
 				Buckets:   prometheus.DefBuckets,
 			},
-			[]string{"outcome", "transport"},
+			[]string{"rpc", "outcome", "transport"},
 		),
 	}
 
@@ -102,9 +102,12 @@ func (s *Set) ObserveHTTPRequest(method, route string, statusCode int, duration 
 	s.HTTPRequestDuration.WithLabelValues(method, route).Observe(duration.Seconds())
 }
 
-func (s *Set) ObserveAgentRequest(transport bool, err error, duration time.Duration) {
+func (s *Set) ObserveAgentRequest(rpc string, transport bool, err error, duration time.Duration) {
 	if s == nil {
 		return
+	}
+	if rpc == "" {
+		rpc = "unknown"
 	}
 
 	outcome := "success"
@@ -116,6 +119,6 @@ func (s *Set) ObserveAgentRequest(transport bool, err error, duration time.Durat
 		transportLabel = "true"
 	}
 
-	s.AgentRequestsTotal.WithLabelValues(outcome, transportLabel).Inc()
-	s.AgentRequestDuration.WithLabelValues(outcome, transportLabel).Observe(duration.Seconds())
+	s.AgentRequestsTotal.WithLabelValues(rpc, outcome, transportLabel).Inc()
+	s.AgentRequestDuration.WithLabelValues(rpc, outcome, transportLabel).Observe(duration.Seconds())
 }

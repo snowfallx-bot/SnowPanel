@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
+use tonic::metadata::MetadataMap;
 use tonic::{Request, Response, Status};
 use tracing::info;
 
@@ -83,24 +84,40 @@ impl GrpcServer {
         info!("core-agent grpc server listening on {}", socket_addr);
 
         tonic::transport::Server::builder()
-            .add_service(HealthServiceServer::new(HealthServiceImpl))
-            .add_service(SystemServiceServer::new(SystemServiceImpl {
-                system_info_service: self.system_info_service.clone(),
-            }))
-            .add_service(FileServiceServer::new(FileServiceImpl {
-                file_service: self.file_service.clone(),
-            }))
-            .add_service(ServiceManagerServiceServer::new(
+            .add_service(HealthServiceServer::with_interceptor(
+                HealthServiceImpl,
+                request_logging_interceptor,
+            ))
+            .add_service(SystemServiceServer::with_interceptor(
+                SystemServiceImpl {
+                    system_info_service: self.system_info_service.clone(),
+                },
+                request_logging_interceptor,
+            ))
+            .add_service(FileServiceServer::with_interceptor(
+                FileServiceImpl {
+                    file_service: self.file_service.clone(),
+                },
+                request_logging_interceptor,
+            ))
+            .add_service(ServiceManagerServiceServer::with_interceptor(
                 ServiceManagerServiceImpl {
                     service_manager: self.service_manager.clone(),
                 },
+                request_logging_interceptor,
             ))
-            .add_service(DockerServiceServer::new(DockerServiceImpl {
-                docker_service: self.docker_service.clone(),
-            }))
-            .add_service(CronServiceServer::new(CronServiceImpl {
-                cron_service: self.cron_service.clone(),
-            }))
+            .add_service(DockerServiceServer::with_interceptor(
+                DockerServiceImpl {
+                    docker_service: self.docker_service.clone(),
+                },
+                request_logging_interceptor,
+            ))
+            .add_service(CronServiceServer::with_interceptor(
+                CronServiceImpl {
+                    cron_service: self.cron_service.clone(),
+                },
+                request_logging_interceptor,
+            ))
             .serve(socket_addr)
             .await
             .with_context(|| format!("grpc server terminated unexpectedly on {socket_addr}"))?;
@@ -271,6 +288,41 @@ fn ok_error() -> Error {
         message: "ok".to_string(),
         detail: String::new(),
     }
+}
+
+fn request_logging_interceptor(request: Request<()>) -> Result<Request<()>, Status> {
+    let grpc_method = request.uri().path().to_string();
+    let request_id = request_id_from_metadata(request.metadata());
+
+    info!(
+        request_id = request_id.as_str(),
+        grpc_method = grpc_method.as_str(),
+        "core-agent grpc request"
+    );
+
+    Ok(request)
+}
+
+fn request_id_from_metadata(metadata: &MetadataMap) -> String {
+    const HEADER: &str = "x-request-id";
+    const MAX_LEN: usize = 128;
+
+    let Some(raw) = metadata.get(HEADER) else {
+        return "missing".to_string();
+    };
+
+    let Ok(value) = raw.to_str() else {
+        return "invalid".to_string();
+    };
+
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return "missing".to_string();
+    }
+    if trimmed.len() > MAX_LEN {
+        return trimmed.chars().take(MAX_LEN).collect::<String>();
+    }
+    trimmed.to_string()
 }
 
 #[derive(Clone)]

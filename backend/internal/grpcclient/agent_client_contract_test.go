@@ -9,8 +9,10 @@ import (
 	"time"
 
 	agentv1 "github.com/snowfallx-bot/SnowPanel/backend/internal/grpcclient/pb/proto/agent/v1"
+	"github.com/snowfallx-bot/SnowPanel/backend/internal/requestctx"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
@@ -25,6 +27,41 @@ func TestClientCheckHealthViaProtoContract(t *testing.T) {
 	}
 	if statusValue != "SERVING" {
 		t.Fatalf("unexpected health status: %s", statusValue)
+	}
+}
+
+func TestClientCheckHealthPropagatesRequestID(t *testing.T) {
+	requestIDCh := make(chan string, 1)
+	target := startProtoContractServer(t, protoContractOptions{
+		healthObserver: func(ctx context.Context) {
+			md, ok := metadata.FromIncomingContext(ctx)
+			if !ok {
+				requestIDCh <- ""
+				return
+			}
+			values := md.Get(requestIDMetadataKey)
+			if len(values) == 0 {
+				requestIDCh <- ""
+				return
+			}
+			requestIDCh <- values[0]
+		},
+	})
+	client := New(target, 2*time.Second)
+
+	ctx := requestctx.WithRequestID(context.Background(), "req-chain-123")
+	_, err := client.CheckHealth(ctx)
+	if err != nil {
+		t.Fatalf("CheckHealth() error = %v", err)
+	}
+
+	select {
+	case observed := <-requestIDCh:
+		if observed != "req-chain-123" {
+			t.Fatalf("expected propagated request id req-chain-123, got %q", observed)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for propagated request id")
 	}
 }
 
@@ -170,6 +207,7 @@ func TestGeneratedGoProtoDescriptorsExposeCriticalServices(t *testing.T) {
 type protoContractOptions struct {
 	healthTransportCode codes.Code
 	listFilesError      *agentv1.Error
+	healthObserver      func(context.Context)
 }
 
 func startProtoContractServer(t *testing.T, opts protoContractOptions) string {
@@ -206,7 +244,10 @@ type protoContractHealthService struct {
 	opts protoContractOptions
 }
 
-func (s *protoContractHealthService) Check(context.Context, *agentv1.HealthCheckRequest) (*agentv1.HealthCheckResponse, error) {
+func (s *protoContractHealthService) Check(ctx context.Context, _ *agentv1.HealthCheckRequest) (*agentv1.HealthCheckResponse, error) {
+	if s.opts.healthObserver != nil {
+		s.opts.healthObserver(ctx)
+	}
 	if s.opts.healthTransportCode != codes.OK {
 		return nil, status.Error(s.opts.healthTransportCode, "health check not implemented by fake contract server")
 	}

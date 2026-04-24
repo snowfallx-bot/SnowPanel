@@ -10,15 +10,18 @@ import (
 
 	agentv1 "github.com/snowfallx-bot/SnowPanel/backend/internal/grpcclient/pb/proto/agent/v1"
 	appmetrics "github.com/snowfallx-bot/SnowPanel/backend/internal/metrics"
+	"github.com/snowfallx-bot/SnowPanel/backend/internal/requestctx"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
 const (
 	agentUnavailableCode    int32 = 3001
 	agentInvalidPayloadCode int32 = 3002
+	requestIDMetadataKey          = "x-request-id"
 )
 
 var agentMetrics = appmetrics.Default()
@@ -335,7 +338,7 @@ func (c *Client) Timeout() time.Duration {
 
 func (c *Client) CheckHealth(ctx context.Context) (string, error) {
 	result := ""
-	err := c.invoke(ctx, func(callCtx context.Context, conn *grpc.ClientConn) error {
+	err := c.invoke(ctx, "health.check", func(callCtx context.Context, conn *grpc.ClientConn) error {
 		client := agentv1.NewHealthServiceClient(conn)
 		resp, err := client.Check(callCtx, &agentv1.HealthCheckRequest{})
 		if err != nil {
@@ -355,7 +358,7 @@ func (c *Client) CheckHealth(ctx context.Context) (string, error) {
 
 func (c *Client) GetSystemOverview(ctx context.Context) (SystemOverview, error) {
 	result := SystemOverview{}
-	err := c.invoke(ctx, func(callCtx context.Context, conn *grpc.ClientConn) error {
+	err := c.invoke(ctx, "system.get_overview", func(callCtx context.Context, conn *grpc.ClientConn) error {
 		client := agentv1.NewSystemServiceClient(conn)
 		resp, err := client.GetSystemOverview(callCtx, &agentv1.GetSystemOverviewRequest{})
 		if err != nil {
@@ -386,7 +389,7 @@ func (c *Client) GetSystemOverview(ctx context.Context) (SystemOverview, error) 
 
 func (c *Client) GetRealtimeResource(ctx context.Context) (RealtimeResource, error) {
 	result := RealtimeResource{}
-	err := c.invoke(ctx, func(callCtx context.Context, conn *grpc.ClientConn) error {
+	err := c.invoke(ctx, "system.get_realtime_resource", func(callCtx context.Context, conn *grpc.ClientConn) error {
 		client := agentv1.NewSystemServiceClient(conn)
 		resp, err := client.GetRealtimeResource(callCtx, &agentv1.GetRealtimeResourceRequest{})
 		if err != nil {
@@ -416,7 +419,7 @@ func (c *Client) GetRealtimeResource(ctx context.Context) (RealtimeResource, err
 
 func (c *Client) ListFiles(ctx context.Context, req ListFilesRequest) (ListFilesResult, error) {
 	result := ListFilesResult{}
-	err := c.invoke(ctx, func(callCtx context.Context, conn *grpc.ClientConn) error {
+	err := c.invoke(ctx, "file.list", func(callCtx context.Context, conn *grpc.ClientConn) error {
 		client := agentv1.NewFileServiceClient(conn)
 		resp, err := client.ListFiles(callCtx, &agentv1.ListFilesRequest{
 			Path: req.Path,
@@ -450,7 +453,7 @@ func (c *Client) ListFiles(ctx context.Context, req ListFilesRequest) (ListFiles
 
 func (c *Client) ReadTextFile(ctx context.Context, req ReadTextFileRequest) (ReadTextFileResult, error) {
 	result := ReadTextFileResult{}
-	err := c.invoke(ctx, func(callCtx context.Context, conn *grpc.ClientConn) error {
+	err := c.invoke(ctx, "file.read_text", func(callCtx context.Context, conn *grpc.ClientConn) error {
 		client := agentv1.NewFileServiceClient(conn)
 		resp, err := client.ReadTextFile(callCtx, &agentv1.ReadTextFileRequest{
 			Path:     req.Path,
@@ -478,7 +481,7 @@ func (c *Client) ReadTextFile(ctx context.Context, req ReadTextFileRequest) (Rea
 
 func (c *Client) ReadFileChunk(ctx context.Context, req ReadFileChunkRequest) (ReadFileChunkResult, error) {
 	result := ReadFileChunkResult{}
-	err := c.invoke(ctx, func(callCtx context.Context, conn *grpc.ClientConn) error {
+	err := c.invoke(ctx, "file.read_chunk", func(callCtx context.Context, conn *grpc.ClientConn) error {
 		client := agentv1.NewFileServiceClient(conn)
 		resp, err := client.ReadFileChunk(callCtx, &agentv1.ReadFileChunkRequest{
 			Path:   req.Path,
@@ -506,7 +509,7 @@ func (c *Client) ReadFileChunk(ctx context.Context, req ReadFileChunkRequest) (R
 
 func (c *Client) WriteFileChunk(ctx context.Context, req WriteFileChunkRequest) (WriteFileChunkResult, error) {
 	result := WriteFileChunkResult{}
-	err := c.invoke(ctx, func(callCtx context.Context, conn *grpc.ClientConn) error {
+	err := c.invoke(ctx, "file.write_chunk", func(callCtx context.Context, conn *grpc.ClientConn) error {
 		client := agentv1.NewFileServiceClient(conn)
 		resp, err := client.WriteFileChunk(callCtx, &agentv1.WriteFileChunkRequest{
 			Path:              req.Path,
@@ -535,7 +538,7 @@ func (c *Client) WriteFileChunk(ctx context.Context, req WriteFileChunkRequest) 
 
 func (c *Client) WriteTextFile(ctx context.Context, req WriteTextFileRequest) (WriteTextFileResult, error) {
 	result := WriteTextFileResult{}
-	err := c.invoke(ctx, func(callCtx context.Context, conn *grpc.ClientConn) error {
+	err := c.invoke(ctx, "file.write_text", func(callCtx context.Context, conn *grpc.ClientConn) error {
 		client := agentv1.NewFileServiceClient(conn)
 		resp, err := client.WriteTextFile(callCtx, &agentv1.WriteTextFileRequest{
 			Path:              req.Path,
@@ -565,7 +568,7 @@ func (c *Client) CreateDirectory(
 	req CreateDirectoryRequest,
 ) (CreateDirectoryResult, error) {
 	result := CreateDirectoryResult{}
-	err := c.invoke(ctx, func(callCtx context.Context, conn *grpc.ClientConn) error {
+	err := c.invoke(ctx, "file.create_directory", func(callCtx context.Context, conn *grpc.ClientConn) error {
 		client := agentv1.NewFileServiceClient(conn)
 		resp, err := client.CreateDirectory(callCtx, &agentv1.CreateDirectoryRequest{
 			Path:          req.Path,
@@ -587,7 +590,7 @@ func (c *Client) CreateDirectory(
 
 func (c *Client) DeleteFile(ctx context.Context, req DeleteFileRequest) (DeleteFileResult, error) {
 	result := DeleteFileResult{}
-	err := c.invoke(ctx, func(callCtx context.Context, conn *grpc.ClientConn) error {
+	err := c.invoke(ctx, "file.delete", func(callCtx context.Context, conn *grpc.ClientConn) error {
 		client := agentv1.NewFileServiceClient(conn)
 		resp, err := client.DeleteFile(callCtx, &agentv1.DeleteFileRequest{
 			Path:      req.Path,
@@ -609,7 +612,7 @@ func (c *Client) DeleteFile(ctx context.Context, req DeleteFileRequest) (DeleteF
 
 func (c *Client) RenameFile(ctx context.Context, req RenameFileRequest) (RenameFileResult, error) {
 	result := RenameFileResult{}
-	err := c.invoke(ctx, func(callCtx context.Context, conn *grpc.ClientConn) error {
+	err := c.invoke(ctx, "file.rename", func(callCtx context.Context, conn *grpc.ClientConn) error {
 		client := agentv1.NewFileServiceClient(conn)
 		resp, err := client.RenameFile(callCtx, &agentv1.RenameFileRequest{
 			SourcePath: req.SourcePath,
@@ -633,7 +636,7 @@ func (c *Client) RenameFile(ctx context.Context, req RenameFileRequest) (RenameF
 
 func (c *Client) ListServices(ctx context.Context, req ListServicesRequest) (ListServicesResult, error) {
 	result := ListServicesResult{}
-	err := c.invoke(ctx, func(callCtx context.Context, conn *grpc.ClientConn) error {
+	err := c.invoke(ctx, "service.list", func(callCtx context.Context, conn *grpc.ClientConn) error {
 		client := agentv1.NewServiceManagerServiceClient(conn)
 		resp, err := client.ListServices(callCtx, &agentv1.ListServicesRequest{
 			Keyword: req.Keyword,
@@ -660,7 +663,7 @@ func (c *Client) ListServices(ctx context.Context, req ListServicesRequest) (Lis
 }
 
 func (c *Client) StartService(ctx context.Context, req ServiceActionRequest) (ServiceActionResult, error) {
-	return c.runServiceAction(ctx, req.Name, func(
+	return c.runServiceAction(ctx, "service.start", req.Name, func(
 		callCtx context.Context,
 		client agentv1.ServiceManagerServiceClient,
 		request *agentv1.ServiceActionRequest,
@@ -670,7 +673,7 @@ func (c *Client) StartService(ctx context.Context, req ServiceActionRequest) (Se
 }
 
 func (c *Client) StopService(ctx context.Context, req ServiceActionRequest) (ServiceActionResult, error) {
-	return c.runServiceAction(ctx, req.Name, func(
+	return c.runServiceAction(ctx, "service.stop", req.Name, func(
 		callCtx context.Context,
 		client agentv1.ServiceManagerServiceClient,
 		request *agentv1.ServiceActionRequest,
@@ -680,7 +683,7 @@ func (c *Client) StopService(ctx context.Context, req ServiceActionRequest) (Ser
 }
 
 func (c *Client) RestartService(ctx context.Context, req ServiceActionRequest) (ServiceActionResult, error) {
-	return c.runServiceAction(ctx, req.Name, func(
+	return c.runServiceAction(ctx, "service.restart", req.Name, func(
 		callCtx context.Context,
 		client agentv1.ServiceManagerServiceClient,
 		request *agentv1.ServiceActionRequest,
@@ -691,7 +694,7 @@ func (c *Client) RestartService(ctx context.Context, req ServiceActionRequest) (
 
 func (c *Client) ListDockerContainers(ctx context.Context) (ListDockerContainersResult, error) {
 	result := ListDockerContainersResult{}
-	err := c.invoke(ctx, func(callCtx context.Context, conn *grpc.ClientConn) error {
+	err := c.invoke(ctx, "docker.list_containers", func(callCtx context.Context, conn *grpc.ClientConn) error {
 		client := agentv1.NewDockerServiceClient(conn)
 		resp, err := client.ListContainers(callCtx, &agentv1.ListDockerContainersRequest{})
 		if err != nil {
@@ -721,7 +724,7 @@ func (c *Client) StartDockerContainer(
 	ctx context.Context,
 	req DockerContainerActionRequest,
 ) (DockerContainerActionResult, error) {
-	return c.runDockerAction(ctx, req.ID, func(
+	return c.runDockerAction(ctx, "docker.start", req.ID, func(
 		callCtx context.Context,
 		client agentv1.DockerServiceClient,
 		request *agentv1.DockerContainerActionRequest,
@@ -734,7 +737,7 @@ func (c *Client) StopDockerContainer(
 	ctx context.Context,
 	req DockerContainerActionRequest,
 ) (DockerContainerActionResult, error) {
-	return c.runDockerAction(ctx, req.ID, func(
+	return c.runDockerAction(ctx, "docker.stop", req.ID, func(
 		callCtx context.Context,
 		client agentv1.DockerServiceClient,
 		request *agentv1.DockerContainerActionRequest,
@@ -747,7 +750,7 @@ func (c *Client) RestartDockerContainer(
 	ctx context.Context,
 	req DockerContainerActionRequest,
 ) (DockerContainerActionResult, error) {
-	return c.runDockerAction(ctx, req.ID, func(
+	return c.runDockerAction(ctx, "docker.restart", req.ID, func(
 		callCtx context.Context,
 		client agentv1.DockerServiceClient,
 		request *agentv1.DockerContainerActionRequest,
@@ -758,7 +761,7 @@ func (c *Client) RestartDockerContainer(
 
 func (c *Client) ListDockerImages(ctx context.Context) (ListDockerImagesResult, error) {
 	result := ListDockerImagesResult{}
-	err := c.invoke(ctx, func(callCtx context.Context, conn *grpc.ClientConn) error {
+	err := c.invoke(ctx, "docker.list_images", func(callCtx context.Context, conn *grpc.ClientConn) error {
 		client := agentv1.NewDockerServiceClient(conn)
 		resp, err := client.ListImages(callCtx, &agentv1.ListDockerImagesRequest{})
 		if err != nil {
@@ -784,7 +787,7 @@ func (c *Client) ListDockerImages(ctx context.Context) (ListDockerImagesResult, 
 
 func (c *Client) ListCronTasks(ctx context.Context) (ListCronTasksResult, error) {
 	result := ListCronTasksResult{}
-	err := c.invoke(ctx, func(callCtx context.Context, conn *grpc.ClientConn) error {
+	err := c.invoke(ctx, "cron.list", func(callCtx context.Context, conn *grpc.ClientConn) error {
 		client := agentv1.NewCronServiceClient(conn)
 		resp, err := client.ListCronTasks(callCtx, &agentv1.ListCronTasksRequest{})
 		if err != nil {
@@ -811,7 +814,7 @@ func (c *Client) ListCronTasks(ctx context.Context) (ListCronTasksResult, error)
 
 func (c *Client) CreateCronTask(ctx context.Context, req CreateCronTaskRequest) (CreateCronTaskResult, error) {
 	result := CreateCronTaskResult{}
-	err := c.invoke(ctx, func(callCtx context.Context, conn *grpc.ClientConn) error {
+	err := c.invoke(ctx, "cron.create", func(callCtx context.Context, conn *grpc.ClientConn) error {
 		client := agentv1.NewCronServiceClient(conn)
 		resp, err := client.CreateCronTask(callCtx, &agentv1.CreateCronTaskRequest{
 			Expression: req.Expression,
@@ -836,7 +839,7 @@ func (c *Client) CreateCronTask(ctx context.Context, req CreateCronTaskRequest) 
 
 func (c *Client) UpdateCronTask(ctx context.Context, req UpdateCronTaskRequest) (UpdateCronTaskResult, error) {
 	result := UpdateCronTaskResult{}
-	err := c.invoke(ctx, func(callCtx context.Context, conn *grpc.ClientConn) error {
+	err := c.invoke(ctx, "cron.update", func(callCtx context.Context, conn *grpc.ClientConn) error {
 		client := agentv1.NewCronServiceClient(conn)
 		resp, err := client.UpdateCronTask(callCtx, &agentv1.UpdateCronTaskRequest{
 			Id:         req.ID,
@@ -862,7 +865,7 @@ func (c *Client) UpdateCronTask(ctx context.Context, req UpdateCronTaskRequest) 
 
 func (c *Client) DeleteCronTask(ctx context.Context, req DeleteCronTaskRequest) (DeleteCronTaskResult, error) {
 	result := DeleteCronTaskResult{}
-	err := c.invoke(ctx, func(callCtx context.Context, conn *grpc.ClientConn) error {
+	err := c.invoke(ctx, "cron.delete", func(callCtx context.Context, conn *grpc.ClientConn) error {
 		client := agentv1.NewCronServiceClient(conn)
 		resp, err := client.DeleteCronTask(callCtx, &agentv1.DeleteCronTaskRequest{
 			Id: req.ID,
@@ -884,7 +887,7 @@ func (c *Client) SetCronTaskEnabled(
 	req SetCronTaskEnabledRequest,
 ) (SetCronTaskEnabledResult, error) {
 	result := SetCronTaskEnabledResult{}
-	err := c.invoke(ctx, func(callCtx context.Context, conn *grpc.ClientConn) error {
+	err := c.invoke(ctx, "cron.set_enabled", func(callCtx context.Context, conn *grpc.ClientConn) error {
 		client := agentv1.NewCronServiceClient(conn)
 		resp, err := client.SetCronTaskEnabled(callCtx, &agentv1.SetCronTaskEnabledRequest{
 			Id:      req.ID,
@@ -908,6 +911,7 @@ func (c *Client) SetCronTaskEnabled(
 
 func (c *Client) runServiceAction(
 	ctx context.Context,
+	rpcName string,
 	name string,
 	rpc func(
 		callCtx context.Context,
@@ -916,7 +920,7 @@ func (c *Client) runServiceAction(
 	) (*agentv1.ServiceActionResponse, error),
 ) (ServiceActionResult, error) {
 	result := ServiceActionResult{}
-	err := c.invoke(ctx, func(callCtx context.Context, conn *grpc.ClientConn) error {
+	err := c.invoke(ctx, rpcName, func(callCtx context.Context, conn *grpc.ClientConn) error {
 		client := agentv1.NewServiceManagerServiceClient(conn)
 		resp, err := rpc(callCtx, client, &agentv1.ServiceActionRequest{Name: name})
 		if err != nil {
@@ -936,6 +940,7 @@ func (c *Client) runServiceAction(
 
 func (c *Client) runDockerAction(
 	ctx context.Context,
+	rpcName string,
 	id string,
 	rpc func(
 		callCtx context.Context,
@@ -944,7 +949,7 @@ func (c *Client) runDockerAction(
 	) (*agentv1.DockerContainerActionResponse, error),
 ) (DockerContainerActionResult, error) {
 	result := DockerContainerActionResult{}
-	err := c.invoke(ctx, func(callCtx context.Context, conn *grpc.ClientConn) error {
+	err := c.invoke(ctx, rpcName, func(callCtx context.Context, conn *grpc.ClientConn) error {
 		client := agentv1.NewDockerServiceClient(conn)
 		resp, err := rpc(callCtx, client, &agentv1.DockerContainerActionRequest{Id: id})
 		if err != nil {
@@ -962,7 +967,11 @@ func (c *Client) runDockerAction(
 	return result, err
 }
 
-func (c *Client) invoke(ctx context.Context, call func(context.Context, *grpc.ClientConn) error) error {
+func (c *Client) invoke(
+	ctx context.Context,
+	rpcName string,
+	call func(context.Context, *grpc.ClientConn) error,
+) error {
 	startedAt := time.Now()
 	callCtx := ctx
 	cancel := func() {}
@@ -970,6 +979,7 @@ func (c *Client) invoke(ctx context.Context, call func(context.Context, *grpc.Cl
 		callCtx, cancel = context.WithTimeout(ctx, c.timeout)
 	}
 	defer cancel()
+	callCtx = withOutgoingRequestID(callCtx)
 
 	conn, err := grpc.DialContext(
 		callCtx,
@@ -979,7 +989,7 @@ func (c *Client) invoke(ctx context.Context, call func(context.Context, *grpc.Cl
 	)
 	if err != nil {
 		transportErr := transportError(err)
-		agentMetrics.ObserveAgentRequest(true, transportErr, time.Since(startedAt))
+		agentMetrics.ObserveAgentRequest(rpcName, true, transportErr, time.Since(startedAt))
 		return transportErr
 	}
 	defer conn.Close()
@@ -987,16 +997,29 @@ func (c *Client) invoke(ctx context.Context, call func(context.Context, *grpc.Cl
 	if err := call(callCtx, conn); err != nil {
 		var agentErr *AgentError
 		if errors.As(err, &agentErr) {
-			agentMetrics.ObserveAgentRequest(agentErr.IsTransport(), agentErr, time.Since(startedAt))
+			agentMetrics.ObserveAgentRequest(
+				rpcName,
+				agentErr.IsTransport(),
+				agentErr,
+				time.Since(startedAt),
+			)
 			return agentErr
 		}
 		transportErr := transportError(err)
-		agentMetrics.ObserveAgentRequest(true, transportErr, time.Since(startedAt))
+		agentMetrics.ObserveAgentRequest(rpcName, true, transportErr, time.Since(startedAt))
 		return transportErr
 	}
 
-	agentMetrics.ObserveAgentRequest(false, nil, time.Since(startedAt))
+	agentMetrics.ObserveAgentRequest(rpcName, false, nil, time.Since(startedAt))
 	return nil
+}
+
+func withOutgoingRequestID(ctx context.Context) context.Context {
+	requestID, ok := requestctx.RequestID(ctx)
+	if !ok {
+		return ctx
+	}
+	return metadata.AppendToOutgoingContext(ctx, requestIDMetadataKey, requestID)
 }
 
 func responseError(err *agentv1.Error) error {
