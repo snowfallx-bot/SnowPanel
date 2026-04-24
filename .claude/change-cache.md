@@ -12,46 +12,44 @@
 
 ============
 
-本轮继续推进 `P2-2`，把可观测性从“可采指标”推进到“可落地报警”。
+本轮继续推进 `P2-2`，在“Prometheus 基线 + 告警规则”基础上补上 Alertmanager 路由链路，完成“规则触发 -> 告警聚合/路由”闭环。
 
 本次核心判断
 
-1. 目前 backend/core-agent 都有 metrics，但缺统一抓取入口和默认告警规则，现场排障仍依赖人工看图。
-2. 在 OTel 大改前，先落 Prometheus 基线 stack 与 alert rules，能最快形成生产可执行的观测闭环。
+1. 上轮已有规则，但 Prometheus 未配置 `alerting` 目标，规则触发后不能进入统一告警路由。
+2. 先补 Alertmanager baseline（含默认 no-op 接收器 + critical 路由模板）可保证部署稳定，同时给后续接入真实通知渠道留清晰入口。
 
 本轮实际改动
 
-1. 新增 observability compose 覆盖
-   - `docker-compose.observability.yml`
-   - 提供 `prometheus` 服务、持久卷、端口映射（默认 `9090`），并支持抓取 host-agent（`host.docker.internal`）。
+1. observability stack 新增 Alertmanager
+   - 更新 `docker-compose.observability.yml`：
+     - 新增 `alertmanager` 服务（默认端口 `9093`）。
+     - `prometheus` 增加对 `alertmanager` 的依赖。
+   - 新增持久卷 `alertmanager_data`。
 
-2. 新增 Prometheus 基线配置与告警
-   - `deploy/observability/prometheus/prometheus.yml`
-   - `deploy/observability/prometheus/alerts/snowpanel-alerts.yml`
-   - 默认抓取目标：
-     - `snowpanel-backend` -> `backend:8080/metrics`
-     - `snowpanel-core-agent-compose` -> `core-agent:9108/metrics`
-     - `snowpanel-core-agent-host` -> `host.docker.internal:9108/metrics`
-   - 基线告警：
-     - `SnowPanelBackendDown`
-     - `SnowPanelCoreAgentMetricsDown`
-     - `SnowPanelBackendP95LatencyHigh`
-     - `SnowPanelCoreAgentP95LatencyHigh`
-     - `SnowPanelBackendAgentTransportErrorsHigh`
-     - `SnowPanelCoreAgentGrpcErrorRateHigh`
-     - `SnowPanelCoreAgentInFlightHigh`
+2. Prometheus 接入 Alertmanager
+   - 更新 `deploy/observability/prometheus/prometheus.yml`：
+     - 新增 `alerting.alertmanagers`，目标 `alertmanager:9093`。
 
-3. Makefile 增加 observability 相关目标
-   - `up-observability` / `down-observability` / `logs-observability`
-   - `up-host-agent-observability` / `down-host-agent-observability` / `logs-host-agent-observability`
+3. 新增 Alertmanager 基线路由配置
+   - 新增 `deploy/observability/alertmanager/alertmanager.yml`：
+     - 默认路由：全部告警走 `snowpanel-null`。
+     - `severity="critical"` 告警路由到 `snowpanel-critical`。
+     - `snowpanel-critical` 预留 webhook 示例（注释模板），默认仍 no-op，确保开箱即用不误发。
+     - 增加 critical 抑制 warning 的基础 inhibit 规则。
 
-4. 配置与文档同步
-   - `.env.example` 增加 `PROMETHEUS_PORT=9090`
+4. Makefile 与环境变量同步
+   - `Makefile` 中 `logs-observability`/`logs-host-agent-observability` 追加 `alertmanager` 日志。
+   - `.env.example` 新增 `ALERTMANAGER_PORT=9093`。
+
+5. 文档与进度同步
    - 更新文档：
      - `docs/observability.md` / `docs/observability.zh-CN.md`
+       - 增加 Alertmanager 入口、路由说明、接收器配置提示。
      - `docs/deployment.md` / `docs/deployment.zh-CN.md`
-   - 更新进度状态：
-     - `progress.md` 标注“Prometheus 基线部署 + 基线告警规则”已完成，`P2-2` 仍进行中（OTel/Alertmanager/SLO 阈值校准未完成）。
+       - 增加 Alertmanager UI 地址说明。
+   - 更新 `progress.md`：
+     - 标注 Alertmanager baseline 已具备，`P2-2` 剩余项聚焦真实通知渠道与 OTel 统一管线。
 
 本轮修改文件
 
@@ -61,7 +59,7 @@
 - `Makefile`
 - `docker-compose.observability.yml`
 - `deploy/observability/prometheus/prometheus.yml`
-- `deploy/observability/prometheus/alerts/snowpanel-alerts.yml`
+- `deploy/observability/alertmanager/alertmanager.yml`
 - `docs/observability.md`
 - `docs/observability.zh-CN.md`
 - `docs/deployment.md`
@@ -77,16 +75,16 @@
 
 commit摘要
 
-- 计划提交：`feat(observability): add prometheus baseline stack and alert rules`
+- 计划提交：`feat(observability): wire prometheus alerts to alertmanager baseline`
 
 希望接下来的 AI 做什么
 
-1. 在具备 docker 的环境启动：
-   - `make up-observability` 或 `make up-host-agent-observability`
-   - 验证 Prometheus targets 与 alerts 载入状态。
-2. 根据真实运行数据校准告警阈值（p95、错误率、in-flight）。
+1. 在具备 docker 的环境验证：
+   - `make up-observability` / `make up-host-agent-observability`
+   - Prometheus targets、rule groups、Alertmanager 路由状态。
+2. 把 `snowpanel-critical` 接收器替换为真实通知渠道（webhook/email/im），并验证恢复通知 (`send_resolved`)。
 3. 继续 `P2-2` 剩余项：
-   - 接入 Alertmanager（通知路由）
-   - 设计 OTel collector/exporter（backend + core-agent 统一）
+   - OTel collector/exporter 统一方案
+   - SLO/SLI 驱动的阈值与告警升级策略
 
 by: gpt-5.5

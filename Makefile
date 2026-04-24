@@ -28,7 +28,7 @@ down-observability:
 	docker compose -f docker-compose.yml -f docker-compose.observability.yml down
 
 logs-observability:
-	docker compose -f docker-compose.yml -f docker-compose.observability.yml logs -f --tail=200 prometheus
+	docker compose -f docker-compose.yml -f docker-compose.observability.yml logs -f --tail=200 prometheus alertmanager
 
 up-host-agent-observability:
 	docker compose -f docker-compose.yml -f docker-compose.host-agent.yml -f docker-compose.observability.yml up -d --build
@@ -37,7 +37,7 @@ down-host-agent-observability:
 	docker compose -f docker-compose.yml -f docker-compose.host-agent.yml -f docker-compose.observability.yml down
 
 logs-host-agent-observability:
-	docker compose -f docker-compose.yml -f docker-compose.host-agent.yml -f docker-compose.observability.yml logs -f --tail=200 prometheus
+	docker compose -f docker-compose.yml -f docker-compose.host-agent.yml -f docker-compose.observability.yml logs -f --tail=200 prometheus alertmanager
 
 backend:
 	cd backend && go run ./cmd/server

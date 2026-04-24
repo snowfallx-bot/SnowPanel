@@ -49,6 +49,7 @@ core-agent 在启用时也会暴露独立 Prometheus 端点：
 - Compose 覆盖文件：`docker-compose.observability.yml`
 - 抓取配置：`deploy/observability/prometheus/prometheus.yml`
 - 告警规则：`deploy/observability/prometheus/alerts/snowpanel-alerts.yml`
+- Alertmanager 路由配置：`deploy/observability/alertmanager/alertmanager.yml`
 
 启动方式：
 
@@ -58,6 +59,7 @@ core-agent 在启用时也会暴露独立 Prometheus 端点：
 查看 Prometheus：
 
 - `http://127.0.0.1:${PROMETHEUS_PORT:-9090}`
+- `http://127.0.0.1:${ALERTMANAGER_PORT:-9093}`
 
 停止方式：
 
@@ -68,6 +70,7 @@ core-agent 在启用时也会暴露独立 Prometheus 端点：
 
 - 基线抓取目标默认假设 backend `:8080` 与 core-agent metrics `:9108`。
 - 若你的运行端口不同，请同步修改 `deploy/observability/prometheus/prometheus.yml`。
+- Alertmanager 默认接收器为 no-op；请在 `deploy/observability/alertmanager/alertmanager.yml` 中配置 webhook/邮件/IM 等真实通知通道。
 
 ## 请求链路关联
 
@@ -107,6 +110,17 @@ core-agent 在启用时也会暴露独立 Prometheus 端点：
 - `SnowPanelBackendAgentTransportErrorsHigh`
 - `SnowPanelCoreAgentGrpcErrorRateHigh`
 - `SnowPanelCoreAgentInFlightHigh`
+
+## 告警投递基线
+
+Prometheus 默认会把告警发送到 Alertmanager（`alertmanager:9093`）。
+
+默认路由策略：
+
+- 所有告警 -> `snowpanel-null`
+- `severity="critical"` -> `snowpanel-critical`
+
+其中 `snowpanel-critical` 默认给出注释模板（webhook 示例），便于按团队规范接入真实通知渠道。
 
 ## 当前缺口
 

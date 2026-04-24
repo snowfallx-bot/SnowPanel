@@ -67,6 +67,7 @@ Run app stack with Prometheus baseline:
 Prometheus UI:
 
 - `http://127.0.0.1:${PROMETHEUS_PORT:-9090}`
+- `http://127.0.0.1:${ALERTMANAGER_PORT:-9093}`
 
 Stop:
 

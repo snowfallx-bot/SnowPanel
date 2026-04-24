@@ -49,6 +49,7 @@ Repository now includes a baseline Prometheus deployment:
 - Compose override: `docker-compose.observability.yml`
 - Prometheus scrape config: `deploy/observability/prometheus/prometheus.yml`
 - Alert rules: `deploy/observability/prometheus/alerts/snowpanel-alerts.yml`
+- Alertmanager routing config: `deploy/observability/alertmanager/alertmanager.yml`
 
 Start baseline stack:
 
@@ -58,6 +59,7 @@ Start baseline stack:
 Inspect Prometheus:
 
 - `http://127.0.0.1:${PROMETHEUS_PORT:-9090}`
+- `http://127.0.0.1:${ALERTMANAGER_PORT:-9093}`
 
 Stop:
 
@@ -68,6 +70,7 @@ Notes:
 
 - Baseline scrape targets assume backend `:8080` and core-agent metrics `:9108`.
 - If your runtime ports differ, update `deploy/observability/prometheus/prometheus.yml` accordingly.
+- Baseline Alertmanager receiver is intentionally no-op. Configure real webhook/email/slack receivers in `deploy/observability/alertmanager/alertmanager.yml`.
 
 ## Request Correlation
 
@@ -107,6 +110,17 @@ Default alerts include:
 - `SnowPanelBackendAgentTransportErrorsHigh`
 - `SnowPanelCoreAgentGrpcErrorRateHigh`
 - `SnowPanelCoreAgentInFlightHigh`
+
+## Alert Delivery Baseline
+
+Prometheus forwards alerts to Alertmanager (`alertmanager:9093`) by default.
+
+Current default routing:
+
+- All alerts -> `snowpanel-null`
+- `severity="critical"` -> `snowpanel-critical`
+
+`snowpanel-critical` ships as a template receiver with commented webhook example so teams can wire real notification channels explicitly.
 
 ## Current Gaps
 
