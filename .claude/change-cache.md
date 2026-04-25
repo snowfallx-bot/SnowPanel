@@ -39,7 +39,12 @@
      - 常用命令增加 `make up-observability` / `make up-host-agent-observability`。
      - 文档导航增加 observability 文档入口。
 
-5. 同步进度缓存
+5. 重写 roadmap 文档
+   - 更新 `docs/roadmap.md` / `docs/roadmap.zh-CN.md`：
+     - 从 “monorepo skeleton / generated stubs” 初始化草案，
+     - 改为“已完成基础能力 / 进行中事项 / 下一步优先级”的当前状态版。
+
+6. 同步进度缓存
    - 更新 `.claude/progress.md`：
      - 标记 `P2-3` 已从“未开始收口”推进到“进行中”。
 
@@ -50,6 +55,8 @@
 - `README.md`
 - `README.zh-CN.md`
 - `backend/README.md`
+- `docs/roadmap.md`
+- `docs/roadmap.zh-CN.md`
 - `core-agent/src/process/systemd_service.rs`
 
 本地验证
@@ -64,6 +71,7 @@ commit摘要
 
 - 已提交：`feat(observability): add otel tracing pipeline and jaeger baseline`
 - 计划下一笔提交：`docs: refresh backend and observability readmes`
+- 计划再下一笔提交：`docs: rewrite roadmap to reflect current project state`
 
 希望接下来的 AI 做什么
 
