@@ -167,6 +167,24 @@ Prometheus 默认会把告警发送到 Alertmanager（`alertmanager:9093`）。
 
 其中 `snowpanel-critical` 默认给出注释模板（webhook 示例），便于按团队规范接入真实通知渠道。
 
+## Alertmanager 落地清单
+
+从基线 no-op 路由切到真实生产告警投递时，可按以下清单执行：
+
+1. 在 `deploy/observability/alertmanager/alertmanager.yml` 中把 `snowpanel-critical` 接收器替换为真实通道（webhook/邮件/slack/wechat 等）。
+2. 按严重级别明确路由归属：
+   - `critical` -> 值班/分页通道
+   - `warning` -> 非分页运维通道（必要时新增独立 receiver/route）
+3. 保留或扩展抑制规则，让同一 `alertname` 下 `critical` 自动抑制重复 `warning` 噪音。
+4. 发布并校验路由配置：
+   - `make up-observability`（或 `make up-host-agent-observability`）
+   - 在 Alertmanager UI（`/#/status`）确认 receiver 与路由状态
+5. 做一次可控投递验证：
+   - 临时下调 `deploy/observability/prometheus/alerts/snowpanel-alerts.yml` 中某条告警阈值
+   - 生成匹配负载/流量
+   - 确认通知在去重窗口内只发送一次，且包含 `alertname`、`severity`、`instance` 等关键标签
+6. 验证后恢复原阈值，并提交最终配置/规则。
+
 ## 当前缺口
 
 - 前端/浏览器侧 tracing 尚未接入。

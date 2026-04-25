@@ -167,6 +167,24 @@ Current default routing:
 
 `snowpanel-critical` ships as a template receiver with commented webhook example so teams can wire real notification channels explicitly.
 
+## Alertmanager Rollout Checklist
+
+Use this checklist when moving from baseline no-op routing to real production delivery.
+
+1. Replace the `snowpanel-critical` receiver with a real channel in `deploy/observability/alertmanager/alertmanager.yml` (webhook/email/slack/wechat/etc).
+2. Keep explicit route ownership by severity:
+   - `critical` -> paging channel
+   - `warning` -> non-paging ops channel (add dedicated route/receiver if needed)
+3. Keep (or extend) inhibition rules so `critical` suppresses duplicate `warning` noise for the same `alertname`.
+4. Roll out and validate routing:
+   - `make up-observability` (or `make up-host-agent-observability`)
+   - verify receiver/routing state in Alertmanager UI (`/#/status`)
+5. Run a controlled delivery test:
+   - temporarily lower one alert threshold in `deploy/observability/prometheus/alerts/snowpanel-alerts.yml`
+   - generate matching traffic/load
+   - confirm notification arrives once per dedup window and includes labels (`alertname`, `severity`, `instance`)
+6. Restore the original threshold after validation and commit the final config/rule set.
+
 ## Current Gaps
 
 - No browser/frontend tracing yet.
