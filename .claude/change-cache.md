@@ -12,83 +12,58 @@
 
 ============
 
-本轮继续按“及时提交（即便小改动）”推进，优先收口 `P2-3` 文案遗留，并补充 `P2-2` 的可执行实测文档路径。
+本轮继续按“小步快提交”推进，重点是 `P2-3` 文档一致性收口 + `P2-2` 告警落地文档补强。
 
 本轮实际改动
 
-1. 清理前端原型文案残留
-   - `frontend/src/layouts/AppLayout.tsx`
-     - `Linux Panel Prototype` -> `SnowPanel Operations Console`
-   - `frontend/e2e/fixtures.ts`
-     - 登录成功锚点同步为 `/snowpanel operations console/i`
+1. frontend 测试链路增加 Node 版本 preflight
+   - `frontend/scripts/check-node-version.mjs`（新增）
+   - `frontend/package.json`
+   - `frontend/README.md`
+   - 当 Node `<20.19.0` 时，`npm run test` / `npm run test:e2e` 会先给出清晰错误并提前失败，避免此前 vitest 启动期依赖报错噪音。
 
-2. 统一 proto 文档命名
-   - `proto/README.md`
-   - `Generate ... Stubs` 全部统一为 `Generate ... Bindings`
-   - Rust 说明更新为当前真实流程（`build.rs` + `tonic-build` + vendored `protoc`）
+2. root README 中英文 Node 版本口径对齐
+   - `README.md`
+   - `README.zh-CN.md`
+   - 统一为“Node 22+ 推荐，前端工具链最低 20.19.0”。
 
-3. 收敛 roadmap 历史措辞
-   - `docs/roadmap.md`
-   - `docs/roadmap.zh-CN.md`
-   - 将 `placeholder` 类表述替换为更准确的“历史遗留措辞”，并补入本轮前端文案清理进展
-
-4. 新增 tracing 实测清单（文档化推进 P2-2）
+3. observability 文档补充 Alertmanager 落地清单
    - `docs/observability.md`
    - `docs/observability.zh-CN.md`
-   - 增加 compose / host-agent 两种模式的最小验证步骤：
-     - 启动方式
-     - 调用经过 core-agent 的接口（示例 `/api/v1/dashboard/summary`）
-     - 注入并校验 `X-Request-ID`
-     - 在 Jaeger 确认 backend + core-agent spans 同 trace
+   - 新增从 no-op 接收器切换到真实通知渠道的执行 checklist（路由归属、抑制规则、发布校验、可控告警验证、阈值回滚）。
 
-5. 明确前端 Node 版本门槛并加本地防护
-   - `docs/development.md`
-   - `docs/development.zh-CN.md`
-   - `frontend/README.md`
-   - `frontend/package.json`
-   - 明确 Node 最低版本 `>=20.19.0`（推荐 22+），并通过 `engines.node` 让不兼容环境尽早告警
-
-6. 同步接力进度
+4. 进度文档同步
    - `.claude/progress.md`
-   - 记录上述文档/前端清理进展
+   - 记录以上三类推进项。
 
 本轮本地验证
 
-1. 已通过：
-   - `cd frontend && npm run build`
-   - `rg` 扫描主要文档中的 `prototype/placeholder/stubs` 遗留词
-
-2. 已执行但失败（环境兼容）：
+1. 已执行：
    - `cd frontend && npm run test -- src/layouts/AppLayout.test.tsx`
-   - 当前失败为工具链启动阶段依赖兼容问题（与 Node `20.18.0` 偏低相关），非本轮业务改动引入
 
-3. 环境能力检查：
-   - `docker` 不可用
-   - `cargo` 不可用
-   - 因此无法在本机完成 `P2-2` tracing 实跑闭环
+2. 结果：
+   - 在当前环境（Node `20.18.0`）下，测试会被 `check:node` 以明确提示提前拦截：
+     - 需要 Node `20.19.0+`（推荐 22+）
+   - 行为符合预期（相比之前可读性明显更好）。
 
 commit 摘要
 
-- `ac97d99 chore: remove remaining prototype wording from app shell`
-- `b767d41 docs: refresh roadmap wording for prototype-trace cleanup`
-- `eb4c2fc chore: refresh change cache handoff notes`
-- `c629372 docs: add tracing validation checklist for observability`
-- `17768da chore: refresh change cache with latest handoff`
-- `b0988de docs: clarify frontend node minimum and add engine guard`
+- `569256a chore: add frontend test node-version preflight`
+- `0dd405f docs: align root node version requirements`
+- `bfcecec docs: add alertmanager rollout checklist`
 
 希望接下来的 AI 做什么
 
-1. 在具备 Docker + cargo 的环境优先收口 `P2-2`
-   - `make up-observability` / `make up-host-agent-observability`
-   - 触发一条 backend -> core-agent 请求
-   - 在 Jaeger 确认跨服务 trace 串联
+1. 在具备 Docker + cargo 的环境收口 `P2-2`
+   - 执行 tracing 闭环实测（compose / host-agent）
+   - 接入真实 Alertmanager 通知渠道并完成一次可控告警验证
 
-2. 继续 `P2-3` 的小步收口
-   - 重点扫描非主文档、测试 fixture、脚本注释中的历史命名或重复描述
-   - 保持“改完即提交”
+2. 持续推进 `P2-3`
+   - 继续扫描非主文档、脚本注释、测试 fixture 的历史措辞与重复说明
+   - 保持“小改即提交”
 
-3. 若要修复本机前端单测启动问题，建议单独开任务
-   - 统一 Node 版本到 `>=20.19.0` 或 22+
-   - 再验证 `vitest` / `jsdom` 依赖链启动稳定性
+3. 若要恢复本机 frontend test 运行
+   - 升级 Node 到 `>=20.19.0`（推荐 22+）
+   - 之后重新跑 `npm run test` / `npm run test:e2e`
 
 by: gpt-5.5
