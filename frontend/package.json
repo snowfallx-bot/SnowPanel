@@ -8,11 +8,12 @@
   },
   "scripts": {
     "dev": "vite",
+    "check:node": "node ./scripts/check-node-version.mjs",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "test": "vitest run",
-    "test:e2e": "playwright test",
-    "test:e2e:headed": "playwright test --headed"
+    "test": "npm run check:node && vitest run",
+    "test:e2e": "npm run check:node && playwright test",
+    "test:e2e:headed": "npm run check:node && playwright test --headed"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.68.0",

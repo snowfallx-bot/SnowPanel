@@ -16,6 +16,7 @@ React + TypeScript + Vite admin UI with:
 ## Runtime Requirements
 
 - Node.js `>=20.19.0` (Node.js 22+ recommended)
+- `npm run test` / `npm run test:e2e` include a preflight Node version check.
 
 Optional env:
 - `VITE_API_BASE_URL` (default empty, meaning same-origin requests such as `/api/v1/...`)
