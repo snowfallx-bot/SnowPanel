@@ -25,6 +25,10 @@ This roadmap reflects the current repository state rather than the original boot
   - backend gRPC client spans
   - core-agent gRPC server spans
   - OTel Collector -> Jaeger pipeline
+- Observability smoke scripts now exist for:
+  - Jaeger cross-service trace validation (`scripts/observability/trace-smoke.ps1`)
+  - Alertmanager synthetic alert injection validation (`scripts/observability/alertmanager-smoke.ps1`)
+  - One-shot trace + alertmanager validation (`scripts/observability/full-smoke.ps1`)
 
 Still remaining:
 

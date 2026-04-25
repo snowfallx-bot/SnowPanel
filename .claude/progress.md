@@ -153,6 +153,7 @@ P2-3：清理“原型痕迹”和重复逻辑
   - 已新增 `scripts/observability/README.md` 汇总 observability 脚本入口，并在 observability 中英文文档加入跳转链接。
   - 已新增 `scripts/observability/full-smoke.ps1` 一键串行执行 tracing + alertmanager 校验，并在 scripts/development/observability 文档补充入口及执行策略说明。
   - 已在 root `README.md` / `README.zh-CN.md` 常用命令中补充 `full-smoke` 脚本入口，提升主入口可发现性。
+  - 已同步 `docs/roadmap.md` / `docs/roadmap.zh-CN.md` 的 `P2-2` 进展，纳入 observability 冒烟脚本能力说明。
 - 当前判断：进行中。
 
 【建议剩余执行顺序】

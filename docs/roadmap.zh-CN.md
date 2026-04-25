@@ -25,6 +25,10 @@
   - backend gRPC client spans
   - core-agent gRPC server spans
   - OTel Collector -> Jaeger 管线
+- observability 冒烟脚本现已具备：
+  - Jaeger 跨服务 trace 校验（`scripts/observability/trace-smoke.ps1`）
+  - Alertmanager 合成告警注入校验（`scripts/observability/alertmanager-smoke.ps1`）
+  - tracing + alertmanager 一键串行校验（`scripts/observability/full-smoke.ps1`）
 
 仍待完成：
 
