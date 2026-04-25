@@ -75,7 +75,13 @@
      - `Compose Prototype / 原型模式` 统一为 `Compose Mode / Compose 模式`。
      - `Prototype Compose` 统一为 `Compose Mode`。
 
-12. 同步进度缓存
+12. 校准进度接力文档时间与结论
+   - 更新 `.claude/progress.md`：
+     - `更新时间` 更新到 `2026-04-25`
+     - 剩余执行顺序改为：在可执行环境优先收口 `P2-2`，并持续推进 `P2-3`
+     - 一句话结论移除“补齐测试矩阵”的过时描述
+
+13. 同步进度缓存
    - 更新 `.claude/progress.md`：
      - 标记 `P2-3` 已从“未开始收口”推进到“进行中”。
 
@@ -117,6 +123,7 @@ commit摘要
 - 计划再下一笔提交：`docs: align observability command docs with make targets`
 - 计划再下一笔提交：`docs: normalize observability terminology across docs`
 - 计划再下一笔提交：`docs: normalize compose mode naming in deployment docs`
+- 计划再下一笔提交：`chore: refresh handoff progress metadata and summary`
 
 希望接下来的 AI 做什么
 
