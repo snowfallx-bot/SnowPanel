@@ -12,58 +12,64 @@
 
 ============
 
-本轮继续按“小步快提交”推进，重点是 `P2-3` 文档一致性收口 + `P2-2` 告警落地文档补强。
+本轮继续按“小步快提交”推进，重点补齐 `P2-2` 的可执行验证能力，并持续做 `P2-3` 文档一致性收口。
 
 本轮实际改动
 
-1. frontend 测试链路增加 Node 版本 preflight
-   - `frontend/scripts/check-node-version.mjs`（新增）
-   - `frontend/package.json`
-   - `frontend/README.md`
-   - 当 Node `<20.19.0` 时，`npm run test` / `npm run test:e2e` 会先给出清晰错误并提前失败，避免此前 vitest 启动期依赖报错噪音。
+1. 新增 tracing 冒烟验证脚本
+   - `scripts/observability/trace-smoke.ps1`
+   - 输入 access token 后会：
+     - 触发 `GET /api/v1/dashboard/summary`（带 `X-Request-ID`）
+     - 轮询 Jaeger API
+     - 仅当同一条近期 trace 同时包含 `snowpanel-backend` 与 `snowpanel-core-agent` 才判定通过
+   - 兼容 `pwsh` 与 Windows PowerShell（对 `SkipHttpErrorCheck` 做了回退处理）。
 
-2. root README 中英文 Node 版本口径对齐
-   - `README.md`
-   - `README.zh-CN.md`
-   - 统一为“Node 22+ 推荐，前端工具链最低 20.19.0”。
+2. 新增 Alertmanager 冒烟验证脚本
+   - `scripts/observability/alertmanager-smoke.ps1`
+   - 注入一条合成告警到 `/api/v2/alerts`，并轮询 `/api/v2/alerts` 确认告警已被 Alertmanager 接收可见。
+   - 可作为真实通知渠道接入前后的快速验收步骤。
 
-3. observability 文档补充 Alertmanager 落地清单
+3. 新增 observability 脚本索引文档
+   - `scripts/observability/README.md`
+   - 汇总 tracing / alertmanager 两个脚本的用途、示例命令与关键参数。
+
+4. 文档接入与一致性同步
    - `docs/observability.md`
    - `docs/observability.zh-CN.md`
-   - 新增从 no-op 接收器切换到真实通知渠道的执行 checklist（路由归属、抑制规则、发布校验、可控告警验证、阈值回滚）。
+   - `docs/development.md`
+   - `docs/development.zh-CN.md`
+   - 把上述脚本接入“Tracing 实测清单 / Alertmanager 落地清单 / 常用命令”，并加 cross-link 到脚本索引文档。
 
-4. 进度文档同步
+5. 进度文档同步
    - `.claude/progress.md`
-   - 记录以上三类推进项。
+   - 记录本轮新增的 observability 脚本与文档入口。
 
 本轮本地验证
 
-1. 已执行：
-   - `cd frontend && npm run test -- src/layouts/AppLayout.test.tsx`
+1. 脚本执行检查（语法/流程）：
+   - `trace-smoke.ps1`：在不可达地址下可正常启动并进入请求流程（随后因目标不可达失败，符合预期）
+   - `alertmanager-smoke.ps1`：在不可达地址下可正常启动并执行注入步骤（随后因目标不可达失败，符合预期）
 
-2. 结果：
-   - 在当前环境（Node `20.18.0`）下，测试会被 `check:node` 以明确提示提前拦截：
-     - 需要 Node `20.19.0+`（推荐 22+）
-   - 行为符合预期（相比之前可读性明显更好）。
+2. 环境限制：
+   - 当前环境仍无 `docker` / `cargo`，无法完成真实链路实跑验证（Jaeger/Alertmanager 在线验收需在具备环境的机器执行）
 
 commit 摘要
 
-- `569256a chore: add frontend test node-version preflight`
-- `0dd405f docs: align root node version requirements`
-- `bfcecec docs: add alertmanager rollout checklist`
+- `45aff41 feat(observability): add jaeger trace smoke validation script`
+- `cd0690f docs: surface tracing smoke script in development guide`
+- `8694ab3 feat(observability): add alertmanager smoke injection script`
+- `b67658a docs(observability): add script index and cross-links`
 
 希望接下来的 AI 做什么
 
-1. 在具备 Docker + cargo 的环境收口 `P2-2`
-   - 执行 tracing 闭环实测（compose / host-agent）
-   - 接入真实 Alertmanager 通知渠道并完成一次可控告警验证
+1. 在具备 Docker + cargo 的环境执行 `P2-2` 实跑闭环
+   - 启动栈：`make up-observability` / `make up-host-agent-observability`
+   - 跑 tracing 验证：`pwsh -File ./scripts/observability/trace-smoke.ps1 -AccessToken "<access_token>"`
+   - 跑 alert 验证：`pwsh -File ./scripts/observability/alertmanager-smoke.ps1`
+   - 在 Jaeger/Alertmanager UI 复核结果并沉淀最终阈值策略
 
-2. 持续推进 `P2-3`
-   - 继续扫描非主文档、脚本注释、测试 fixture 的历史措辞与重复说明
+2. 继续 `P2-3` 收口
+   - 扫描非主文档、脚本注释、测试 fixture 的历史措辞与重复说明
    - 保持“小改即提交”
-
-3. 若要恢复本机 frontend test 运行
-   - 升级 Node 到 `>=20.19.0`（推荐 22+）
-   - 之后重新跑 `npm run test` / `npm run test:e2e`
 
 by: gpt-5.5
