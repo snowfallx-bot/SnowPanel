@@ -111,6 +111,9 @@ function Wait-UntilReady {
 }
 
 try {
+  $validateScript = Join-Path $PSScriptRoot "..\observability\validate-config.ps1"
+  & $validateScript
+
   $env:APP_ENV = "production"
   $env:BACKEND_PORT = $BackendPort
   $env:PROMETHEUS_PORT = $PrometheusPort

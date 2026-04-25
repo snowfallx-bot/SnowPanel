@@ -45,6 +45,7 @@ When you want local binaries + containerized dependencies:
 - `make logs-observability`: tail logs for Prometheus, Alertmanager, OTel Collector, and Jaeger
 - `make logs-host-agent-observability`: tail observability logs in host-agent mode
 - `pwsh -File ./scripts/observability/trace-smoke.ps1 -AccessToken "<access_token>"`: trigger a core-agent request and verify backend/core-agent spans are linked in Jaeger
+- `pwsh -File ./scripts/observability/validate-config.ps1`: run `promtool`/`amtool` validation against observability configs
 - `pwsh -File ./scripts/observability/alertmanager-smoke.ps1`: inject a synthetic alert and confirm it appears in Alertmanager
 - `pwsh -File ./scripts/observability/full-smoke.ps1 -AccessToken "<access_token>"`: run trace + alertmanager smoke checks in one command
 - `pwsh -File ./scripts/observability/full-smoke.ps1 -LoginUsername "admin" -LoginPassword "<password>"`: full smoke with automatic login/token fetch

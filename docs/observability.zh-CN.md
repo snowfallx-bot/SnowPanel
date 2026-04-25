@@ -84,6 +84,7 @@ Prometheus 还提供了面向 SLO 的 recording rules：
 - Alertmanager 默认 warning/critical 接收器均为 no-op；请在 `deploy/observability/alertmanager/alertmanager.yml` 中配置 webhook/邮件/IM 等真实通知通道。
 - Compose 可观测性模式会默认给 `backend` 与容器版 `core-agent` 打开 OTLP tracing 导出。
 - 若使用宿主机 Agent 模式，还需要在 `deploy/core-agent/systemd/core-agent.env.example`（或 `/etc/snowpanel/core-agent.env`）里设置 OTEL 环境变量，让宿主机上的 `core-agent` 把 trace 发往 collector。
+- 在做冒烟/实跑前，建议先执行 `pwsh -File ./scripts/observability/validate-config.ps1`，快速拦截 Prometheus/Alertmanager 配置错误。
 
 ## 请求链路关联
 

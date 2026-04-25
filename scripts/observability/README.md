@@ -25,6 +25,14 @@ Key parameters:
 - `RequestId` (optional): override generated request id
 - `TraceWaitSeconds` (optional): Jaeger polling timeout (default `30`)
 
+## `validate-config.ps1`
+
+Validate Prometheus and Alertmanager configs by running `promtool`/`amtool` inside official container images.
+
+```powershell
+pwsh -File ./scripts/observability/validate-config.ps1
+```
+
 ## `alertmanager-smoke.ps1`
 
 Inject a synthetic alert into Alertmanager and verify it is observable via Alertmanager API.

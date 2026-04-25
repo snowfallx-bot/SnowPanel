@@ -10,6 +10,16 @@ permissions:
   contents: read
 
 jobs:
+  observability-config:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Validate Observability Configs
+        shell: pwsh
+        run: ./scripts/observability/validate-config.ps1
+
   backend:
     runs-on: ubuntu-latest
     steps:
@@ -108,6 +118,7 @@ jobs:
   compose-smoke:
     runs-on: ubuntu-latest
     needs:
+      - observability-config
       - backend
       - core-agent
       - frontend
