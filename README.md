@@ -97,7 +97,7 @@ Common commands:
 - [Security Notes](docs/security.md) | [安全说明](docs/security.zh-CN.md)
 - [Observability Notes](docs/observability.md) | [可观测性说明](docs/observability.zh-CN.md)
 - [Deployment Guide](docs/deployment.md) | [部署指南](docs/deployment.zh-CN.md)
-- [Roadmap](docs/roadmap.md) | [路线图草案](docs/roadmap.zh-CN.md)
+- [Roadmap](docs/roadmap.md) | [路线图](docs/roadmap.zh-CN.md)
 
 ## Contributing & Community
 

@@ -54,7 +54,11 @@
      - 增加 `make up-observability` / `make up-host-agent-observability`
      - 将测试覆盖说明改为当前真实 CI / test matrix
 
-8. 同步进度缓存
+8. 同步 root README 中的 roadmap 标签
+   - 更新 `README.md` / `README.zh-CN.md`：
+     - 不再继续把 roadmap 标成“路线图草案”。
+
+9. 同步进度缓存
    - 更新 `.claude/progress.md`：
      - 标记 `P2-3` 已从“未开始收口”推进到“进行中”。
 
@@ -88,6 +92,7 @@ commit摘要
 - 计划再下一笔提交：`docs: rewrite roadmap to reflect current project state`
 - 计划再下一笔提交：`docs: align architecture docs with current redis usage`
 - 计划再下一笔提交：`docs: refresh development guides for current test matrix`
+- 计划再下一笔提交：`docs: remove stale roadmap draft labels`
 
 希望接下来的 AI 做什么
 
