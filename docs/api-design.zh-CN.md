@@ -19,6 +19,17 @@
 
 `code != 0` 表示业务失败。
 
+## 系统与运维端点
+
+- `GET /api/v1/ping`
+  - 版本化 API 路径下的轻量存活响应
+- `GET /health`
+  - 进程级健康检查
+- `GET /ready`
+  - 就绪检查（包含数据库与 agent 依赖链路）
+- `GET /metrics`
+  - Prometheus 指标端点
+
 ## 认证
 
 - `POST /auth/login`

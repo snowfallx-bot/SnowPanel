@@ -138,6 +138,7 @@ P2-3：清理“原型痕迹”和重复逻辑
   - 已补齐 README / development 文档中的 observability `down/logs` 命令，统一到 `Makefile` 实际命令集。
   - 已统一 deployment / observability 文档术语，避免仍以 “Prometheus UI/基线” 指代整套可观测性组件。
   - 已将 deployment 文档中的 “Compose Prototype / 原型模式” 命名统一为 “Compose Mode / Compose 模式”。
+  - 已补齐 `docs/api-design.md` / `docs/api-design.zh-CN.md` 的系统与运维端点说明（`/api/v1/ping`、`/health`、`/ready`、`/metrics`）。
 - 当前判断：进行中。
 
 【建议剩余执行顺序】

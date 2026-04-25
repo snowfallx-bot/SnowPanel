@@ -81,7 +81,11 @@
      - 剩余执行顺序改为：在可执行环境优先收口 `P2-2`，并持续推进 `P2-3`
      - 一句话结论移除“补齐测试矩阵”的过时描述
 
-13. 同步进度缓存
+13. 补齐 API 设计文档中的系统与运维端点
+   - 更新 `docs/api-design.md` / `docs/api-design.zh-CN.md`：
+     - 增加 `GET /api/v1/ping`、`GET /health`、`GET /ready`、`GET /metrics` 说明。
+
+14. 同步进度缓存
    - 更新 `.claude/progress.md`：
      - 标记 `P2-3` 已从“未开始收口”推进到“进行中”。
 
@@ -94,6 +98,8 @@
 - `backend/README.md`
 - `docs/architecture.md`
 - `docs/architecture.zh-CN.md`
+- `docs/api-design.md`
+- `docs/api-design.zh-CN.md`
 - `docs/development.md`
 - `docs/development.zh-CN.md`
 - `docs/deployment.md`
@@ -124,6 +130,7 @@ commit摘要
 - 计划再下一笔提交：`docs: normalize observability terminology across docs`
 - 计划再下一笔提交：`docs: normalize compose mode naming in deployment docs`
 - 计划再下一笔提交：`chore: refresh handoff progress metadata and summary`
+- 计划再下一笔提交：`docs: add system and ops endpoints to api design docs`
 
 希望接下来的 AI 做什么
 
