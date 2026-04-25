@@ -66,6 +66,8 @@
 - frontend e2e：登录、文件浏览、权限感知导航
 - 可选手动 CI：[Observability Smoke](../.github/workflows/observability-smoke.yml)（`workflow_dispatch`）用于 trace + alertmanager 端到端冒烟验证
 
+另见：[`scripts/ci/README.md`](../scripts/ci/README.md)，集中说明各 CI 脚本职责与入口。
+
 ## 编码约定
 
 - handler 仅负责参数绑定与响应组装。

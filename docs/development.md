@@ -66,6 +66,8 @@ Current test matrix covers:
 - frontend e2e coverage for login, file browsing, and permission-aware navigation
 - optional manual CI workflow [Observability Smoke](../.github/workflows/observability-smoke.yml) (`workflow_dispatch`) for trace + alertmanager end-to-end validation
 
+See also: [`scripts/ci/README.md`](../scripts/ci/README.md) for script-level CI workflow notes.
+
 ## Coding Conventions
 
 - Handlers should stay focused on binding/response only.
