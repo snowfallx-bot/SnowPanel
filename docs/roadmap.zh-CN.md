@@ -34,7 +34,8 @@
 
 ### P2-3 原型痕迹清理
 
-- backend README 中过时的 placeholder 描述已移除
+- backend README 中过时的原型遗留描述已移除
+- 前端应用壳与 e2e 页面锚点已不再使用 `Linux Panel Prototype` 文案
 - root README 已补上 observability 命令与文档入口
 - 仍有少量历史措辞与重复说明需要继续清理
 
@@ -42,7 +43,7 @@
 
 1. 在具备 Docker 的环境验证 tracing 闭环
 2. 完成生产化告警投递与阈值调优
-3. 继续清理过时文档、placeholder 措辞与重复说明
+3. 继续清理过时文档、历史遗留措辞与重复说明
 
 ## 当前不优先的方向
 

@@ -34,7 +34,8 @@ Still remaining:
 
 ### P2-3 Prototype-Trace Cleanup
 
-- Outdated backend README placeholder notes have been removed
+- Outdated backend README legacy prototype notes have been removed
+- App shell and frontend e2e marker no longer use `Linux Panel Prototype`
 - Root README now exposes observability commands and docs
 - Some historical wording and duplicate docs still need cleanup
 
@@ -42,7 +43,7 @@ Still remaining:
 
 1. Validate the tracing pipeline in a Docker-capable environment
 2. Finish production-ready alert delivery and threshold tuning
-3. Continue pruning outdated docs, placeholder wording, and duplicated explanations
+3. Continue pruning outdated docs, legacy wording, and duplicated explanations
 
 ## Not Current Priorities
 
