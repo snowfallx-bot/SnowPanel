@@ -1,0 +1,19 @@
+name: Observability Smoke
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  observability-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Run Observability Smoke Test
+        shell: pwsh
+        run: ./scripts/ci/observability-smoke.ps1

@@ -156,7 +156,7 @@ P2-3：清理“原型痕迹”和重复逻辑
   - 已同步 `docs/roadmap.md` / `docs/roadmap.zh-CN.md` 的 `P2-2` 进展，纳入 observability 冒烟脚本能力说明。
   - 已升级 `full-smoke.ps1` 支持 `LoginUsername/LoginPassword` 自动登录取 token，并同步 scripts/docs/README 中英文用法。
   - 已新增 `scripts/ci/observability-smoke.ps1`，用于在 Docker 环境中自动拉起 observability 栈并执行 full-smoke 端到端校验；development 中英文文档已补命令入口。
-  - 已在 `.github/workflows/ci.yml` 增加 `workflow_dispatch` 手动入口与 `observability-smoke` 任务，可按需执行 observability 端到端冒烟验证而不阻塞默认 PR 流水线。
+  - 已新增独立手动 workflow `.github/workflows/observability-smoke.yml`（`workflow_dispatch`）执行 observability 端到端冒烟验证；默认 `ci.yml` 保持 push/PR 主流水线职责。
 - 当前判断：进行中。
 
 【建议剩余执行顺序】
