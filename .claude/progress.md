@@ -155,6 +155,7 @@ P2-3：清理“原型痕迹”和重复逻辑
   - 已在 root `README.md` / `README.zh-CN.md` 常用命令中补充 `full-smoke` 脚本入口，提升主入口可发现性。
   - 已同步 `docs/roadmap.md` / `docs/roadmap.zh-CN.md` 的 `P2-2` 进展，纳入 observability 冒烟脚本能力说明。
   - 已升级 `full-smoke.ps1` 支持 `LoginUsername/LoginPassword` 自动登录取 token，并同步 scripts/docs/README 中英文用法。
+  - 已新增 `scripts/ci/observability-smoke.ps1`，用于在 Docker 环境中自动拉起 observability 栈并执行 full-smoke 端到端校验；development 中英文文档已补命令入口。
 - 当前判断：进行中。
 
 【建议剩余执行顺序】
