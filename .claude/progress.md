@@ -135,6 +135,7 @@ P2-3：清理“原型痕迹”和重复逻辑
   - 已修正文档中 “Redis 仅预留后续使用” 的过时描述，改为反映当前登录限流共享状态用途。
   - 已更新 `docs/development.md` / `docs/development.zh-CN.md` 的 observability 命令与测试矩阵说明。
   - 已同步 root README 中 roadmap 导航标签，不再继续标注为“草案”。
+  - 已补齐 README / development 文档中的 observability `down/logs` 命令，统一到 `Makefile` 实际命令集。
 - 当前判断：进行中。
 
 【建议剩余执行顺序】

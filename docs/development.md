@@ -40,6 +40,10 @@ When you want local binaries + containerized dependencies:
 - `make logs-host-agent`: tail logs for the host-agent compose stack
 - `make up-observability`: start the app stack with Prometheus, Alertmanager, OTel Collector, and Jaeger
 - `make up-host-agent-observability`: start host-agent mode with the observability stack
+- `make down-observability`: stop the compose stack that includes observability services
+- `make down-host-agent-observability`: stop the host-agent stack that includes observability services
+- `make logs-observability`: tail logs for Prometheus, Alertmanager, OTel Collector, and Jaeger
+- `make logs-host-agent-observability`: tail observability logs in host-agent mode
 - `make lint`: baseline static checks (`go vet`, `cargo fmt --check`, frontend build)
 - `make test`: backend tests + rust tests + frontend test/build flow
 

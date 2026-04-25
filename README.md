@@ -82,10 +82,14 @@ Common commands:
 - `make up-host-agent`: start backend/frontend/postgres/redis with the host-agent compose override
 - `make up-observability`: start the app stack with Prometheus, Alertmanager, OTel Collector, and Jaeger
 - `make up-host-agent-observability`: start host-agent mode with the observability stack
+- `make down-observability`: stop the compose stack that includes observability services
+- `make down-host-agent-observability`: stop the host-agent stack that includes observability services
 - `make down`: stop all services
 - `make down-host-agent`: stop the host-agent compose stack
 - `make logs`: tail compose logs
 - `make logs-host-agent`: tail logs for the host-agent compose stack
+- `make logs-observability`: tail logs for Prometheus, Alertmanager, OTel Collector, and Jaeger
+- `make logs-host-agent-observability`: tail observability logs in host-agent mode
 - `make lint`: baseline static checks
 - `make test`: backend/core-agent tests + frontend test/build checks
 

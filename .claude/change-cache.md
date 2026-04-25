@@ -58,7 +58,13 @@
    - 更新 `README.md` / `README.zh-CN.md`：
      - 不再继续把 roadmap 标成“路线图草案”。
 
-9. 同步进度缓存
+9. 补齐 observability 命令文档入口
+   - 更新 `README.md` / `README.zh-CN.md`：
+     - 增加 `down/logs` 相关 observability 命令，和 `Makefile` 对齐。
+   - 更新 `docs/development.md` / `docs/development.zh-CN.md`：
+     - 增加 `down/logs` 相关 observability 命令，避免只写 `up` 不写关闭与排障入口。
+
+10. 同步进度缓存
    - 更新 `.claude/progress.md`：
      - 标记 `P2-3` 已从“未开始收口”推进到“进行中”。
 
@@ -93,6 +99,7 @@ commit摘要
 - 计划再下一笔提交：`docs: align architecture docs with current redis usage`
 - 计划再下一笔提交：`docs: refresh development guides for current test matrix`
 - 计划再下一笔提交：`docs: remove stale roadmap draft labels`
+- 计划再下一笔提交：`docs: align observability command docs with make targets`
 
 希望接下来的 AI 做什么
 
