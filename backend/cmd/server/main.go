@@ -12,6 +12,7 @@ import (
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/database"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/grpcclient"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/logger"
+	"github.com/snowfallx-bot/SnowPanel/backend/internal/observability"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/repository"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/security"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/service"
@@ -30,6 +31,21 @@ func main() {
 	defer func() {
 		_ = zapLogger.Sync()
 	}()
+
+	tracingEnabled := cfg.Tracing.Enabled
+	tracingShutdown, err := observability.InitTracing(context.Background(), cfg.Tracing, cfg.AppEnv)
+	if err != nil {
+		tracingEnabled = false
+		zapLogger.Warn("otel tracing disabled", logger.Err(err))
+	} else {
+		defer func() {
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if shutdownErr := tracingShutdown(shutdownCtx); shutdownErr != nil {
+				zapLogger.Warn("failed to shutdown otel tracing", logger.Err(shutdownErr))
+			}
+		}()
+	}
 
 	db, err := database.NewPostgres(cfg.Database)
 	if err != nil {
@@ -98,6 +114,8 @@ func main() {
 		Handler: api.NewRouter(api.RouterDeps{
 			Logger:           zapLogger,
 			DB:               db,
+			TracingEnabled:   tracingEnabled,
+			TracingSvcName:   cfg.Tracing.ServiceName,
 			AgentClient:      agentClient,
 			AuthService:      authService,
 			DashboardService: dashboardService,

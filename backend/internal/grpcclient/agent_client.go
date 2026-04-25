@@ -11,6 +11,7 @@ import (
 	agentv1 "github.com/snowfallx-bot/SnowPanel/backend/internal/grpcclient/pb/proto/agent/v1"
 	appmetrics "github.com/snowfallx-bot/SnowPanel/backend/internal/metrics"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/requestctx"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -985,6 +986,7 @@ func (c *Client) invoke(
 		callCtx,
 		c.target,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithStatsHandler(otelgrpc.NewClientHandler()),
 		grpc.WithBlock(),
 	)
 	if err != nil {

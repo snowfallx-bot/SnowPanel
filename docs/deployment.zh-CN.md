@@ -68,6 +68,7 @@ Prometheus UI：
 
 - `http://127.0.0.1:${PROMETHEUS_PORT:-9090}`
 - `http://127.0.0.1:${ALERTMANAGER_PORT:-9093}`
+- `http://127.0.0.1:${JAEGER_UI_PORT:-16686}`
 
 停止：
 
@@ -99,6 +100,7 @@ PostgreSQL 首次初始化时，会加载以下 schema SQL：
 - 登录防爆破模式与阈值（`LOGIN_ATTEMPT_STORE`、`LOGIN_ATTEMPT_REDIS_PREFIX`、`LOGIN_*`）
 - core-agent 安全根目录与读写大小限制
 - core-agent 指标端点配置（`CORE_AGENT_METRICS_ENABLED`、`CORE_AGENT_METRICS_HOST`、`CORE_AGENT_METRICS_PORT`）
+- OTEL tracing 配置（`OTEL_TRACING_ENABLED`、`OTEL_EXPORTER_OTLP_ENDPOINT`、`OTEL_TRACES_SAMPLER_ARG`）
 - PostgreSQL + Redis 连接参数（`REDIS_HOST`、`REDIS_PORT`、`REDIS_PASSWORD`、`REDIS_DB`）
 - frontend API 基地址（`VITE_API_BASE_URL`，推荐留空并走同源请求）
 - frontend 的 Vite 代理目标（`VITE_API_PROXY_TARGET`，Docker 下默认指向 backend 服务）
@@ -114,3 +116,4 @@ PostgreSQL 首次初始化时，会加载以下 schema SQL：
 - 在 backend/frontend 前加 HTTPS 反向代理。
 - 仅在可信网络暴露 core-agent（`50051`）。
 - 将 core-agent metrics 端点（宿主机模式默认 `127.0.0.1:9108`）限制在本地或可信采集网络。
+- 若宿主机 Agent 模式启用 tracing，请将 `OTEL_EXPORTER_OTLP_ENDPOINT` 指向宿主机可访问的 collector 地址（本仓库 compose 可观测性基线下可用 `127.0.0.1:4317`）。

@@ -105,17 +105,21 @@
 P2-2：补齐生产化观测能力
 - 当前已有：
   - backend `/metrics`（Prometheus）已覆盖 HTTP 与 agent RPC 计数/时延（含 `rpc/outcome/transport` 标签）
-  - backend request id / access log
+  - backend request id / access log（现已追加 `trace_id` / `span_id`）
   - health / readiness
   - core-agent tracing 日志 + 独立 `/metrics` 端点（可输出 gRPC 请求总量/时延/in-flight）
   - Prometheus 基线部署与抓取配置（`docker-compose.observability.yml` + `deploy/observability/prometheus/prometheus.yml`）
   - Prometheus 基线告警规则（backend down、agent down、p95 高延迟、agent 错误率与并发 in-flight）
   - Alertmanager 基线路由与接入点（Prometheus `alerting` + `deploy/observability/alertmanager/alertmanager.yml`）
+  - OTel tracing 基线已接入：
+    - backend HTTP spans + gRPC client spans
+    - core-agent gRPC server spans + remote trace context 提取
+    - `otel-collector -> Jaeger` 基线部署（`deploy/observability/otel-collector/config.yaml`）
   - audit logs 基础检索
   - `X-Request-ID` 已打通 backend -> gRPC metadata -> core-agent 日志（可按同一 request_id 联查）
-  - 已新增 `docs/observability.md` / `docs/observability.zh-CN.md`，明确指标与排障路径
+  - 已新增/更新 `docs/observability.md` / `docs/observability.zh-CN.md`，明确 metrics + tracing 排障路径
 - 仍缺：
-  - 统一 OTel pipeline / distributed tracing backend（Jaeger/Tempo 等）
+  - tracing 落地验证：compose / host-agent 模式下的 collector、Jaeger、跨服务 trace 串联实测
   - metrics 与 alert 的生产化落地（真实通知渠道、告警去重/升级策略、SLO/SLI 阈值校准）
 - 当前判断：进行中。
 

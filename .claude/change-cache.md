@@ -12,44 +12,75 @@
 
 ============
 
-本轮继续推进 `P2-2`，在“Prometheus 基线 + 告警规则”基础上补上 Alertmanager 路由链路，完成“规则触发 -> 告警聚合/路由”闭环。
+本轮继续推进 `P2-2`，把“Prometheus + Alertmanager baseline”往前推进到“分布式 tracing baseline”，补出 `backend -> core-agent -> OTel Collector -> Jaeger` 的最小闭环。
 
 本次核心判断
 
-1. 上轮已有规则，但 Prometheus 未配置 `alerting` 目标，规则触发后不能进入统一告警路由。
-2. 先补 Alertmanager baseline（含默认 no-op 接收器 + critical 路由模板）可保证部署稳定，同时给后续接入真实通知渠道留清晰入口。
+1. 仅有 metrics + request-id 还不够，跨服务延迟/错误排查依旧缺真正的 span 级视图。
+2. 最稳妥的下一步不是直接接某个云厂商 tracing backend，而是先在仓库内落地通用 OTLP collector/exporter 策略，再让后续通知/采集后端替换 exporter。
+3. backend 侧可以低侵入接官方 `otelgin` + `otelgrpc`；core-agent 侧需要手动把 tonic metadata 中的 trace context 提取出来并挂到 gRPC server span 上。
 
 本轮实际改动
 
-1. observability stack 新增 Alertmanager
-   - 更新 `docker-compose.observability.yml`：
-     - 新增 `alertmanager` 服务（默认端口 `9093`）。
-     - `prometheus` 增加对 `alertmanager` 的依赖。
-   - 新增持久卷 `alertmanager_data`。
+1. backend 接入 OTel tracing
+   - 新增 `backend/internal/observability/tracing.go`：
+     - 基于 OTLP gRPC exporter 初始化 tracer provider。
+     - 支持环境变量：
+       - `OTEL_TRACING_ENABLED`
+       - `OTEL_SERVICE_NAME`
+       - `OTEL_SERVICE_VERSION`
+       - `OTEL_EXPORTER_OTLP_ENDPOINT`
+       - `OTEL_EXPORTER_OTLP_INSECURE`
+       - `OTEL_TRACES_SAMPLER_ARG`
+   - `backend/cmd/server/main.go`：
+     - 启动时初始化 tracing，失败时仅 warn，不阻塞服务主链路。
+     - 退出时调用 tracer shutdown。
+   - `backend/internal/api/router.go`：
+     - 接入 `otelgin` HTTP middleware。
+   - `backend/internal/grpcclient/agent_client.go`：
+     - 接入 `otelgrpc.NewClientHandler()`，让 backend -> core-agent 的 gRPC 调用自动生成 client span 并传播 trace context。
+   - `backend/internal/middleware/*`：
+     - 新增 span request_id 属性注入中间件。
+     - access log 追加 `trace_id` / `span_id`。
+     - panic recover 会记录 span error/status。
+   - `backend/internal/config/config.go`：
+     - 增加 tracing 配置解析。
 
-2. Prometheus 接入 Alertmanager
-   - 更新 `deploy/observability/prometheus/prometheus.yml`：
-     - 新增 `alerting.alertmanagers`，目标 `alertmanager:9093`。
+2. core-agent 补 tracing 配置与 gRPC trace context 提取
+   - `core-agent/Cargo.toml`：
+     - 新增 `opentelemetry` / `opentelemetry_sdk` / `opentelemetry-otlp` / `tracing-opentelemetry` 依赖声明。
+   - `core-agent/src/observability/tracing.rs`：
+     - 新增 tracing subscriber + OTLP exporter 初始化。
+   - `core-agent/src/main.rs`：
+     - 启动时优先初始化 OTel tracing，失败时 fallback 到原 fmt logger。
+   - `core-agent/src/config/mod.rs`：
+     - 增加 `APP_ENV` 与 OTEL 相关环境变量解析。
+   - `core-agent/src/api/grpc_server.rs`：
+     - 为各 gRPC handler 统一创建 server span。
+     - 从 tonic metadata 提取远端 trace context。
+     - 将 span 挂到当前 gRPC 请求处理 future 上。
+     - 保留原有 request_id 日志链路。
 
-3. 新增 Alertmanager 基线路由配置
-   - 新增 `deploy/observability/alertmanager/alertmanager.yml`：
-     - 默认路由：全部告警走 `snowpanel-null`。
-     - `severity="critical"` 告警路由到 `snowpanel-critical`。
-     - `snowpanel-critical` 预留 webhook 示例（注释模板），默认仍 no-op，确保开箱即用不误发。
-     - 增加 critical 抑制 warning 的基础 inhibit 规则。
+3. observability stack 新增 collector + Jaeger
+   - `docker-compose.observability.yml`：
+     - 新增 `otel-collector` 与 `jaeger`。
+     - 在 observability 覆盖模式下，为 backend / 容器版 core-agent 注入默认 OTLP tracing 环境变量。
+   - 新增 `deploy/observability/otel-collector/config.yaml`：
+     - `otlp` receiver
+     - `batch` processor
+     - exporter 到 `jaeger:4317`
 
-4. Makefile 与环境变量同步
-   - `Makefile` 中 `logs-observability`/`logs-host-agent-observability` 追加 `alertmanager` 日志。
-   - `.env.example` 新增 `ALERTMANAGER_PORT=9093`。
-
-5. 文档与进度同步
+4. 环境变量、systemd 模板与文档同步
+   - `.env.example`：
+     - 新增 Jaeger / OTel Collector 端口与 tracing 环境变量模板。
+   - `deploy/core-agent/systemd/core-agent.env.example`：
+     - 新增 host-agent tracing 所需 OTEL 变量。
    - 更新文档：
      - `docs/observability.md` / `docs/observability.zh-CN.md`
-       - 增加 Alertmanager 入口、路由说明、接收器配置提示。
      - `docs/deployment.md` / `docs/deployment.zh-CN.md`
-       - 增加 Alertmanager UI 地址说明。
-   - 更新 `progress.md`：
-     - 标注 Alertmanager baseline 已具备，`P2-2` 剩余项聚焦真实通知渠道与 OTel 统一管线。
+     - `deploy/core-agent/systemd/README.md` / `README.zh-CN.md`
+   - 更新 `.claude/progress.md`：
+     - 标注 OTel + Jaeger baseline 已进入仓库，`P2-2` 剩余项转为“真实运行验证 + alert 生产化校准”。
 
 本轮修改文件
 
@@ -57,34 +88,63 @@
 - `.claude/progress.md`
 - `.env.example`
 - `Makefile`
+- `backend/cmd/server/main.go`
+- `backend/go.mod`
+- `backend/go.sum`
+- `backend/internal/api/router.go`
+- `backend/internal/config/config.go`
+- `backend/internal/grpcclient/agent_client.go`
+- `backend/internal/middleware/access_log.go`
+- `backend/internal/middleware/recover.go`
+- `backend/internal/middleware/tracing.go`
+- `backend/internal/observability/tracing.go`
+- `core-agent/Cargo.toml`
+- `core-agent/src/api/grpc_server.rs`
+- `core-agent/src/config/mod.rs`
+- `core-agent/src/main.rs`
+- `core-agent/src/observability/mod.rs`
+- `core-agent/src/observability/tracing.rs`
+- `deploy/core-agent/systemd/README.md`
+- `deploy/core-agent/systemd/README.zh-CN.md`
+- `deploy/core-agent/systemd/core-agent.env.example`
+- `deploy/observability/otel-collector/config.yaml`
 - `docker-compose.observability.yml`
-- `deploy/observability/prometheus/prometheus.yml`
-- `deploy/observability/alertmanager/alertmanager.yml`
-- `docs/observability.md`
-- `docs/observability.zh-CN.md`
 - `docs/deployment.md`
 - `docs/deployment.zh-CN.md`
+- `docs/observability.md`
+- `docs/observability.zh-CN.md`
 
 本地验证
 
 - 已通过：
-  - `go test ./internal/grpcclient ./internal/middleware ./internal/api`
-- 未做：
-  - docker compose 实际启动验证（当前环境无 docker）
-  - rust 侧编译验证（当前环境无 cargo）
+  - `cd backend && go test ./...`
+- 未做 / 受环境限制：
+  - `cargo check` / `cargo test`（当前环境无 `cargo`）
+  - `docker compose ... config/up`（当前环境无 `docker`）
+  - Jaeger / OTel Collector / cross-service trace 实际联调
+
+风险与注意事项
+
+1. core-agent tracing 改动是按官方 crate API 文档写入的，但当前机器无法用 `cargo` 编译验证；下一位 agent 应优先在有 Rust toolchain 的环境做 `cargo check`，必要时修正细节 API。
+2. host-agent 模式下，只有 backend 容器会自动通过 compose override 注入 tracing env；宿主机 `core-agent` 还需要手工在 `/etc/snowpanel/core-agent.env` 中配置 OTEL 变量。
 
 commit摘要
 
-- 计划提交：`feat(observability): wire prometheus alerts to alertmanager baseline`
+- 计划提交：`feat(observability): add otel tracing pipeline and jaeger baseline`
 
 希望接下来的 AI 做什么
 
-1. 在具备 docker 的环境验证：
-   - `make up-observability` / `make up-host-agent-observability`
-   - Prometheus targets、rule groups、Alertmanager 路由状态。
-2. 把 `snowpanel-critical` 接收器替换为真实通知渠道（webhook/email/im），并验证恢复通知 (`send_resolved`)。
-3. 继续 `P2-2` 剩余项：
-   - OTel collector/exporter 统一方案
-   - SLO/SLI 驱动的阈值与告警升级策略
+1. 在具备 `cargo` 的环境优先验证并修正 Rust 侧：
+   - `cd core-agent && cargo fmt --check`
+   - `cd core-agent && cargo check`
+   - `cd core-agent && cargo test`
+2. 在具备 Docker 的环境验证 tracing 闭环：
+   - `make up-observability`
+   - backend 发起一个会走 core-agent 的真实请求
+   - 在 Jaeger UI 确认单条 trace 中同时出现 backend HTTP span、backend gRPC client span、core-agent gRPC server span
+3. 若 tracing 基线验证通过，继续 `P2-2` 剩余项：
+   - 真实通知渠道接入 Alertmanager
+   - 告警去重 / 升级策略
+   - SLO/SLI 阈值校准
 
 by: gpt-5.5

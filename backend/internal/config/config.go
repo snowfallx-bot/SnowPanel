@@ -17,6 +17,7 @@ type Config struct {
 	Database     DatabaseConfig
 	Redis        RedisConfig
 	Auth         AuthConfig
+	Tracing      TracingConfig
 	AgentTarget  string
 	AgentTimeout time.Duration
 }
@@ -65,6 +66,15 @@ type AuthConfig struct {
 	DefaultAdminPassword string
 }
 
+type TracingConfig struct {
+	Enabled        bool
+	ServiceName    string
+	ServiceVersion string
+	OTLPEndpoint   string
+	Insecure       bool
+	SampleRatio    float64
+}
+
 func Load() Config {
 	v := viper.New()
 	v.SetConfigName(".env")
@@ -96,6 +106,12 @@ func Load() Config {
 	v.SetDefault("DEFAULT_ADMIN_USERNAME", "admin")
 	v.SetDefault("DEFAULT_ADMIN_EMAIL", "admin@snowpanel.local")
 	v.SetDefault("DEFAULT_ADMIN_PASSWORD", "")
+	v.SetDefault("OTEL_TRACING_ENABLED", false)
+	v.SetDefault("OTEL_SERVICE_NAME", "snowpanel-backend")
+	v.SetDefault("OTEL_SERVICE_VERSION", "")
+	v.SetDefault("OTEL_EXPORTER_OTLP_ENDPOINT", "")
+	v.SetDefault("OTEL_EXPORTER_OTLP_INSECURE", true)
+	v.SetDefault("OTEL_TRACES_SAMPLER_ARG", 1.0)
 
 	v.SetDefault("POSTGRES_HOST", "127.0.0.1")
 	v.SetDefault("POSTGRES_PORT", 5432)
@@ -171,6 +187,14 @@ func Load() Config {
 			DefaultAdminUsername: v.GetString("DEFAULT_ADMIN_USERNAME"),
 			DefaultAdminEmail:    v.GetString("DEFAULT_ADMIN_EMAIL"),
 			DefaultAdminPassword: v.GetString("DEFAULT_ADMIN_PASSWORD"),
+		},
+		Tracing: TracingConfig{
+			Enabled:        v.GetBool("OTEL_TRACING_ENABLED"),
+			ServiceName:    strings.TrimSpace(v.GetString("OTEL_SERVICE_NAME")),
+			ServiceVersion: strings.TrimSpace(v.GetString("OTEL_SERVICE_VERSION")),
+			OTLPEndpoint:   strings.TrimSpace(v.GetString("OTEL_EXPORTER_OTLP_ENDPOINT")),
+			Insecure:       v.GetBool("OTEL_EXPORTER_OTLP_INSECURE"),
+			SampleRatio:    clampSampleRatio(v.GetFloat64("OTEL_TRACES_SAMPLER_ARG")),
 		},
 	}
 }
@@ -310,4 +334,14 @@ func generateDevJWTSecret(byteLen int) (string, error) {
 		return "", err
 	}
 	return base64.RawURLEncoding.EncodeToString(buffer), nil
+}
+
+func clampSampleRatio(raw float64) float64 {
+	if raw < 0 {
+		return 0
+	}
+	if raw > 1 {
+		return 1
+	}
+	return raw
 }

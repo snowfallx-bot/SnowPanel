@@ -27,6 +27,12 @@
    - `ss -lntp | grep 50051`
    - `curl -fsS http://127.0.0.1:9108/metrics | head`
 
+如果还希望宿主机上的 `core-agent` 输出分布式 trace，请在 `/etc/snowpanel/core-agent.env` 中启用：
+
+- `OTEL_TRACING_ENABLED=true`
+- `OTEL_SERVICE_NAME=snowpanel-core-agent`
+- `OTEL_EXPORTER_OTLP_ENDPOINT=<collector-host>:4317`
+
 ## backend 容器 + 宿主机 agent 运行方式
 
 当 backend 在 Docker 中运行、`core-agent` 在宿主机运行时，使用：
@@ -46,5 +52,6 @@
 
 - 将 `50051` 端口限制在可信网络（防火墙/内网）内。
 - 将 metrics 端点（`CORE_AGENT_METRICS_HOST:CORE_AGENT_METRICS_PORT`，默认 `127.0.0.1:9108`）限制在本地回环或可信采集网络内。
+- 将 OTLP 导出目标限制在可信 collector / tracing backend 范围内。
 - 收紧 `CORE_AGENT_ALLOWED_ROOTS`、服务白名单、Cron 命令白名单。
 - 条件允许时将 `CORE_AGENT_HOST` 绑定到私网地址，而不是公网 `0.0.0.0`。

@@ -68,6 +68,7 @@ Prometheus UI:
 
 - `http://127.0.0.1:${PROMETHEUS_PORT:-9090}`
 - `http://127.0.0.1:${ALERTMANAGER_PORT:-9093}`
+- `http://127.0.0.1:${JAEGER_UI_PORT:-16686}`
 
 Stop:
 
@@ -99,6 +100,7 @@ Key settings in `.env`:
 - login attempt limiter mode and thresholds (`LOGIN_ATTEMPT_STORE`, `LOGIN_ATTEMPT_REDIS_PREFIX`, `LOGIN_*`)
 - core-agent safe-root and read/write limits
 - core-agent metrics endpoint config (`CORE_AGENT_METRICS_ENABLED`, `CORE_AGENT_METRICS_HOST`, `CORE_AGENT_METRICS_PORT`)
+- OTEL tracing config (`OTEL_TRACING_ENABLED`, `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_TRACES_SAMPLER_ARG`)
 - PostgreSQL + Redis connection info (`REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`, `REDIS_DB`)
 - frontend API base URL (`VITE_API_BASE_URL`, prefer empty for same-origin requests)
 - frontend Vite proxy target (`VITE_API_PROXY_TARGET`, defaults to backend service in Docker)
@@ -114,3 +116,4 @@ Key settings in `.env`:
 - Place backend/frontend behind HTTPS reverse proxy.
 - Restrict core-agent (`50051`) exposure to trusted network only.
 - Keep core-agent metrics endpoint (`CORE_AGENT_METRICS_HOST:CORE_AGENT_METRICS_PORT`, default `127.0.0.1:9108` in host mode) in loopback or trusted scrape networks.
+- If you enable host-agent tracing, point `OTEL_EXPORTER_OTLP_ENDPOINT` at the collector address reachable from host (for local compose observability baseline, `127.0.0.1:4317`).

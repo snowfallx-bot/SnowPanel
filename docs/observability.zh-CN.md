@@ -8,6 +8,7 @@
 
 - 指标（Prometheus 格式）
 - 跨服务请求关联（`X-Request-ID`）
+- 分布式追踪（OTLP -> OTel Collector -> Jaeger）
 - 日志检索路径
 
 ## 指标
@@ -50,6 +51,8 @@ core-agent 在启用时也会暴露独立 Prometheus 端点：
 - 抓取配置：`deploy/observability/prometheus/prometheus.yml`
 - 告警规则：`deploy/observability/prometheus/alerts/snowpanel-alerts.yml`
 - Alertmanager 路由配置：`deploy/observability/alertmanager/alertmanager.yml`
+- OTel Collector 配置：`deploy/observability/otel-collector/config.yaml`
+- Jaeger UI：`http://127.0.0.1:${JAEGER_UI_PORT:-16686}`
 
 启动方式：
 
@@ -60,6 +63,7 @@ core-agent 在启用时也会暴露独立 Prometheus 端点：
 
 - `http://127.0.0.1:${PROMETHEUS_PORT:-9090}`
 - `http://127.0.0.1:${ALERTMANAGER_PORT:-9093}`
+- `http://127.0.0.1:${JAEGER_UI_PORT:-16686}`
 
 停止方式：
 
@@ -71,6 +75,8 @@ core-agent 在启用时也会暴露独立 Prometheus 端点：
 - 基线抓取目标默认假设 backend `:8080` 与 core-agent metrics `:9108`。
 - 若你的运行端口不同，请同步修改 `deploy/observability/prometheus/prometheus.yml`。
 - Alertmanager 默认接收器为 no-op；请在 `deploy/observability/alertmanager/alertmanager.yml` 中配置 webhook/邮件/IM 等真实通知通道。
+- Compose 可观测性模式会默认给 `backend` 与容器版 `core-agent` 打开 OTLP tracing 导出。
+- 若使用宿主机 Agent 模式，还需要在 `deploy/core-agent/systemd/core-agent.env.example`（或 `/etc/snowpanel/core-agent.env`）里设置 OTEL 环境变量，让宿主机上的 `core-agent` 把 trace 发往 collector。
 
 ## 请求链路关联
 
@@ -84,6 +90,28 @@ core-agent 在启用时也会暴露独立 Prometheus 端点：
    - `grpc_method`
 
 这样可以把同一次请求从浏览器/API 客户端日志一路关联到 backend 与 core-agent。
+
+## 分布式追踪基线
+
+当前 trace 链路如下：
+
+1. backend HTTP 请求创建 server span。
+2. backend gRPC client 创建子 span，并将 W3C trace context 透传给 core-agent。
+3. core-agent 提取上游 context，创建同一条 trace 下的 gRPC server span。
+4. 两端统一通过 OTLP 导出到 OTel Collector。
+5. Collector 做 batch 后转发到 Jaeger。
+
+推荐 OTEL 环境变量：
+
+- `OTEL_TRACING_ENABLED=true`
+- `OTEL_EXPORTER_OTLP_ENDPOINT=<collector-host>:4317`
+- `OTEL_EXPORTER_OTLP_INSECURE=true`
+- `OTEL_TRACES_SAMPLER_ARG=1.0`
+
+默认服务名：
+
+- backend：`snowpanel-backend`
+- core-agent：`snowpanel-core-agent`
 
 ## 快速排障路径
 
@@ -124,6 +152,6 @@ Prometheus 默认会把告警发送到 Alertmanager（`alertmanager:9093`）。
 
 ## 当前缺口
 
-- 尚未接入完整 OpenTelemetry 管线。
-- 尚未接入分布式追踪后端（Jaeger/Tempo 等）。
-- backend 与 core-agent 之间尚未形成统一 OTel collector/exporter 策略。
+- 前端/浏览器侧 tracing 尚未接入。
+- 尚未形成基于 trace 的日志统一采集链路；当前仍主要依赖日志检索 + `X-Request-ID` 关联。
+- 告警通知、去重、升级策略与 SLO/SLA 阈值仍需按真实生产负载校准。

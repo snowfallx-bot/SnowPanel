@@ -8,6 +8,7 @@ This document describes SnowPanel's current production troubleshooting baseline 
 
 - Metrics (Prometheus format)
 - Cross-service request correlation (`X-Request-ID`)
+- Distributed tracing (OTLP -> OTel Collector -> Jaeger)
 - Operational log lookup
 
 ## Metrics
@@ -50,6 +51,8 @@ Repository now includes a baseline Prometheus deployment:
 - Prometheus scrape config: `deploy/observability/prometheus/prometheus.yml`
 - Alert rules: `deploy/observability/prometheus/alerts/snowpanel-alerts.yml`
 - Alertmanager routing config: `deploy/observability/alertmanager/alertmanager.yml`
+- OTel Collector config: `deploy/observability/otel-collector/config.yaml`
+- Jaeger UI: `http://127.0.0.1:${JAEGER_UI_PORT:-16686}`
 
 Start baseline stack:
 
@@ -60,6 +63,7 @@ Inspect Prometheus:
 
 - `http://127.0.0.1:${PROMETHEUS_PORT:-9090}`
 - `http://127.0.0.1:${ALERTMANAGER_PORT:-9093}`
+- `http://127.0.0.1:${JAEGER_UI_PORT:-16686}`
 
 Stop:
 
@@ -71,6 +75,8 @@ Notes:
 - Baseline scrape targets assume backend `:8080` and core-agent metrics `:9108`.
 - If your runtime ports differ, update `deploy/observability/prometheus/prometheus.yml` accordingly.
 - Baseline Alertmanager receiver is intentionally no-op. Configure real webhook/email/slack receivers in `deploy/observability/alertmanager/alertmanager.yml`.
+- Compose observability mode enables OTLP tracing export for `backend` and containerized `core-agent` by default.
+- In host-agent mode, also set OTEL variables in `deploy/core-agent/systemd/core-agent.env.example` (or `/etc/snowpanel/core-agent.env`) so host `core-agent` exports traces to the collector.
 
 ## Request Correlation
 
@@ -84,6 +90,28 @@ SnowPanel now propagates request IDs through the backend to core-agent:
    - `grpc_method`
 
 This allows a single request path to be traced from browser/API client logs to backend logs and into core-agent logs.
+
+## Distributed Tracing Baseline
+
+Current trace path:
+
+1. Backend HTTP requests create server spans.
+2. Backend gRPC client creates child spans and propagates W3C trace context to core-agent.
+3. Core-agent extracts remote context and creates gRPC server spans under the same trace.
+4. Both services export OTLP traces to OTel Collector.
+5. Collector batches and forwards traces to Jaeger.
+
+Recommended OTEL variables:
+
+- `OTEL_TRACING_ENABLED=true`
+- `OTEL_EXPORTER_OTLP_ENDPOINT=<collector-host>:4317`
+- `OTEL_EXPORTER_OTLP_INSECURE=true`
+- `OTEL_TRACES_SAMPLER_ARG=1.0`
+
+Default service names:
+
+- backend: `snowpanel-backend`
+- core-agent: `snowpanel-core-agent`
 
 ## Fast Triage Flow
 
@@ -124,6 +152,6 @@ Current default routing:
 
 ## Current Gaps
 
-- No full OpenTelemetry pipeline yet.
-- No distributed trace backend (Jaeger/Tempo/etc.) yet.
-- No unified OTel collector/exporter strategy across backend + core-agent yet.
+- No browser/frontend tracing yet.
+- No trace-backed log shipping pipeline; request correlation still mainly relies on logs + `X-Request-ID`.
+- Alert routing, deduplication, escalation, and SLO/SLA calibration still need production tuning.
