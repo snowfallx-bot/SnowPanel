@@ -44,7 +44,12 @@
      - 从 “monorepo skeleton / generated stubs” 初始化草案，
      - 改为“已完成基础能力 / 进行中事项 / 下一步优先级”的当前状态版。
 
-6. 同步进度缓存
+6. 修正 architecture 文档中的 Redis 描述
+   - 更新 `docs/architecture.md` / `docs/architecture.zh-CN.md`：
+     - 不再写成“Redis 仅预留后续使用”，
+     - 改为反映当前已用于共享登录失败限流状态。
+
+7. 同步进度缓存
    - 更新 `.claude/progress.md`：
      - 标记 `P2-3` 已从“未开始收口”推进到“进行中”。
 
@@ -55,6 +60,8 @@
 - `README.md`
 - `README.zh-CN.md`
 - `backend/README.md`
+- `docs/architecture.md`
+- `docs/architecture.zh-CN.md`
 - `docs/roadmap.md`
 - `docs/roadmap.zh-CN.md`
 - `core-agent/src/process/systemd_service.rs`
@@ -72,6 +79,7 @@ commit摘要
 - 已提交：`feat(observability): add otel tracing pipeline and jaeger baseline`
 - 计划下一笔提交：`docs: refresh backend and observability readmes`
 - 计划再下一笔提交：`docs: rewrite roadmap to reflect current project state`
+- 计划再下一笔提交：`docs: align architecture docs with current redis usage`
 
 希望接下来的 AI 做什么
 

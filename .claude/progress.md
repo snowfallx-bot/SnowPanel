@@ -132,6 +132,7 @@ P2-3：清理“原型痕迹”和重复逻辑
   - 已移除 `core-agent` 中 `tail_logs_placeholder` 占位方法。
   - 已把 root README 的 observability 入口与常用命令补齐。
   - 已将 `docs/roadmap.md` / `docs/roadmap.zh-CN.md` 从初始化草案改为当前状态路线图。
+  - 已修正文档中 “Redis 仅预留后续使用” 的过时描述，改为反映当前登录限流共享状态用途。
 - 当前判断：进行中。
 
 【建议剩余执行顺序】
