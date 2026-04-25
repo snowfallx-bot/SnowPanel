@@ -199,6 +199,7 @@ Both `snowpanel-warning` and `snowpanel-critical` ship as template no-op receive
 Use this checklist when moving from baseline no-op routing to real production delivery.
 
 1. Replace both `snowpanel-warning` and `snowpanel-critical` receivers with real channels in `deploy/observability/alertmanager/alertmanager.yml` (webhook/email/slack/wechat/etc).
+   - You can start from `deploy/observability/alertmanager/alertmanager.production.example.yml` and then apply your real channel endpoints/secrets.
 2. Keep explicit route ownership by severity:
    - `critical` -> paging channel
    - `warning` -> non-paging ops channel (add dedicated route/receiver if needed)

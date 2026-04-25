@@ -199,6 +199,7 @@ Prometheus 默认会把告警发送到 Alertmanager（`alertmanager:9093`）。
 从基线 no-op 路由切到真实生产告警投递时，可按以下清单执行：
 
 1. 在 `deploy/observability/alertmanager/alertmanager.yml` 中将 `snowpanel-warning` 与 `snowpanel-critical` 两个接收器都替换为真实通道（webhook/邮件/slack/wechat 等）。
+   - 可先从 `deploy/observability/alertmanager/alertmanager.production.example.yml` 拷贝，再替换成真实通道地址与密钥。
 2. 按严重级别明确路由归属：
    - `critical` -> 值班/分页通道
    - `warning` -> 非分页运维通道（必要时新增独立 receiver/route）
