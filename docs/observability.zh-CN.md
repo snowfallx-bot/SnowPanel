@@ -130,6 +130,17 @@ core-agent 在启用时也会暴露独立 Prometheus 端点：
    - `snowpanel-core-agent`
 6. 若是宿主机 Agent 模式，再确认 `/etc/snowpanel/core-agent.env`（或 `deploy/core-agent/systemd/core-agent.env.example`）中的 OTEL 变量配置正确。
 
+可选辅助脚本（PowerShell）：
+
+```powershell
+pwsh -File ./scripts/observability/trace-smoke.ps1 `
+  -AccessToken "<access_token>" `
+  -BackendBaseUrl "http://127.0.0.1:8080" `
+  -JaegerBaseUrl "http://127.0.0.1:16686"
+```
+
+该脚本会带自动生成的 `X-Request-ID` 调用 `GET /api/v1/dashboard/summary`，随后轮询 Jaeger；若未找到同时包含 `snowpanel-backend` 与 `snowpanel-core-agent` 的近期 trace，会直接失败。
+
 ## 快速排障路径
 
 1. 从浏览器开发者工具或 API 响应头拿到 `X-Request-ID`。

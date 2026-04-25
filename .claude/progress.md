@@ -147,6 +147,7 @@ P2-3：清理“原型痕迹”和重复逻辑
   - 已为 frontend 测试脚本增加 Node 版本 preflight（`check:node`），当版本低于 `20.19.0` 时以清晰错误信息提前失败，避免 vitest 启动期依赖报错噪音。
   - 已同步 root `README.md` / `README.zh-CN.md` 的 Node 版本口径，与 development/frontend 文档保持一致。
   - 已为 `docs/observability.md` / `docs/observability.zh-CN.md` 增加 Alertmanager 落地清单，补齐从 no-op 接收器切换到真实通知渠道的执行步骤与验证路径。
+  - 已新增 `scripts/observability/trace-smoke.ps1`，支持用 access token 触发 `dashboard/summary` 并自动轮询 Jaeger 校验 backend/core-agent 跨服务 trace；中英文 observability 文档已补充脚本用法。
 - 当前判断：进行中。
 
 【建议剩余执行顺序】

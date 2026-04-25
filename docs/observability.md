@@ -130,6 +130,17 @@ Use this checklist to verify the trace chain in either compose mode or host-agen
    - `snowpanel-core-agent`
 6. If using host-agent mode, also confirm host `core-agent` OTEL vars are set correctly in `/etc/snowpanel/core-agent.env` (or from `deploy/core-agent/systemd/core-agent.env.example`).
 
+Optional helper script (PowerShell):
+
+```powershell
+pwsh -File ./scripts/observability/trace-smoke.ps1 `
+  -AccessToken "<access_token>" `
+  -BackendBaseUrl "http://127.0.0.1:8080" `
+  -JaegerBaseUrl "http://127.0.0.1:16686"
+```
+
+The script triggers `GET /api/v1/dashboard/summary` with a generated `X-Request-ID`, then polls Jaeger and fails unless it finds a recent trace containing both `snowpanel-backend` and `snowpanel-core-agent`.
+
 ## Fast Triage Flow
 
 1. Capture the `X-Request-ID` from browser devtools or API response headers.
