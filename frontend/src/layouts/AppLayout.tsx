@@ -107,7 +107,7 @@ export function AppLayout() {
       <main className="flex flex-col">
         <header className="flex items-center justify-between border-b border-slate-200 bg-white px-6 py-4">
           <div>
-            <p className="text-sm text-slate-500">Linux Panel Prototype</p>
+            <p className="text-sm text-slate-500">SnowPanel Operations Console</p>
             <p className="text-base font-medium">{user?.username ?? "unknown"}</p>
           </div>
           <Button variant="ghost" onClick={handleLogout} disabled={loggingOut}>

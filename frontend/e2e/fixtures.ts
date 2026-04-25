@@ -49,7 +49,7 @@ export async function loginAndMaybeRotate(page: Page, session: AuthSession) {
   const primaryAttempt = await submitLogin(page, session.username, session.primaryPassword);
 
   const passwordGate = page.getByRole("heading", { name: /password change required/i });
-  const shellMarker = page.getByText(/linux panel prototype/i);
+  const shellMarker = page.getByText(/snowpanel operations console/i);
   if (session.rotatedPassword && (await passwordGate.isVisible().catch(() => false))) {
     await page.getByLabel(/current password/i).fill(session.primaryPassword);
     await page.getByLabel(/^new password$/i).fill(session.rotatedPassword);

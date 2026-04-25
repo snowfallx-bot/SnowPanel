@@ -139,6 +139,8 @@ P2-3：清理“原型痕迹”和重复逻辑
   - 已统一 deployment / observability 文档术语，避免仍以 “Prometheus UI/基线” 指代整套可观测性组件。
   - 已将 deployment 文档中的 “Compose Prototype / 原型模式” 命名统一为 “Compose Mode / Compose 模式”。
   - 已补齐 `docs/api-design.md` / `docs/api-design.zh-CN.md` 的系统与运维端点说明（`/api/v1/ping`、`/health`、`/ready`、`/metrics`）。
+  - 已移除前端应用壳中的 `Linux Panel Prototype` 文案，并同步 e2e 登录后页面锚点为 `SnowPanel Operations Console`。
+  - 已将 `proto/README.md` 中的 `Stubs` 表述统一为 `Bindings`，避免延续原型期命名。
 - 当前判断：进行中。
 
 【建议剩余执行顺序】
