@@ -12,72 +12,81 @@
 
 ============
 
-本轮继续按“小步快提交”推进，核心是把 observability 验证链路进一步工程化，并收口 CI/文档一致性。
+本轮目标：按用户“加快推进 P2-2”的要求，优先补齐可观测性生产化缺口中最可落地的部分（SLO/告警分层/通知模板），并保持小步快提交。
 
 本轮实际改动
 
-1. `full-smoke.ps1` 支持自动登录模式
-   - 文件：`scripts/observability/full-smoke.ps1`
-   - 新增参数集：
-     - token 模式：`-AccessToken`
-     - 登录模式：`-LoginUsername/-LoginPassword`
-   - 自动登录后可直接串行执行 tracing + alertmanager 验证，减少手工取 token 成本。
+1. Prometheus 告警规则升级为 SLO 分层基线
+   - 文件：`deploy/observability/prometheus/alerts/snowpanel-alerts.yml`
+   - 新增 recording rules：
+     - `snowpanel:backend_http_total:rate5m`
+     - `snowpanel:backend_http_5xx:rate5m`
+     - `snowpanel:backend_http_availability:ratio5m`
+     - `snowpanel:core_agent_grpc_error_ratio:ratio5m`
+   - 新增 critical 分级：
+     - `SnowPanelBackendP95LatencyCritical`
+     - `SnowPanelCoreAgentP95LatencyCritical`
+     - `SnowPanelCoreAgentGrpcErrorRateCritical`
+   - 新增 backend availability SLO 告警：
+     - `SnowPanelBackendAvailabilitySLOWarning`
+     - `SnowPanelBackendAvailabilitySLOCritical`
+   - 并将 core-agent gRPC warning 阈值收敛为更早预警（2%），critical 维持高阈值（5%）。
 
-2. 新增 CI 端到端 observability 冒烟脚本
-   - 文件：`scripts/ci/observability-smoke.ps1`
-   - 能力：
-     - 拉起 compose + observability 栈
-     - 等待 backend/jaeger/alertmanager 就绪
-     - 完成 bootstrap admin 改密并拿 token
-     - 调用 `scripts/observability/full-smoke.ps1`
-   - 增加 `docker` 前置检查，缺失时直接明确失败。
+2. Alertmanager 基线路由从“单 no-op”升级为 warning/critical 双通道骨架
+   - 文件：`deploy/observability/alertmanager/alertmanager.yml`
+   - 路由改为：
+     - `severity="warning"` -> `snowpanel-warning`
+     - `severity="critical"` -> `snowpanel-critical`
+   - 两个 receiver 均保留 no-op 注释模板，便于后续直接接 webhook/email/slack/wechat。
 
-3. workflow 结构优化（避免影响默认 CI）
-   - `ci.yml` 回归 push/PR 主流水线职责
-   - 新增独立手动 workflow：`.github/workflows/observability-smoke.yml`
-   - 通过 `workflow_dispatch` 按需触发 observability 冒烟，不阻塞默认 PR 路径。
+3. 新增生产接收器模板文件（加速真实通知落地）
+   - 文件：`deploy/observability/alertmanager/alertmanager.production.example.yml`（新增）
+   - 提供 warning/critical 双 receiver 的可执行模板结构，可作为生产配置起点。
 
-4. 术语与文档入口收口
-   - `ci.yml` 中 `Proto Stubs` 步骤命名改为 `Proto Bindings`
-   - root README（中英文）补充 `Observability Smoke` 手动 workflow 入口
-   - development/observability/scripts 文档同步 `full-smoke` 自动登录与 CI 脚本入口
-   - 新增 `scripts/ci/README.md`，汇总 CI 脚本职责与入口
-
-5. 进度文档同步
-   - `.claude/progress.md` 已同步上述进展
+4. 文档与路线图同步
+   - 更新：
+     - `docs/observability.md`
+     - `docs/observability.zh-CN.md`
+     - `docs/roadmap.md`
+     - `docs/roadmap.zh-CN.md`
+     - `.claude/progress.md`
+   - 内容同步：
+     - SLO recording rules 与新告警项
+     - Alertmanager warning/critical 双通道路由说明
+     - 生产模板文件入口
 
 本轮本地验证
 
-1. 脚本执行检查：
-   - `full-smoke.ps1` 登录模式可正常进入登录流程（不可达地址下按预期网络失败）
-   - `scripts/ci/observability-smoke.ps1` 在无 docker 环境下会给出清晰前置错误并退出
+1. 能做的：
+   - 配置与文档引用一致性扫描（`rg`）通过。
 
-2. 环境限制：
-   - 当前环境依然没有 `docker` / `cargo`，无法完成真实在线 Jaeger/Alertmanager 验证
+2. 受限项：
+   - 当前环境无 `docker`、无 `python`、无 `promtool`，无法在本机做 Prometheus/Alertmanager 真实加载验证。
+   - 因此本轮主要完成“配置落地 + 文档一致性 + 可执行模板”，实跑验证留给有环境机器。
 
 commit 摘要
 
-- `b026ae9 feat(observability): support full-smoke login mode`
-- `fe712f1 feat(ci): add observability smoke compose runner`
-- `c5e6008 ci: add manual observability smoke workflow`
-- `4631054 ci: split observability smoke into dedicated manual workflow`
-- `7b88619 chore(ci): rename proto stubs steps to bindings`
-- `180af40 docs: add observability workflow entry to root readmes`
-- `00bdf6b docs(ci): add script index and development cross-links`
+- `f35455b feat(observability): add slo recording rules and severity routing baseline`
+- `ed42111 docs(observability): add production alertmanager receiver template`
 
 希望接下来的 AI 做什么
 
-1. 在具备 Docker + cargo 的环境执行真实验收
-   - 手动触发 GitHub Actions `Observability Smoke`
-   - 或本地跑 `pwsh -File ./scripts/ci/observability-smoke.ps1`
-   - 记录 Jaeger trace 与 Alertmanager 验证结果
+1. 在具备 Docker 的环境优先做 P2-2 实跑验收（非常关键）
+   - 启动：
+     - `make up-observability` 或 `make up-host-agent-observability`
+   - 验证：
+     - `pwsh -File ./scripts/ci/observability-smoke.ps1`
+     - 或手动触发 GitHub Actions `Observability Smoke` workflow
+   - 检查点：
+     - Prometheus 规则加载成功（含新 recording/alerts）
+     - Alertmanager warning/critical 路由生效
+     - Jaeger 跨服务 trace 串联通过
 
-2. 继续 `P2-2` 收口
-   - 接入真实通知渠道（webhook/email/slack/wechat）
-   - 校准告警 dedup/escalation 与 SLO/SLI 阈值
+2. 立即推进真实通知渠道接入（P2-2 最后关键缺口）
+   - 基于 `alertmanager.production.example.yml` 填入真实 webhook/email/slack/wechat
+   - 结合 `scripts/observability/alertmanager-smoke.ps1` 做投递验收
 
-3. 持续 `P2-3`
-   - 扫描非主文档、脚本注释、测试 fixture 的历史措辞和重复描述
-   - 继续小改即提交
+3. 继续小步清理 P2-3
+   - 重点扫尾非主文档、注释与 fixture 的历史措辞
 
 by: gpt-5.5
