@@ -44,6 +44,7 @@ When you want local binaries + containerized dependencies:
 - `make down-host-agent-observability`: stop the host-agent stack that includes observability services
 - `make logs-observability`: tail logs for Prometheus, Alertmanager, OTel Collector, and Jaeger
 - `make logs-host-agent-observability`: tail observability logs in host-agent mode
+- `pwsh -File ./scripts/observability/trace-smoke.ps1 -AccessToken "<access_token>"`: trigger a core-agent request and verify backend/core-agent spans are linked in Jaeger
 - `make lint`: baseline static checks (`go vet`, `cargo fmt --check`, frontend build)
 - `make test`: backend tests + rust tests + frontend test/build flow
 
