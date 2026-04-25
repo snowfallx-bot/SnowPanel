@@ -33,6 +33,9 @@ This roadmap reflects the current repository state rather than the original boot
   - Jaeger cross-service trace validation (`scripts/observability/trace-smoke.ps1`)
   - Alertmanager synthetic alert injection validation (`scripts/observability/alertmanager-smoke.ps1`)
   - One-shot trace + alertmanager validation (`scripts/observability/full-smoke.ps1`)
+- Observability config validation gate now exists:
+  - `scripts/observability/validate-config.ps1` (`promtool`/`amtool` container checks)
+  - CI `observability-config` job in `.github/workflows/ci.yml`
 
 Still remaining:
 

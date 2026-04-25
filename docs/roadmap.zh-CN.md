@@ -33,6 +33,9 @@
   - Jaeger 跨服务 trace 校验（`scripts/observability/trace-smoke.ps1`）
   - Alertmanager 合成告警注入校验（`scripts/observability/alertmanager-smoke.ps1`）
   - tracing + alertmanager 一键串行校验（`scripts/observability/full-smoke.ps1`）
+- observability 配置校验闸门现已具备：
+  - `scripts/observability/validate-config.ps1`（容器内 `promtool`/`amtool` 检查）
+  - `ci.yml` 中的 `observability-config` 任务
 
 仍待完成：
 

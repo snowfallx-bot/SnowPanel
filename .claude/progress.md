@@ -164,6 +164,7 @@ P2-3：清理“原型痕迹”和重复逻辑
   - 已更新 `deploy/observability/alertmanager/alertmanager.yml` 基线路由为 warning/critical 双接收器结构（no-op 模板），并同步 observability 中英文文档与 roadmap 的 SLO 进展描述。
   - 已新增 `deploy/observability/alertmanager/alertmanager.production.example.yml` 作为生产接收器模板，加速真实通知渠道落地。
   - 已新增 `scripts/observability/validate-config.ps1`（容器内 `promtool`/`amtool` 校验），并接入 `scripts/ci/observability-smoke.ps1` 与 GitHub workflows（`ci.yml` 新增 `observability-config` job，`observability-smoke.yml` 增加前置校验）。
+  - 已同步 `docs/roadmap.md` / `docs/roadmap.zh-CN.md`：纳入 observability 配置校验闸门（脚本 + CI job）进展。
 - 当前判断：进行中。
 
 【建议剩余执行顺序】
