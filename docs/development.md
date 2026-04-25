@@ -7,7 +7,7 @@ Language: **English** | [简体中文](development.zh-CN.md)
 - Docker + Docker Compose v2
 - Go 1.25+
 - Rust stable toolchain
-- Node.js 22+
+- Node.js 22+ (recommended; minimum 20.19.0 for frontend tooling)
 
 ## One-Command Local Stack
 

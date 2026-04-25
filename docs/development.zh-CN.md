@@ -7,7 +7,7 @@
 - Docker + Docker Compose v2
 - Go 1.25+
 - Rust stable toolchain
-- Node.js 22+
+- Node.js 22+（推荐；前端工具链最低 20.19.0）
 
 ## 一键本地环境
 

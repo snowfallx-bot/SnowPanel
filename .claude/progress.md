@@ -143,6 +143,7 @@ P2-3：清理“原型痕迹”和重复逻辑
   - 已将 `proto/README.md` 中的 `Stubs` 表述统一为 `Bindings`，避免延续原型期命名。
   - 已同步 `docs/roadmap.md` / `docs/roadmap.zh-CN.md` 措辞，替换 `placeholder` 等遗留描述并纳入最新清理进展。
   - 已为 `docs/observability.md` / `docs/observability.zh-CN.md` 增加 tracing 实测清单，明确 compose / host-agent 两种模式下的最小验证路径。
+  - 已在 `docs/development.md` / `docs/development.zh-CN.md` 与 `frontend/README.md` 明确 Node 最低版本（`>=20.19.0`），并在 `frontend/package.json` 增加 `engines.node` 提前暴露环境不匹配问题。
 - 当前判断：进行中。
 
 【建议剩余执行顺序】
