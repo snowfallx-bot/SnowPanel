@@ -133,6 +133,7 @@ P2-3：清理“原型痕迹”和重复逻辑
   - 已把 root README 的 observability 入口与常用命令补齐。
   - 已将 `docs/roadmap.md` / `docs/roadmap.zh-CN.md` 从初始化草案改为当前状态路线图。
   - 已修正文档中 “Redis 仅预留后续使用” 的过时描述，改为反映当前登录限流共享状态用途。
+  - 已更新 `docs/development.md` / `docs/development.zh-CN.md` 的 observability 命令与测试矩阵说明。
 - 当前判断：进行中。
 
 【建议剩余执行顺序】

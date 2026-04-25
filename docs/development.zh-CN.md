@@ -38,6 +38,8 @@
 
 - `make logs`：查看 compose 日志
 - `make logs-host-agent`：查看宿主机 Agent 覆盖模式的 compose 日志
+- `make up-observability`：以 Prometheus、Alertmanager、OTel Collector、Jaeger 一起启动应用栈
+- `make up-host-agent-observability`：以宿主机 Agent 模式启动应用栈并附带可观测性组件
 - `make lint`：基础静态检查（`go vet`、`cargo fmt --check`、frontend build）
 - `make test`：backend 测试 + rust 测试 + frontend test/build 流程
 
@@ -47,10 +49,12 @@
 
 ## 测试覆盖范围
 
-当前最小测试集重点覆盖：
-- backend auth service 与 auth/permission middleware 行为。
-- core-agent 路径校验器与系统信息服务基本正确性。
-- frontend 登录页渲染基线。
+当前测试矩阵已覆盖：
+- backend unit tests：auth、middleware、grpc client、service 层与安全敏感路径
+- backend + fake-agent integration-style tests：dashboard、files、services、Docker、cron 契约
+- compose smoke：登录、首次强制改密、refresh rotation、dashboard、files、logout 主链路
+- backend integration CI：真实 backend/core-agent/postgres 组合链路
+- frontend e2e：登录、文件浏览、权限感知导航
 
 ## 编码约定
 

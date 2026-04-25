@@ -38,6 +38,8 @@ When you want local binaries + containerized dependencies:
 
 - `make logs`: tail compose logs
 - `make logs-host-agent`: tail logs for the host-agent compose stack
+- `make up-observability`: start the app stack with Prometheus, Alertmanager, OTel Collector, and Jaeger
+- `make up-host-agent-observability`: start host-agent mode with the observability stack
 - `make lint`: baseline static checks (`go vet`, `cargo fmt --check`, frontend build)
 - `make test`: backend tests + rust tests + frontend test/build flow
 
@@ -47,10 +49,12 @@ If you are using the host-agent runtime mode, keep using `make up-host-agent` / 
 
 ## Test Coverage Scope
 
-Current minimum test suite focuses on:
-- backend auth service and auth/permission middleware behavior.
-- core-agent path validator and system info service sanity.
-- frontend login page render baseline.
+Current test matrix covers:
+- backend unit tests across auth, middleware, grpc client, services, and security-sensitive flows
+- backend + fake-agent integration-style tests for dashboard, files, services, Docker, and cron contracts
+- compose smoke coverage for login, forced password change, refresh rotation, dashboard, files, and logout
+- backend integration CI coverage against real backend/core-agent/postgres wiring
+- frontend e2e coverage for login, file browsing, and permission-aware navigation
 
 ## Coding Conventions
 
