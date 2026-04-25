@@ -142,6 +142,7 @@ pwsh -File ./scripts/observability/trace-smoke.ps1 `
 The script triggers `GET /api/v1/dashboard/summary` with a generated `X-Request-ID`, then polls Jaeger and fails unless it finds a recent trace containing both `snowpanel-backend` and `snowpanel-core-agent`.
 
 See also: [`scripts/observability/README.md`](../scripts/observability/README.md) for both tracing and Alertmanager smoke script usage.
+For a one-shot check, you can run `pwsh -File ./scripts/observability/full-smoke.ps1 -AccessToken "<access_token>"`.
 
 ## Fast Triage Flow
 

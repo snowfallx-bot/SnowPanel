@@ -142,6 +142,7 @@ pwsh -File ./scripts/observability/trace-smoke.ps1 `
 该脚本会带自动生成的 `X-Request-ID` 调用 `GET /api/v1/dashboard/summary`，随后轮询 Jaeger；若未找到同时包含 `snowpanel-backend` 与 `snowpanel-core-agent` 的近期 trace，会直接失败。
 
 另见：[`scripts/observability/README.md`](../scripts/observability/README.md)，集中说明 tracing 与 Alertmanager 冒烟脚本用法。
+若希望一次跑完两项校验，可使用：`pwsh -File ./scripts/observability/full-smoke.ps1 -AccessToken "<access_token>"`。
 
 ## 快速排障路径
 
