@@ -92,6 +92,7 @@ Common commands:
 - `make logs-host-agent-observability`: tail observability logs in host-agent mode
 - `pwsh -File ./scripts/observability/full-smoke.ps1 -AccessToken "<access_token>"`: run one-shot observability smoke checks (trace + alertmanager)
 - `pwsh -File ./scripts/observability/full-smoke.ps1 -LoginUsername "admin" -LoginPassword "<password>"`: run one-shot observability smoke checks with automatic login
+- GitHub Actions manual workflow: `Observability Smoke` (`.github/workflows/observability-smoke.yml`)
 - `make lint`: baseline static checks
 - `make test`: backend/core-agent tests + frontend test/build checks
 

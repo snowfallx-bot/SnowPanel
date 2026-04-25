@@ -158,6 +158,7 @@ P2-3：清理“原型痕迹”和重复逻辑
   - 已新增 `scripts/ci/observability-smoke.ps1`，用于在 Docker 环境中自动拉起 observability 栈并执行 full-smoke 端到端校验；development 中英文文档已补命令入口。
   - 已新增独立手动 workflow `.github/workflows/observability-smoke.yml`（`workflow_dispatch`）执行 observability 端到端冒烟验证；默认 `ci.yml` 保持 push/PR 主流水线职责。
   - 已将 `ci.yml` 中残留的 `Proto Stubs` 步骤命名统一为 `Proto Bindings`，与仓库文档术语保持一致。
+  - 已在 root `README.md` / `README.zh-CN.md` 常用命令区域补充 `Observability Smoke` 手动 workflow 入口说明。
 - 当前判断：进行中。
 
 【建议剩余执行顺序】

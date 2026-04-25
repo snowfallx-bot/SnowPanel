@@ -94,6 +94,7 @@ SnowPanel 是一个 Linux 服务器运维面板，采用 Vibe Coding 而成。
 - `make logs-host-agent-observability`: 查看宿主机 Agent + 可观测性模式下的 observability 日志
 - `pwsh -File ./scripts/observability/full-smoke.ps1 -AccessToken "<access_token>"`: 一键执行可观测性冒烟校验（trace + alertmanager）
 - `pwsh -File ./scripts/observability/full-smoke.ps1 -LoginUsername "admin" -LoginPassword "<password>"`: 自动登录后执行一键可观测性冒烟校验
+- GitHub Actions 手动工作流：`Observability Smoke`（`.github/workflows/observability-smoke.yml`）
 - `make lint`: 运行基础静态检查
 - `make test`: backend/core-agent 测试 + frontend test/build 检查
 
