@@ -70,7 +70,12 @@
    - 更新 `docs/observability.md` / `docs/observability.zh-CN.md`：
      - “Prometheus Baseline Stack” 调整为 “Observability Baseline Stack / 可观测性基线栈”。
 
-11. 同步进度缓存
+11. 统一 deployment 中 Compose 命名
+   - 更新 `docs/deployment.md` / `docs/deployment.zh-CN.md`：
+     - `Compose Prototype / 原型模式` 统一为 `Compose Mode / Compose 模式`。
+     - `Prototype Compose` 统一为 `Compose Mode`。
+
+12. 同步进度缓存
    - 更新 `.claude/progress.md`：
      - 标记 `P2-3` 已从“未开始收口”推进到“进行中”。
 
@@ -111,6 +116,7 @@ commit摘要
 - 计划再下一笔提交：`docs: remove stale roadmap draft labels`
 - 计划再下一笔提交：`docs: align observability command docs with make targets`
 - 计划再下一笔提交：`docs: normalize observability terminology across docs`
+- 计划再下一笔提交：`docs: normalize compose mode naming in deployment docs`
 
 希望接下来的 AI 做什么
 

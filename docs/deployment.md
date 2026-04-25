@@ -6,7 +6,7 @@ Language: **English** | [简体中文](deployment.zh-CN.md)
 
 | Mode | Description | Recommended For |
 | --- | --- | --- |
-| Compose Prototype | `core-agent` runs as a container in the same compose stack. | Local development and demos. |
+| Compose Mode | `core-agent` runs as a container in the same compose stack. | Local development and demos. |
 | Host-Agent (Recommended) | `core-agent` runs as a host systemd service; backend connects over private network gRPC. | Production and real host operations (docker/systemd/cron). |
 
 ## Ubuntu 25.10 One-Click Install
@@ -15,7 +15,7 @@ For host-agent mode on Ubuntu 25.10, use:
 
 - [One-click installer](../deploy/one-click/ubuntu-25.10/README.md)
 
-## Mode A: Compose Prototype
+## Mode A: Compose Mode
 
 This project ships with a development-oriented compose stack including:
 - `postgres`
@@ -75,7 +75,7 @@ Stop:
 - Compose mode: `make down-observability`
 - Host-agent mode: `make down-host-agent-observability`
 
-## Port Defaults (Prototype Compose)
+## Port Defaults (Compose Mode)
 
 - Frontend: `5173`
 - Backend: `8080`
