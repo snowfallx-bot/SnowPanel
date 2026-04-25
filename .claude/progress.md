@@ -145,6 +145,7 @@ P2-3：清理“原型痕迹”和重复逻辑
   - 已为 `docs/observability.md` / `docs/observability.zh-CN.md` 增加 tracing 实测清单，明确 compose / host-agent 两种模式下的最小验证路径。
   - 已在 `docs/development.md` / `docs/development.zh-CN.md` 与 `frontend/README.md` 明确 Node 最低版本（`>=20.19.0`），并在 `frontend/package.json` 增加 `engines.node` 提前暴露环境不匹配问题。
   - 已为 frontend 测试脚本增加 Node 版本 preflight（`check:node`），当版本低于 `20.19.0` 时以清晰错误信息提前失败，避免 vitest 启动期依赖报错噪音。
+  - 已同步 root `README.md` / `README.zh-CN.md` 的 Node 版本口径，与 development/frontend 文档保持一致。
 - 当前判断：进行中。
 
 【建议剩余执行顺序】

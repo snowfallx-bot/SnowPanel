@@ -42,7 +42,7 @@ SnowPanel is a Linux server ops panel built with Vibe Coding.
 - Optional local toolchains:
   - Go `1.25+`
   - Rust stable
-  - Node.js `22+`
+  - Node.js `22+` (recommended; minimum `20.19.0` for frontend tooling)
 
 ## Quick Start
 

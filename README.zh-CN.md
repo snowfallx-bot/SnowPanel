@@ -44,7 +44,7 @@ SnowPanel 是一个 Linux 服务器运维面板，采用 Vibe Coding 而成。
 - 可选本地工具链：
   - Go `1.25+`
   - Rust stable
-  - Node.js `22+`
+  - Node.js `22+`（推荐；前端工具链最低 `20.19.0`）
 
 ## 快速开始
 
