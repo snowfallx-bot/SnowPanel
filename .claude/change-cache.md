@@ -12,67 +12,73 @@
 
 ============
 
-本轮继续按“小步快提交”推进，核心是把 `P2-2` 从“有文档”再推进到“有可执行脚本工具链”。
+本轮继续按“小步快提交”推进，主线仍是 `P2-2` 可观测性实跑能力落地，并同步 `P2-3` 文档一致性。
 
 本轮实际改动
 
-1. 新增一键 observability 冒烟脚本
+1. observability 一键脚本能力继续增强
    - `scripts/observability/full-smoke.ps1`
-   - 串行执行：
-     - `trace-smoke.ps1`（backend/core-agent trace 串联验证）
-     - `alertmanager-smoke.ps1`（Alertmanager 合成告警注入验证）
-   - 支持统一传入 `AccessToken`、backend/jaeger/alertmanager base URL、超时参数等。
+   - 新增双模式：
+     - `-AccessToken` 直传 token 模式
+     - `-LoginUsername/-LoginPassword` 自动登录取 token 模式
+   - 自动登录模式下若用户 `must_change_password=true` 会明确失败并给出指引，避免误判。
 
-2. 脚本文档与执行策略补充
+2. 新增 CI 端到端 observability 冒烟脚本
+   - `scripts/ci/observability-smoke.ps1`（新增）
+   - 在 Docker 环境中自动执行：
+     - 拉起 compose + observability 栈（`docker-compose.yml` + `docker-compose.observability.yml`）
+     - backend readiness / jaeger / alertmanager 等待检查
+     - bootstrap admin 登录与改密
+     - 调用 `scripts/observability/full-smoke.ps1` 做 tracing + alertmanager 一体化校验
+   - 增加 `docker` 前置检查，缺失时直接给出清晰错误。
+
+3. GitHub Actions 手动入口接入
+   - `.github/workflows/ci.yml`
+   - 新增 `workflow_dispatch` 输入 `run_observability_smoke`
+   - 新增 `observability-smoke` 任务（仅手动触发时运行），避免阻塞默认 PR 流水线。
+
+4. 文档入口全面同步
    - `scripts/observability/README.md`
-   - 增加 `full-smoke.ps1` 用法和参数说明
-   - 增加 Windows `ExecutionPolicy` 受限时的运行方式（`-ExecutionPolicy Bypass`）
+   - `docs/observability.md` / `docs/observability.zh-CN.md`
+   - `docs/development.md` / `docs/development.zh-CN.md`
+   - `README.md` / `README.zh-CN.md`
+   - 补齐 `full-smoke` 自动登录模式、`scripts/ci/observability-smoke.ps1`、ExecutionPolicy 提示等入口。
 
-3. observability / development 文档入口对齐
-   - `docs/observability.md`
-   - `docs/observability.zh-CN.md`
-   - `docs/development.md`
-   - `docs/development.zh-CN.md`
-   - 补充 `full-smoke` 入口与 one-shot 说明，保持脚本与文档双向可达。
-
-4. root README 可发现性补齐
-   - `README.md`
-   - `README.zh-CN.md`
-   - 常用命令区增加 `full-smoke` 命令入口。
-
-5. roadmap 状态同步
-   - `docs/roadmap.md`
-   - `docs/roadmap.zh-CN.md`
-   - `P2-2` 进展明确写入 observability 冒烟脚本能力（trace / alertmanager / full）。
-
-6. 接力文档同步
+5. 进度文档同步
    - `.claude/progress.md`
-   - 记录本轮新增脚本与文档入口同步进展。
+   - 已记录 observability 脚本链路与手动 workflow 状态。
 
 本轮本地验证
 
-1. 轻量执行检查：
-   - `trace-smoke.ps1`、`alertmanager-smoke.ps1`、`full-smoke.ps1` 均可正常启动并进入请求流程。
-   - 在不可达地址下按预期报网络不可达错误（用于本机无 Docker 环境下的语法/流程检查）。
+1. 已执行脚本级检查（当前机器无 docker）：
+   - `full-smoke.ps1` 自动登录模式可正常进入登录流程（不可达地址下按预期网络失败）
+   - `scripts/ci/observability-smoke.ps1` 可正常执行前置检查，并在缺少 docker 时明确报错退出
 
 2. 环境限制：
-   - 当前环境仍缺 `docker` / `cargo`，无法执行真实 Jaeger/Alertmanager 在线验收。
+   - 当前环境仍缺 `docker` / `cargo`，无法完成真实 Jaeger/Alertmanager 在线实跑验收
 
 commit 摘要
 
-- `ae05931 feat(observability): add one-shot full smoke runner`
-- `2e43703 docs: add observability full-smoke command to root readmes`
-- `a3111e5 docs: update roadmap with observability smoke tooling`
+- `fe712f1 feat(ci): add observability smoke compose runner`
+- `c5e6008 ci: add manual observability smoke workflow`
+- `b026ae9 feat(observability): support full-smoke login mode`
+- （同轮前序）`ae05931 feat(observability): add one-shot full smoke runner`
+- （同轮前序）`2e43703 docs: add observability full-smoke command to root readmes`
+- （同轮前序）`a3111e5 docs: update roadmap with observability smoke tooling`
+- （同轮前序）`1ae67cf chore: refresh change cache after full-smoke rollout`
 
 希望接下来的 AI 做什么
 
-1. 在具备 Docker + cargo 的环境执行真实 `P2-2` 实跑闭环：
-   - `make up-observability` 或 `make up-host-agent-observability`
-   - `pwsh -File ./scripts/observability/full-smoke.ps1 -AccessToken "<access_token>"`
-   - 在 Jaeger / Alertmanager UI 复核与留证
+1. 在具备 Docker + cargo 的环境跑通手动 workflow：
+   - GitHub Actions 手动触发 `CI`，启用 `run_observability_smoke=true`
+   - 收集 Jaeger trace ID 与 Alertmanager 告警验证结果
 
-2. 继续 `P2-3` 小步收口：
-   - 扫描非主文档、脚本注释、测试 fixture 的历史措辞或重复说明
-   - 继续“改完即提交”
+2. 在验证结果基础上继续收口 `P2-2`：
+   - 接入真实通知渠道（webhook/email/slack/wechat）
+   - 校准 dedup/escalation 与 SLO/SLI 阈值
+
+3. 持续推进 `P2-3`：
+   - 继续扫描非主文档/脚本注释/fixture 的历史措辞与重复说明
+   - 保持“改完即提交”
 
 by: gpt-5.5
