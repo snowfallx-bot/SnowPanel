@@ -150,6 +150,7 @@ P2-3：清理“原型痕迹”和重复逻辑
   - 已新增 `scripts/observability/trace-smoke.ps1`，支持用 access token 触发 `dashboard/summary` 并自动轮询 Jaeger 校验 backend/core-agent 跨服务 trace；中英文 observability 文档已补充脚本用法。
   - 已在 `docs/development.md` / `docs/development.zh-CN.md` 的常用命令中补充 tracing 脚本入口，便于开发阶段直接执行链路验证。
   - 已新增 `scripts/observability/alertmanager-smoke.ps1`，支持注入合成告警并校验 Alertmanager 接收；相关用法已写入 observability/development 中英文文档。
+  - 已新增 `scripts/observability/README.md` 汇总 observability 脚本入口，并在 observability 中英文文档加入跳转链接。
 - 当前判断：进行中。
 
 【建议剩余执行顺序】
