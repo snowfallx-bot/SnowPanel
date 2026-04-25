@@ -59,12 +59,12 @@ Do not fall back to plain `docker compose up` / `make up`, or backend will lose 
 
 ## Optional: Observability Baseline
 
-Run app stack with Prometheus baseline:
+Run app stack with the observability baseline:
 
 - Compose mode: `make up-observability`
 - Host-agent mode: `make up-host-agent-observability`
 
-Prometheus UI:
+Observability UIs:
 
 - `http://127.0.0.1:${PROMETHEUS_PORT:-9090}`
 - `http://127.0.0.1:${ALERTMANAGER_PORT:-9093}`

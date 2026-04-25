@@ -43,9 +43,9 @@ core-agent 在启用时也会暴露独立 Prometheus 端点：
 - `grpc_method`
 - `outcome`（`ok` / `error`）
 
-## Prometheus 基线栈
+## 可观测性基线栈
 
-仓库已提供可直接落地的 Prometheus 基线部署：
+仓库已提供可直接落地的可观测性基线部署：
 
 - Compose 覆盖文件：`docker-compose.observability.yml`
 - 抓取配置：`deploy/observability/prometheus/prometheus.yml`
@@ -59,7 +59,7 @@ core-agent 在启用时也会暴露独立 Prometheus 端点：
 - Compose 模式：`make up-observability`
 - 宿主机 Agent 模式：`make up-host-agent-observability`
 
-查看 Prometheus：
+查看可观测性入口：
 
 - `http://127.0.0.1:${PROMETHEUS_PORT:-9090}`
 - `http://127.0.0.1:${ALERTMANAGER_PORT:-9093}`

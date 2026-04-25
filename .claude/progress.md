@@ -136,6 +136,7 @@ P2-3：清理“原型痕迹”和重复逻辑
   - 已更新 `docs/development.md` / `docs/development.zh-CN.md` 的 observability 命令与测试矩阵说明。
   - 已同步 root README 中 roadmap 导航标签，不再继续标注为“草案”。
   - 已补齐 README / development 文档中的 observability `down/logs` 命令，统一到 `Makefile` 实际命令集。
+  - 已统一 deployment / observability 文档术语，避免仍以 “Prometheus UI/基线” 指代整套可观测性组件。
 - 当前判断：进行中。
 
 【建议剩余执行顺序】

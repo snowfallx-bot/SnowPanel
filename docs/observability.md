@@ -43,9 +43,9 @@ Core-agent gRPC metrics are labeled by:
 - `grpc_method`
 - `outcome` (`ok` / `error`)
 
-## Prometheus Baseline Stack
+## Observability Baseline Stack
 
-Repository now includes a baseline Prometheus deployment:
+Repository now includes a baseline observability deployment:
 
 - Compose override: `docker-compose.observability.yml`
 - Prometheus scrape config: `deploy/observability/prometheus/prometheus.yml`
@@ -59,7 +59,7 @@ Start baseline stack:
 - Compose mode: `make up-observability`
 - Host-agent mode: `make up-host-agent-observability`
 
-Inspect Prometheus:
+Inspect UIs:
 
 - `http://127.0.0.1:${PROMETHEUS_PORT:-9090}`
 - `http://127.0.0.1:${ALERTMANAGER_PORT:-9093}`

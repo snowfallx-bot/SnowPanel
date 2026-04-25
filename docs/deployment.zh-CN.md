@@ -59,12 +59,12 @@
 
 ## 可选：可观测性基线
 
-以 Prometheus 基线一起启动应用栈：
+以可观测性基线一起启动应用栈：
 
 - Compose 模式：`make up-observability`
 - 宿主机 Agent 模式：`make up-host-agent-observability`
 
-Prometheus UI：
+可观测性入口：
 
 - `http://127.0.0.1:${PROMETHEUS_PORT:-9090}`
 - `http://127.0.0.1:${ALERTMANAGER_PORT:-9093}`

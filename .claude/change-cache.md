@@ -64,7 +64,13 @@
    - 更新 `docs/development.md` / `docs/development.zh-CN.md`：
      - 增加 `down/logs` 相关 observability 命令，避免只写 `up` 不写关闭与排障入口。
 
-10. 同步进度缓存
+10. 统一 observability 文档术语
+   - 更新 `docs/deployment.md` / `docs/deployment.zh-CN.md`：
+     - “Prometheus UI” 调整为可观测性入口表达。
+   - 更新 `docs/observability.md` / `docs/observability.zh-CN.md`：
+     - “Prometheus Baseline Stack” 调整为 “Observability Baseline Stack / 可观测性基线栈”。
+
+11. 同步进度缓存
    - 更新 `.claude/progress.md`：
      - 标记 `P2-3` 已从“未开始收口”推进到“进行中”。
 
@@ -79,6 +85,10 @@
 - `docs/architecture.zh-CN.md`
 - `docs/development.md`
 - `docs/development.zh-CN.md`
+- `docs/deployment.md`
+- `docs/deployment.zh-CN.md`
+- `docs/observability.md`
+- `docs/observability.zh-CN.md`
 - `docs/roadmap.md`
 - `docs/roadmap.zh-CN.md`
 - `core-agent/src/process/systemd_service.rs`
@@ -100,6 +110,7 @@ commit摘要
 - 计划再下一笔提交：`docs: refresh development guides for current test matrix`
 - 计划再下一笔提交：`docs: remove stale roadmap draft labels`
 - 计划再下一笔提交：`docs: align observability command docs with make targets`
+- 计划再下一笔提交：`docs: normalize observability terminology across docs`
 
 希望接下来的 AI 做什么
 
