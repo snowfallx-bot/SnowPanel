@@ -143,6 +143,7 @@ The script triggers `GET /api/v1/dashboard/summary` with a generated `X-Request-
 
 See also: [`scripts/observability/README.md`](../scripts/observability/README.md) for both tracing and Alertmanager smoke script usage.
 For a one-shot check, you can run `pwsh -File ./scripts/observability/full-smoke.ps1 -AccessToken "<access_token>"`.
+`full-smoke.ps1` also supports automatic login mode via `-LoginUsername` + `-LoginPassword` if you do not want to fetch token manually.
 
 ## Fast Triage Flow
 

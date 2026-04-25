@@ -47,6 +47,7 @@
 - `pwsh -File ./scripts/observability/trace-smoke.ps1 -AccessToken "<access_token>"`：触发一次 core-agent 请求，并校验 Jaeger 中 backend/core-agent spans 是否串联
 - `pwsh -File ./scripts/observability/alertmanager-smoke.ps1`：注入一条合成告警并确认 Alertmanager 可见
 - `pwsh -File ./scripts/observability/full-smoke.ps1 -AccessToken "<access_token>"`：一条命令串行完成 tracing + alertmanager 两项冒烟校验
+- `pwsh -File ./scripts/observability/full-smoke.ps1 -LoginUsername "admin" -LoginPassword "<password>"`：自动登录并获取 token 后执行一键冒烟校验
 - `make lint`：基础静态检查（`go vet`、`cargo fmt --check`、frontend build）
 - `make test`：backend 测试 + rust 测试 + frontend test/build 流程
 

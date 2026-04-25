@@ -143,6 +143,7 @@ pwsh -File ./scripts/observability/trace-smoke.ps1 `
 
 另见：[`scripts/observability/README.md`](../scripts/observability/README.md)，集中说明 tracing 与 Alertmanager 冒烟脚本用法。
 若希望一次跑完两项校验，可使用：`pwsh -File ./scripts/observability/full-smoke.ps1 -AccessToken "<access_token>"`。
+`full-smoke.ps1` 也支持 `-LoginUsername` + `-LoginPassword` 自动登录模式，无需手工提取 token。
 
 ## 快速排障路径
 

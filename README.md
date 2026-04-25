@@ -91,6 +91,7 @@ Common commands:
 - `make logs-observability`: tail logs for Prometheus, Alertmanager, OTel Collector, and Jaeger
 - `make logs-host-agent-observability`: tail observability logs in host-agent mode
 - `pwsh -File ./scripts/observability/full-smoke.ps1 -AccessToken "<access_token>"`: run one-shot observability smoke checks (trace + alertmanager)
+- `pwsh -File ./scripts/observability/full-smoke.ps1 -LoginUsername "admin" -LoginPassword "<password>"`: run one-shot observability smoke checks with automatic login
 - `make lint`: baseline static checks
 - `make test`: backend/core-agent tests + frontend test/build checks
 

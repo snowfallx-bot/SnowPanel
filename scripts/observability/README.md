@@ -53,3 +53,14 @@ pwsh -File ./scripts/observability/full-smoke.ps1 `
   -JaegerBaseUrl "http://127.0.0.1:16686" `
   -AlertmanagerBaseUrl "http://127.0.0.1:9093"
 ```
+
+Or let the script log in and fetch token automatically:
+
+```powershell
+pwsh -File ./scripts/observability/full-smoke.ps1 `
+  -LoginUsername "admin" `
+  -LoginPassword "<admin_password>" `
+  -BackendBaseUrl "http://127.0.0.1:8080" `
+  -JaegerBaseUrl "http://127.0.0.1:16686" `
+  -AlertmanagerBaseUrl "http://127.0.0.1:9093"
+```

@@ -47,6 +47,7 @@ When you want local binaries + containerized dependencies:
 - `pwsh -File ./scripts/observability/trace-smoke.ps1 -AccessToken "<access_token>"`: trigger a core-agent request and verify backend/core-agent spans are linked in Jaeger
 - `pwsh -File ./scripts/observability/alertmanager-smoke.ps1`: inject a synthetic alert and confirm it appears in Alertmanager
 - `pwsh -File ./scripts/observability/full-smoke.ps1 -AccessToken "<access_token>"`: run trace + alertmanager smoke checks in one command
+- `pwsh -File ./scripts/observability/full-smoke.ps1 -LoginUsername "admin" -LoginPassword "<password>"`: full smoke with automatic login/token fetch
 - `make lint`: baseline static checks (`go vet`, `cargo fmt --check`, frontend build)
 - `make test`: backend tests + rust tests + frontend test/build flow
 
