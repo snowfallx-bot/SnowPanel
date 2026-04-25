@@ -191,8 +191,10 @@ Prometheus 默认会把告警发送到 Alertmanager（`alertmanager:9093`）。
    - `make up-observability`（或 `make up-host-agent-observability`）
    - 在 Alertmanager UI（`/#/status`）确认 receiver 与路由状态
 5. 做一次可控投递验证：
-   - 临时下调 `deploy/observability/prometheus/alerts/snowpanel-alerts.yml` 中某条告警阈值
-   - 生成匹配负载/流量
+   - 可直接注入一条合成告警：
+     - `pwsh -File ./scripts/observability/alertmanager-smoke.ps1`
+   - 或临时下调 `deploy/observability/prometheus/alerts/snowpanel-alerts.yml` 中某条告警阈值
+   - 再按需生成匹配负载/流量
    - 确认通知在去重窗口内只发送一次，且包含 `alertname`、`severity`、`instance` 等关键标签
 6. 验证后恢复原阈值，并提交最终配置/规则。
 

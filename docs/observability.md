@@ -191,8 +191,10 @@ Use this checklist when moving from baseline no-op routing to real production de
    - `make up-observability` (or `make up-host-agent-observability`)
    - verify receiver/routing state in Alertmanager UI (`/#/status`)
 5. Run a controlled delivery test:
-   - temporarily lower one alert threshold in `deploy/observability/prometheus/alerts/snowpanel-alerts.yml`
-   - generate matching traffic/load
+   - either inject a synthetic alert:
+     - `pwsh -File ./scripts/observability/alertmanager-smoke.ps1`
+   - or temporarily lower one alert threshold in `deploy/observability/prometheus/alerts/snowpanel-alerts.yml`
+   - then generate matching traffic/load as needed
    - confirm notification arrives once per dedup window and includes labels (`alertname`, `severity`, `instance`)
 6. Restore the original threshold after validation and commit the final config/rule set.
 

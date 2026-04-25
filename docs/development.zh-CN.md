@@ -45,6 +45,7 @@
 - `make logs-observability`：查看 Prometheus、Alertmanager、OTel Collector、Jaeger 日志
 - `make logs-host-agent-observability`：查看宿主机 Agent + 可观测性模式下的 observability 日志
 - `pwsh -File ./scripts/observability/trace-smoke.ps1 -AccessToken "<access_token>"`：触发一次 core-agent 请求，并校验 Jaeger 中 backend/core-agent spans 是否串联
+- `pwsh -File ./scripts/observability/alertmanager-smoke.ps1`：注入一条合成告警并确认 Alertmanager 可见
 - `make lint`：基础静态检查（`go vet`、`cargo fmt --check`、frontend build）
 - `make test`：backend 测试 + rust 测试 + frontend test/build 流程
 
