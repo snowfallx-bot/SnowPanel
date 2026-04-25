@@ -125,10 +125,13 @@ P2-2：补齐生产化观测能力
 
 P2-3：清理“原型痕迹”和重复逻辑
 - 当前问题：
-  - `backend/README.md` 仍有关于 grpc transport placeholder 的过时描述。
-  - 部分文档判断已明显落后于当前实现。
-  - 代码中仍有少量占位痕迹，例如 `tail_logs_placeholder`。
-- 当前判断：未完成。
+  - 根 README / 子模块 README 仍有部分内容需要继续与当前实现对齐。
+  - 仍需继续扫描并收敛少量历史原型措辞与重复说明。
+- 当前进展：
+  - 已清理 `backend/README.md` 中关于 gRPC transport placeholder 的过时描述。
+  - 已移除 `core-agent` 中 `tail_logs_placeholder` 占位方法。
+  - 已把 root README 的 observability 入口与常用命令补齐。
+- 当前判断：进行中。
 
 【建议剩余执行顺序】
 

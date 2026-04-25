@@ -80,6 +80,8 @@ Common commands:
 
 - `make up`: start all services with build
 - `make up-host-agent`: start backend/frontend/postgres/redis with the host-agent compose override
+- `make up-observability`: start the app stack with Prometheus, Alertmanager, OTel Collector, and Jaeger
+- `make up-host-agent-observability`: start host-agent mode with the observability stack
 - `make down`: stop all services
 - `make down-host-agent`: stop the host-agent compose stack
 - `make logs`: tail compose logs
@@ -93,6 +95,7 @@ Common commands:
 - [Development Guide](docs/development.md) | [开发指南](docs/development.zh-CN.md)
 - [API Design](docs/api-design.md) | [API 设计](docs/api-design.zh-CN.md)
 - [Security Notes](docs/security.md) | [安全说明](docs/security.zh-CN.md)
+- [Observability Notes](docs/observability.md) | [可观测性说明](docs/observability.zh-CN.md)
 - [Deployment Guide](docs/deployment.md) | [部署指南](docs/deployment.zh-CN.md)
 - [Roadmap](docs/roadmap.md) | [路线图草案](docs/roadmap.zh-CN.md)
 

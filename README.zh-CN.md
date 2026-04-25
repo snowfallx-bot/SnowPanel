@@ -82,6 +82,8 @@ SnowPanel 是一个 Linux 服务器运维面板，采用 Vibe Coding 而成。
 
 - `make up`: 构建并启动所有服务
 - `make up-host-agent`: 以宿主机 Agent 覆盖模式启动 backend/frontend/postgres/redis
+- `make up-observability`: 以 Prometheus、Alertmanager、OTel Collector、Jaeger 一起启动应用栈
+- `make up-host-agent-observability`: 以宿主机 Agent 模式启动应用栈并附带可观测性组件
 - `make down`: 停止所有服务
 - `make down-host-agent`: 停止宿主机 Agent 覆盖模式的 compose 栈
 - `make logs`: 查看 compose 日志
@@ -95,6 +97,7 @@ SnowPanel 是一个 Linux 服务器运维面板，采用 Vibe Coding 而成。
 - [开发指南](docs/development.zh-CN.md) | [Development Guide](docs/development.md)
 - [API 设计](docs/api-design.zh-CN.md) | [API Design](docs/api-design.md)
 - [安全说明](docs/security.zh-CN.md) | [Security Notes](docs/security.md)
+- [可观测性说明](docs/observability.zh-CN.md) | [Observability Notes](docs/observability.md)
 - [部署指南](docs/deployment.zh-CN.md) | [Deployment Guide](docs/deployment.md)
 - [路线图草案](docs/roadmap.zh-CN.md) | [Roadmap](docs/roadmap.md)
 

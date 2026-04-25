@@ -1,70 +1,116 @@
 # Backend
 
-Go backend baseline with:
-- `gin` HTTP service
-- `viper` config loading
-- `zap` structured logging
-- `gorm` PostgreSQL connection bootstrap
+Go API service for SnowPanel. The backend is responsible for:
+
+- HTTP API routing with `gin`
+- auth/session flows with JWT + refresh rotation
+- RBAC-aware authorization middleware
+- PostgreSQL-backed user/audit/task state
+- gRPC calls to `core-agent` for host operations
+- metrics, request correlation, and tracing hooks
 
 ## Run
 
 1. Ensure PostgreSQL is reachable (defaults from `.env.example`).
-2. Start service:
-   `go run ./cmd/server`
+2. Ensure `core-agent` is reachable via `AGENT_TARGET`.
+3. Start service:
+   - `go run ./cmd/server`
 
-## Endpoints
+## Operational Endpoints
 
 - `GET /health`
-- `GET /api/v1/ping`
+- `GET /ready`
+- `GET /metrics`
+
+## API Surface
+
+Auth:
+
 - `POST /api/v1/auth/login`
-- `GET /api/v1/auth/me` (JWT protected)
-- `GET /api/v1/dashboard/summary` (JWT protected, data source is core-agent via grpc client)
-- `GET /api/v1/files/list?path=` (JWT + `files.read`)
-- `POST /api/v1/files/read` (JWT + `files.read`)
-- `POST /api/v1/files/write` (JWT + `files.write`)
-- `POST /api/v1/files/mkdir` (JWT + `files.write`)
-- `DELETE /api/v1/files/delete` (JWT + `files.write`)
-- `GET /api/v1/services` (JWT + `services.read`)
-- `POST /api/v1/services/:name/start` (JWT + `services.manage`)
-- `POST /api/v1/services/:name/stop` (JWT + `services.manage`)
-- `POST /api/v1/services/:name/restart` (JWT + `services.manage`)
-- `GET /api/v1/docker/containers` (JWT + `docker.read`)
-- `POST /api/v1/docker/containers/:id/start` (JWT + `docker.manage`)
-- `POST /api/v1/docker/containers/:id/stop` (JWT + `docker.manage`)
-- `POST /api/v1/docker/containers/:id/restart` (JWT + `docker.manage`)
-- `GET /api/v1/docker/images` (JWT + `docker.read`)
-- `GET /api/v1/cron` (JWT + `cron.read`)
-- `POST /api/v1/cron` (JWT + `cron.manage`)
-- `PUT /api/v1/cron/:id` (JWT + `cron.manage`)
-- `DELETE /api/v1/cron/:id` (JWT + `cron.manage`)
-- `POST /api/v1/cron/:id/enable` (JWT + `cron.manage`)
-- `POST /api/v1/cron/:id/disable` (JWT + `cron.manage`)
-- `GET /api/v1/audit/logs` (JWT + `audit.read`)
-- `GET /api/v1/tasks` (JWT + `tasks.read`)
-- `GET /api/v1/tasks/:id` (JWT + `tasks.read`)
-- `POST /api/v1/tasks/docker/restart` (JWT + `tasks.manage`)
-- `POST /api/v1/tasks/services/restart` (JWT + `tasks.manage`)
-- `POST /api/v1/tasks/:id/cancel` (JWT + `tasks.manage`)
-- `POST /api/v1/tasks/:id/retry` (JWT + `tasks.manage`)
+- `POST /api/v1/auth/refresh`
+- `GET /api/v1/auth/me`
+- `POST /api/v1/auth/logout`
+- `POST /api/v1/auth/change-password`
 
-## Default Admin Bootstrap
+Dashboard:
 
-When `BOOTSTRAP_ADMIN=true`, backend creates a default admin only when no users exist.
-Default credentials come from:
+- `GET /api/v1/dashboard/summary`
+
+Files:
+
+- `GET /api/v1/files/list`
+- `GET /api/v1/files/download`
+- `POST /api/v1/files/upload`
+- `POST /api/v1/files/read`
+- `POST /api/v1/files/write`
+- `POST /api/v1/files/rename`
+- `POST /api/v1/files/mkdir`
+- `DELETE /api/v1/files/delete`
+
+Services:
+
+- `GET /api/v1/services`
+- `POST /api/v1/services/:name/start`
+- `POST /api/v1/services/:name/stop`
+- `POST /api/v1/services/:name/restart`
+
+Docker:
+
+- `GET /api/v1/docker/containers`
+- `POST /api/v1/docker/containers/:id/start`
+- `POST /api/v1/docker/containers/:id/stop`
+- `POST /api/v1/docker/containers/:id/restart`
+- `GET /api/v1/docker/images`
+
+Cron:
+
+- `GET /api/v1/cron`
+- `POST /api/v1/cron`
+- `PUT /api/v1/cron/:id`
+- `DELETE /api/v1/cron/:id`
+- `POST /api/v1/cron/:id/enable`
+- `POST /api/v1/cron/:id/disable`
+
+Audit / Tasks:
+
+- `GET /api/v1/audit/logs`
+- `GET /api/v1/tasks`
+- `GET /api/v1/tasks/:id`
+- `POST /api/v1/tasks/docker/restart`
+- `POST /api/v1/tasks/services/restart`
+- `POST /api/v1/tasks/:id/cancel`
+- `POST /api/v1/tasks/:id/retry`
+
+## Auth Bootstrap
+
+When `BOOTSTRAP_ADMIN=true`, backend creates the first admin only when no users exist.
+Bootstrap values come from:
+
 - `DEFAULT_ADMIN_USERNAME`
 - `DEFAULT_ADMIN_PASSWORD`
 - `DEFAULT_ADMIN_EMAIL`
 
-## Migration Note
+In development, an empty `DEFAULT_ADMIN_PASSWORD` generates a one-time password.
+In production, startup fails if bootstrap password or `JWT_SECRET` is weak.
 
-Current SQL migrations are in `backend/migrations`.
-Recommended execution flow:
-1. apply `.up.sql`
-2. start backend
+## Data And Migrations
 
-## gRPC Client Skeleton
+Schema migrations live in `backend/migrations`.
+Recommended flow:
 
-`internal/grpcclient` currently exposes a transport placeholder interface.
-After proto code generation is ready, replace placeholder methods with:
-- grpc connection setup
-- generated `SystemServiceClient` calls
+1. Apply `.up.sql`
+2. Start backend
+
+## Observability Notes
+
+- Prometheus metrics are exposed at `/metrics`.
+- `X-Request-ID` is propagated from HTTP to gRPC metadata.
+- Access logs include `request_id`, `trace_id`, and `span_id`.
+- OTEL tracing can be enabled with:
+  - `OTEL_TRACING_ENABLED=true`
+  - `OTEL_EXPORTER_OTLP_ENDPOINT=<collector-host>:4317`
+
+See repository docs for full deployment and observability guidance:
+
+- `docs/deployment.md`
+- `docs/observability.md`
