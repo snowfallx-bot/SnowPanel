@@ -64,6 +64,7 @@ Current test matrix covers:
 - compose smoke coverage for login, forced password change, refresh rotation, dashboard, files, and logout
 - backend integration CI coverage against real backend/core-agent/postgres wiring
 - frontend e2e coverage for login, file browsing, and permission-aware navigation
+- optional manual CI workflow (`workflow_dispatch`) for observability smoke (trace + alertmanager end-to-end)
 
 ## Coding Conventions
 

@@ -64,6 +64,7 @@
 - compose smoke：登录、首次强制改密、refresh rotation、dashboard、files、logout 主链路
 - backend integration CI：真实 backend/core-agent/postgres 组合链路
 - frontend e2e：登录、文件浏览、权限感知导航
+- 可选手动 CI（`workflow_dispatch`）：observability 冒烟验证（trace + alertmanager 端到端）
 
 ## 编码约定
 
