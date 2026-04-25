@@ -113,6 +113,23 @@ Default service names:
 - backend: `snowpanel-backend`
 - core-agent: `snowpanel-core-agent`
 
+## Tracing Validation Checklist
+
+Use this checklist to verify the trace chain in either compose mode or host-agent mode.
+
+1. Start stack:
+   - Compose mode: `make up-observability`
+   - Host-agent mode: `make up-host-agent-observability`
+2. Log in and keep a valid bearer token (for protected APIs under `/api/v1/*`).
+3. Call one backend route that must proxy to core-agent, for example:
+   - `GET /api/v1/dashboard/summary`
+   - Include a custom header such as `X-Request-ID: trace-e2e-001`
+4. Confirm backend response still contains the same `X-Request-ID`.
+5. In Jaeger (`http://127.0.0.1:${JAEGER_UI_PORT:-16686}`), verify a single trace contains spans from both services:
+   - `snowpanel-backend`
+   - `snowpanel-core-agent`
+6. If using host-agent mode, also confirm host `core-agent` OTEL vars are set correctly in `/etc/snowpanel/core-agent.env` (or from `deploy/core-agent/systemd/core-agent.env.example`).
+
 ## Fast Triage Flow
 
 1. Capture the `X-Request-ID` from browser devtools or API response headers.

@@ -113,6 +113,23 @@ core-agent 在启用时也会暴露独立 Prometheus 端点：
 - backend：`snowpanel-backend`
 - core-agent：`snowpanel-core-agent`
 
+## Tracing 实测清单
+
+可按以下清单在 compose 或 host-agent 模式验证 trace 链路是否打通：
+
+1. 启动可观测性栈：
+   - Compose 模式：`make up-observability`
+   - 宿主机 Agent 模式：`make up-host-agent-observability`
+2. 先登录拿到可用 bearer token（访问 `/api/v1/*` 受保护接口需要）。
+3. 调用一个必经 core-agent 的 backend 接口，例如：
+   - `GET /api/v1/dashboard/summary`
+   - 并携带自定义请求头 `X-Request-ID: trace-e2e-001`
+4. 确认 backend 响应头回写了同一个 `X-Request-ID`。
+5. 在 Jaeger（`http://127.0.0.1:${JAEGER_UI_PORT:-16686}`）确认同一条 trace 里同时出现以下服务的 span：
+   - `snowpanel-backend`
+   - `snowpanel-core-agent`
+6. 若是宿主机 Agent 模式，再确认 `/etc/snowpanel/core-agent.env`（或 `deploy/core-agent/systemd/core-agent.env.example`）中的 OTEL 变量配置正确。
+
 ## 快速排障路径
 
 1. 从浏览器开发者工具或 API 响应头拿到 `X-Request-ID`。
