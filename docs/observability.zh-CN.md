@@ -32,6 +32,13 @@ core-agent 在启用时也会暴露独立 Prometheus 端点：
 - `snowpanel_core_agent_grpc_request_duration_seconds`
 - `snowpanel_core_agent_grpc_requests_in_flight`
 
+Prometheus 还提供了面向 SLO 的 recording rules：
+
+- `snowpanel:backend_http_total:rate5m`
+- `snowpanel:backend_http_5xx:rate5m`
+- `snowpanel:backend_http_availability:ratio5m`
+- `snowpanel:core_agent_grpc_error_ratio:ratio5m`
+
 其中 agent RPC 指标包含以下标签：
 
 - `rpc`
@@ -74,7 +81,7 @@ core-agent 在启用时也会暴露独立 Prometheus 端点：
 
 - 基线抓取目标默认假设 backend `:8080` 与 core-agent metrics `:9108`。
 - 若你的运行端口不同，请同步修改 `deploy/observability/prometheus/prometheus.yml`。
-- Alertmanager 默认接收器为 no-op；请在 `deploy/observability/alertmanager/alertmanager.yml` 中配置 webhook/邮件/IM 等真实通知通道。
+- Alertmanager 默认 warning/critical 接收器均为 no-op；请在 `deploy/observability/alertmanager/alertmanager.yml` 中配置 webhook/邮件/IM 等真实通知通道。
 - Compose 可观测性模式会默认给 `backend` 与容器版 `core-agent` 打开 OTLP tracing 导出。
 - 若使用宿主机 Agent 模式，还需要在 `deploy/core-agent/systemd/core-agent.env.example`（或 `/etc/snowpanel/core-agent.env`）里设置 OTEL 环境变量，让宿主机上的 `core-agent` 把 trace 发往 collector。
 
@@ -166,10 +173,15 @@ pwsh -File ./scripts/observability/trace-smoke.ps1 `
 - `SnowPanelBackendDown`
 - `SnowPanelCoreAgentMetricsDown`
 - `SnowPanelBackendP95LatencyHigh`
+- `SnowPanelBackendP95LatencyCritical`
 - `SnowPanelCoreAgentP95LatencyHigh`
+- `SnowPanelCoreAgentP95LatencyCritical`
 - `SnowPanelBackendAgentTransportErrorsHigh`
 - `SnowPanelCoreAgentGrpcErrorRateHigh`
+- `SnowPanelCoreAgentGrpcErrorRateCritical`
 - `SnowPanelCoreAgentInFlightHigh`
+- `SnowPanelBackendAvailabilitySLOWarning`
+- `SnowPanelBackendAvailabilitySLOCritical`
 
 ## 告警投递基线
 
@@ -177,16 +189,16 @@ Prometheus 默认会把告警发送到 Alertmanager（`alertmanager:9093`）。
 
 默认路由策略：
 
-- 所有告警 -> `snowpanel-null`
+- `severity="warning"` -> `snowpanel-warning`
 - `severity="critical"` -> `snowpanel-critical`
 
-其中 `snowpanel-critical` 默认给出注释模板（webhook 示例），便于按团队规范接入真实通知渠道。
+其中 `snowpanel-warning` 与 `snowpanel-critical` 默认都给出注释模板（webhook 示例），便于按团队规范接入真实通知渠道。
 
 ## Alertmanager 落地清单
 
 从基线 no-op 路由切到真实生产告警投递时，可按以下清单执行：
 
-1. 在 `deploy/observability/alertmanager/alertmanager.yml` 中把 `snowpanel-critical` 接收器替换为真实通道（webhook/邮件/slack/wechat 等）。
+1. 在 `deploy/observability/alertmanager/alertmanager.yml` 中将 `snowpanel-warning` 与 `snowpanel-critical` 两个接收器都替换为真实通道（webhook/邮件/slack/wechat 等）。
 2. 按严重级别明确路由归属：
    - `critical` -> 值班/分页通道
    - `warning` -> 非分页运维通道（必要时新增独立 receiver/route）

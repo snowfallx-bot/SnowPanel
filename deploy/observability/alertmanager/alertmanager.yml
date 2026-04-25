@@ -2,7 +2,7 @@ global:
   resolve_timeout: 5m
 
 route:
-  receiver: snowpanel-null
+  receiver: snowpanel-warning
   group_by: ["alertname", "severity"]
   group_wait: 30s
   group_interval: 5m
@@ -11,17 +11,27 @@ route:
     - receiver: snowpanel-critical
       matchers:
         - severity="critical"
+    - receiver: snowpanel-warning
+      matchers:
+        - severity="warning"
 
 receivers:
-  - name: snowpanel-null
-
-  - name: snowpanel-critical
-    # Baseline ships with a no-op receiver to keep startup predictable.
-    # Configure your own channel here (webhook/email/slack/wechat/etc).
+  - name: snowpanel-warning
+    # Baseline ships with a no-op warning receiver to keep startup predictable.
+    # Configure your own warning channel here (webhook/email/slack/wechat/etc).
     #
     # Example:
     # webhook_configs:
-    #   - url: "https://example.com/alert-webhook"
+    #   - url: "https://example.com/alert-webhook-warning"
+    #     send_resolved: true
+
+  - name: snowpanel-critical
+    # Baseline ships with a no-op critical receiver to keep startup predictable.
+    # Configure your own paging channel here (webhook/email/slack/wechat/etc).
+    #
+    # Example:
+    # webhook_configs:
+    #   - url: "https://example.com/alert-webhook-critical"
     #     send_resolved: true
 
 inhibit_rules:

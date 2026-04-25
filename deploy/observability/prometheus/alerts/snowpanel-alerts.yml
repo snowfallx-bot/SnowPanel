@@ -1,4 +1,18 @@
 groups:
+  - name: snowpanel-slo-recordings
+    rules:
+      - record: snowpanel:backend_http_total:rate5m
+        expr: sum(rate(snowpanel_http_requests_total{route!="/metrics"}[5m]))
+
+      - record: snowpanel:backend_http_5xx:rate5m
+        expr: sum(rate(snowpanel_http_requests_total{route!="/metrics",status=~"5.."}[5m]))
+
+      - record: snowpanel:backend_http_availability:ratio5m
+        expr: 1 - (snowpanel:backend_http_5xx:rate5m / clamp_min(snowpanel:backend_http_total:rate5m, 0.001))
+
+      - record: snowpanel:core_agent_grpc_error_ratio:ratio5m
+        expr: sum(rate(snowpanel_core_agent_grpc_requests_total{outcome="error"}[5m])) / clamp_min(sum(rate(snowpanel_core_agent_grpc_requests_total[5m])), 0.001)
+
   - name: snowpanel-health
     rules:
       - alert: SnowPanelBackendDown
@@ -39,6 +53,24 @@ groups:
           summary: "SnowPanel core-agent gRPC p95 latency is high"
           description: "Core-agent gRPC p95 latency has been above 1s for 10 minutes."
 
+      - alert: SnowPanelBackendP95LatencyCritical
+        expr: histogram_quantile(0.95, sum(rate(snowpanel_http_request_duration_seconds_bucket{route!="unmatched"}[5m])) by (le)) > 3
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "SnowPanel backend p95 latency is critically high"
+          description: "Backend p95 request latency has been above 3s for 10 minutes."
+
+      - alert: SnowPanelCoreAgentP95LatencyCritical
+        expr: histogram_quantile(0.95, sum(rate(snowpanel_core_agent_grpc_request_duration_seconds_bucket[5m])) by (le)) > 2
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "SnowPanel core-agent gRPC p95 latency is critically high"
+          description: "Core-agent gRPC p95 latency has been above 2s for 10 minutes."
+
   - name: snowpanel-error-rate
     rules:
       - alert: SnowPanelBackendAgentTransportErrorsHigh
@@ -51,12 +83,21 @@ groups:
           description: "Backend reports sustained transport-level core-agent errors (>0.1 req/s) for 10 minutes."
 
       - alert: SnowPanelCoreAgentGrpcErrorRateHigh
-        expr: sum(rate(snowpanel_core_agent_grpc_requests_total{outcome="error"}[5m])) / clamp_min(sum(rate(snowpanel_core_agent_grpc_requests_total[5m])), 0.001) > 0.05
+        expr: snowpanel:core_agent_grpc_error_ratio:ratio5m > 0.02
         for: 10m
         labels:
           severity: warning
         annotations:
           summary: "Core-agent gRPC error rate is high"
+          description: "Core-agent gRPC error ratio has exceeded 2% for 10 minutes."
+
+      - alert: SnowPanelCoreAgentGrpcErrorRateCritical
+        expr: snowpanel:core_agent_grpc_error_ratio:ratio5m > 0.05
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Core-agent gRPC error rate is critically high"
           description: "Core-agent gRPC error ratio has exceeded 5% for 10 minutes."
 
       - alert: SnowPanelCoreAgentInFlightHigh
@@ -67,3 +108,23 @@ groups:
         annotations:
           summary: "Core-agent in-flight requests are high"
           description: "Core-agent concurrent in-flight gRPC requests exceeded 50 for 10 minutes."
+
+  - name: snowpanel-slo
+    rules:
+      - alert: SnowPanelBackendAvailabilitySLOWarning
+        expr: snowpanel:backend_http_availability:ratio5m < 0.995
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "SnowPanel backend availability SLO is degrading"
+          description: "Backend 5xx-based availability has been below 99.5% for 15 minutes."
+
+      - alert: SnowPanelBackendAvailabilitySLOCritical
+        expr: snowpanel:backend_http_availability:ratio5m < 0.98
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "SnowPanel backend availability SLO is critically low"
+          description: "Backend 5xx-based availability has been below 98% for 10 minutes."

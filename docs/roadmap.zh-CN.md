@@ -25,6 +25,10 @@
   - backend gRPC client spans
   - core-agent gRPC server spans
   - OTel Collector -> Jaeger 管线
+- Prometheus/Alertmanager 的 SLO 基线已扩展：
+  - backend 可用性 recording rules 与 warning/critical 分级告警
+  - core-agent gRPC 错误率 recording rule 与 warning/critical 分级告警
+  - Alertmanager warning/critical 双接收器路由基线
 - observability 冒烟脚本现已具备：
   - Jaeger 跨服务 trace 校验（`scripts/observability/trace-smoke.ps1`）
   - Alertmanager 合成告警注入校验（`scripts/observability/alertmanager-smoke.ps1`）

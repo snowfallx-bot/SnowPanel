@@ -25,6 +25,10 @@ This roadmap reflects the current repository state rather than the original boot
   - backend gRPC client spans
   - core-agent gRPC server spans
   - OTel Collector -> Jaeger pipeline
+- Prometheus/Alertmanager SLO baseline has been expanded with:
+  - backend availability recording rules and warning/critical SLO alerts
+  - core-agent gRPC error-ratio recording rule and warning/critical alerts
+  - warning/critical receiver split in Alertmanager routing baseline
 - Observability smoke scripts now exist for:
   - Jaeger cross-service trace validation (`scripts/observability/trace-smoke.ps1`)
   - Alertmanager synthetic alert injection validation (`scripts/observability/alertmanager-smoke.ps1`)

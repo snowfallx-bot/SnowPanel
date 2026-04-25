@@ -32,6 +32,13 @@ Current key metric families include:
 - `snowpanel_core_agent_grpc_request_duration_seconds`
 - `snowpanel_core_agent_grpc_requests_in_flight`
 
+Prometheus recording rules also derive SLO-oriented series:
+
+- `snowpanel:backend_http_total:rate5m`
+- `snowpanel:backend_http_5xx:rate5m`
+- `snowpanel:backend_http_availability:ratio5m`
+- `snowpanel:core_agent_grpc_error_ratio:ratio5m`
+
 Agent RPC metrics are labeled by:
 
 - `rpc`
@@ -74,7 +81,7 @@ Notes:
 
 - Baseline scrape targets assume backend `:8080` and core-agent metrics `:9108`.
 - If your runtime ports differ, update `deploy/observability/prometheus/prometheus.yml` accordingly.
-- Baseline Alertmanager receiver is intentionally no-op. Configure real webhook/email/slack receivers in `deploy/observability/alertmanager/alertmanager.yml`.
+- Baseline Alertmanager receivers are intentionally no-op. Configure real warning/critical webhook/email/slack receivers in `deploy/observability/alertmanager/alertmanager.yml`.
 - Compose observability mode enables OTLP tracing export for `backend` and containerized `core-agent` by default.
 - In host-agent mode, also set OTEL variables in `deploy/core-agent/systemd/core-agent.env.example` (or `/etc/snowpanel/core-agent.env`) so host `core-agent` exports traces to the collector.
 
@@ -166,10 +173,15 @@ Default alerts include:
 - `SnowPanelBackendDown`
 - `SnowPanelCoreAgentMetricsDown`
 - `SnowPanelBackendP95LatencyHigh`
+- `SnowPanelBackendP95LatencyCritical`
 - `SnowPanelCoreAgentP95LatencyHigh`
+- `SnowPanelCoreAgentP95LatencyCritical`
 - `SnowPanelBackendAgentTransportErrorsHigh`
 - `SnowPanelCoreAgentGrpcErrorRateHigh`
+- `SnowPanelCoreAgentGrpcErrorRateCritical`
 - `SnowPanelCoreAgentInFlightHigh`
+- `SnowPanelBackendAvailabilitySLOWarning`
+- `SnowPanelBackendAvailabilitySLOCritical`
 
 ## Alert Delivery Baseline
 
@@ -177,16 +189,16 @@ Prometheus forwards alerts to Alertmanager (`alertmanager:9093`) by default.
 
 Current default routing:
 
-- All alerts -> `snowpanel-null`
+- `severity="warning"` -> `snowpanel-warning`
 - `severity="critical"` -> `snowpanel-critical`
 
-`snowpanel-critical` ships as a template receiver with commented webhook example so teams can wire real notification channels explicitly.
+Both `snowpanel-warning` and `snowpanel-critical` ship as template no-op receivers with commented webhook examples so teams can wire real notification channels explicitly.
 
 ## Alertmanager Rollout Checklist
 
 Use this checklist when moving from baseline no-op routing to real production delivery.
 
-1. Replace the `snowpanel-critical` receiver with a real channel in `deploy/observability/alertmanager/alertmanager.yml` (webhook/email/slack/wechat/etc).
+1. Replace both `snowpanel-warning` and `snowpanel-critical` receivers with real channels in `deploy/observability/alertmanager/alertmanager.yml` (webhook/email/slack/wechat/etc).
 2. Keep explicit route ownership by severity:
    - `critical` -> paging channel
    - `warning` -> non-paging ops channel (add dedicated route/receiver if needed)
