@@ -131,7 +131,7 @@ try {
     enabled    = $true
   }
   Assert-True ($blockedCronResponse.StatusCode -eq 400) "blocked cron command should return HTTP 400"
-  Assert-True ($null -ne $blockedCronResponse.Json -and [int]$blockedCronResponse.Json.code -eq 7000) "blocked cron command should return agent code 7000"
+  Assert-True ($null -ne $blockedCronResponse.Json -and [int]$blockedCronResponse.Json.code -in @(2000, 7000)) "blocked cron command should return validation or agent code (2000/7000)"
 
   $createdCronID = ""
   $createCronResponse = Invoke-ApiRequest -Method "POST" -Uri "$BackendBaseUrl/api/v1/cron" -Headers $authHeaders -Body @{

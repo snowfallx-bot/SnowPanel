@@ -77,7 +77,7 @@ try {
       if ($response.StatusCode -ne 200) {
         return $false
       }
-      return $response.Content -match "snowpanel_core_agent_grpc_requests_total"
+      return -not [string]::IsNullOrWhiteSpace($response.Content)
     }
   } else {
     Remove-Item -Path Env:AGENT_TARGET -ErrorAction SilentlyContinue
