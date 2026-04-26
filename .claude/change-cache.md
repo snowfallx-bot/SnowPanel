@@ -12,90 +12,63 @@
 
 ============
 
-本轮按“加快 P2-2 收口”推进，重点是把 observability 从“能跑冒烟”推进到“有配置质量闸门 + 可落地告警分层”。
+本轮继续按“加快 P2-2”推进，重点补上“规则已加载”的自动校验，避免只检查配置语法但漏掉运行时规则注册问题。
 
 本轮实际改动
 
-1. SLO/告警分层基线落地（Prometheus + Alertmanager）
-   - `deploy/observability/prometheus/alerts/snowpanel-alerts.yml`
-     - 新增 recording rules：
-       - `snowpanel:backend_http_total:rate5m`
-       - `snowpanel:backend_http_5xx:rate5m`
-       - `snowpanel:backend_http_availability:ratio5m`
-       - `snowpanel:core_agent_grpc_error_ratio:ratio5m`
-     - 新增 critical 分级告警与 availability SLO 告警
-   - `deploy/observability/alertmanager/alertmanager.yml`
-     - 路由升级为 `warning` / `critical` 双接收器骨架
+1. 新增 Prometheus 规则加载冒烟脚本
+   - `scripts/observability/prometheus-rules-smoke.ps1`（新增）
+   - 对运行中的 `/api/v1/rules` 做检查：
+     - 校验关键 recording rules 是否存在
+     - 校验关键 alert rules 是否存在
+   - 覆盖本项目当前 SLO/分级告警基线（availability、error ratio、latency critical/warning 等）。
 
-2. 新增生产接收器模板
-   - `deploy/observability/alertmanager/alertmanager.production.example.yml`
-   - 作为真实 webhook/邮件/IM 通道接入的起点模板。
-
-3. 新增 observability 配置校验脚本（关键）
-   - `scripts/observability/validate-config.ps1`（新增）
-   - 使用官方容器内 `promtool` / `amtool` 检查：
-     - Prometheus config
-     - alert/rule files
-     - Alertmanager baseline config
-     - Alertmanager production example config
-
-4. CI 接入配置校验闸门
-   - `.github/workflows/ci.yml`
-     - 新增 `observability-config` job（push/PR 即执行）
-     - `compose-smoke` 依赖该 job
-   - `.github/workflows/observability-smoke.yml`
-     - 在 observability smoke 前增加配置校验步骤
+2. 将规则加载校验接入 observability 冒烟主流程
    - `scripts/ci/observability-smoke.ps1`
-     - 起栈前先调用 `validate-config.ps1`
+   - 新增：
+     - Prometheus rules API 就绪等待
+     - 调用 `prometheus-rules-smoke.ps1` 做规则存在性校验
+   - 顺序变为：配置校验 -> 栈启动 -> 规则加载校验 -> trace/alertmanager 冒烟。
 
-5. workflow 与文档一致性收口
-   - `.github/workflows/ci.yml` 与 `.github/workflows/observability-smoke.yml` 完成职责拆分（主 CI / 手动 observability workflow）
-   - 术语统一：CI 中 `Proto Stubs` -> `Proto Bindings`
-   - 更新文档：
-     - `docs/observability*.md`
-     - `docs/development*.md`
-     - `docs/roadmap*.md`
-     - `README*.md`
-     - `scripts/observability/README.md`
-     - `scripts/ci/README.md`
-   - `.claude/progress.md` 已同步以上进展
+3. 文档入口同步
+   - `scripts/observability/README.md`
+   - `scripts/ci/README.md`
+   - `docs/development.md`
+   - `docs/development.zh-CN.md`
+   - `docs/observability.md`
+   - `docs/observability.zh-CN.md`
+   - `.claude/progress.md`
+   - 新增脚本命令说明，并标注其在 observability 冒烟链路中的作用。
 
 本轮本地验证
 
 1. 已执行：
-   - `pwsh -File ./scripts/observability/validate-config.ps1`
+   - `pwsh -File ./scripts/observability/prometheus-rules-smoke.ps1 -PrometheusBaseUrl http://127.0.0.1:1`
 
 2. 结果：
-   - 当前机器缺少 `docker`，脚本按预期快速失败并给出明确提示（fail-fast 生效）。
+   - 在不可达地址下按预期网络失败，说明脚本启动与失败路径正常。
 
-3. 受限：
-   - 当前环境无 `docker/cargo`，未完成真实 Jaeger/Alertmanager 在线验证；需在可执行环境跑完闭环。
+3. 环境限制：
+   - 当前机器仍无 `docker`，无法在本地跑通真实 `prometheus/api/v1/rules` 在线校验；
+   - 需在具备 Docker 的环境完成端到端验证。
 
-commit 摘要（本轮关键）
+commit 摘要
 
-- `f35455b feat(observability): add slo recording rules and severity routing baseline`
-- `ed42111 docs(observability): add production alertmanager receiver template`
-- `b83513d feat(observability): add config validation script and ci gate`
-- `14cffb7 docs: record observability config gate progress in roadmap`
-- `5357c15 chore: refresh change cache after p2-2 slo baseline push`
-
-（同阶段连续推进）
-- `4631054 ci: split observability smoke into dedicated manual workflow`
-- `7b88619 chore(ci): rename proto stubs steps to bindings`
-- `00bdf6b docs(ci): add script index and development cross-links`
+- `5165417 feat(observability): add prometheus rules smoke validation`
 
 希望接下来的 AI 做什么
 
-1. 在有 Docker 的环境跑完 P2-2 验收闭环（优先）
+1. 在有 Docker 的环境跑完整 P2-2 验收链路
    - `pwsh -File ./scripts/observability/validate-config.ps1`
    - `pwsh -File ./scripts/ci/observability-smoke.ps1`
-   - 或手动触发 `Observability Smoke` workflow
+   - 确认 `prometheus-rules-smoke` 通过（规则全部存在）
 
-2. 立即接入真实通知通道
-   - 基于 `alertmanager.production.example.yml` 填入真实 warning/critical 目标
-   - 用 `alertmanager-smoke.ps1` 验证通知投递与去重行为
+2. 接入真实通知通道并验证
+   - 以 `alertmanager.production.example.yml` 为模板
+   - 接入 warning/critical 实际 receiver
+   - 使用 `alertmanager-smoke.ps1` 做投递验收
 
-3. 收尾 P2-3
-   - 继续清理少量历史措辞与重复说明，保持小改即提交
+3. 然后继续清理 P2-3 尾项
+   - 聚焦非主文档与注释中的历史措辞
 
 by: gpt-5.5
