@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Context, Result};
 use opentelemetry::{global, trace::TracerProvider as _, KeyValue};
-use opentelemetry_otlp::{WithExportConfig, WithTonicConfig};
+use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_sdk::{
     propagation::TraceContextPropagator,
     trace::{Sampler, SdkTracerProvider},
@@ -42,12 +42,15 @@ impl TracingGuard {
             ));
         }
 
-        let mut exporter_builder = opentelemetry_otlp::SpanExporter::builder()
+        if !cfg.otlp_insecure && endpoint.starts_with("http://") {
+            return Err(anyhow!(
+                "OTEL_EXPORTER_OTLP_INSECURE must be true when OTLP endpoint uses plain http://"
+            ));
+        }
+
+        let exporter_builder = opentelemetry_otlp::SpanExporter::builder()
             .with_tonic()
             .with_endpoint(endpoint.to_string());
-        if cfg.otlp_insecure {
-            exporter_builder = exporter_builder.with_insecure();
-        }
 
         let exporter = exporter_builder
             .build()

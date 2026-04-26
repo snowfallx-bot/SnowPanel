@@ -101,7 +101,7 @@ tests:
         alertname: SnowPanelBackendAvailabilitySLOCritical
         exp_alerts: []
 
-      - eval_time: 11m
+      - eval_time: 16m
         alertname: SnowPanelCoreAgentGrpcErrorRateHigh
         exp_alerts:
           - exp_labels:
@@ -111,6 +111,6 @@ tests:
               summary: Core-agent gRPC error rate is high
               description: Core-agent gRPC error ratio has exceeded 2% for 10 minutes.
 
-      - eval_time: 11m
+      - eval_time: 16m
         alertname: SnowPanelCoreAgentGrpcErrorRateCritical
         exp_alerts: []

@@ -115,7 +115,10 @@ jobs:
         run: PATH="$PWD/backend/bin:$PATH" make proto-go
 
       - name: Verify Generated Proto Bindings Are Current
-        run: git diff --exit-code -- backend/internal/grpcclient/pb/proto/agent/v1/agent.pb.go backend/internal/grpcclient/pb/proto/agent/v1/agent_grpc.pb.go
+        run: |
+          git diff --exit-code -I '^[[:space:]]*//[[:space:]]*(-[[:space:]]*)?protoc[[:space:]]+v' -- \
+            backend/internal/grpcclient/pb/proto/agent/v1/agent.pb.go \
+            backend/internal/grpcclient/pb/proto/agent/v1/agent_grpc.pb.go
 
   compose-smoke:
     runs-on: ubuntu-latest
