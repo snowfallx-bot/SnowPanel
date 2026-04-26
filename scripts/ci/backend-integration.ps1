@@ -54,6 +54,21 @@ function Assert-SuccessOrKnownFailure {
   }
 }
 
+function Assert-AuditLogsAvailable {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$BaseUrl,
+    [Parameter(Mandatory = $true)]
+    [hashtable]$Headers,
+    [Parameter(Mandatory = $true)]
+    [string]$Module
+  )
+
+  $response = Invoke-ApiRequest -Method "GET" -Uri "$BaseUrl/api/v1/audit/logs?module=$Module&page=1&size=20" -Headers $Headers
+  Assert-ApiSuccess -Response $response -Description "list $Module audit logs"
+  Assert-True ([int64]$response.Json.data.total -ge 1) "$Module audit logs should not be empty"
+}
+
 function Wait-ForTaskTerminal {
   param(
     [Parameter(Mandatory = $true)]
@@ -192,21 +207,10 @@ try {
   Assert-ApiSuccess -Response $tasksListResponse -Description "list docker restart tasks"
   Assert-True ([int64]$tasksListResponse.Json.data.total -ge 2) "task list should contain at least two docker restart tasks"
 
-  $auditTasksResponse = Invoke-ApiRequest -Method "GET" -Uri "$BackendBaseUrl/api/v1/audit/logs?module=tasks&page=1&size=20" -Headers $authHeaders
-  Assert-ApiSuccess -Response $auditTasksResponse -Description "list task audit logs"
-  Assert-True ([int64]$auditTasksResponse.Json.data.total -ge 1) "task audit logs should not be empty"
-
-  $auditDockerResponse = Invoke-ApiRequest -Method "GET" -Uri "$BackendBaseUrl/api/v1/audit/logs?module=docker&page=1&size=20" -Headers $authHeaders
-  Assert-ApiSuccess -Response $auditDockerResponse -Description "list docker audit logs"
-  Assert-True ([int64]$auditDockerResponse.Json.data.total -ge 1) "docker audit logs should not be empty"
-
-  $auditServicesResponse = Invoke-ApiRequest -Method "GET" -Uri "$BackendBaseUrl/api/v1/audit/logs?module=services&page=1&size=20" -Headers $authHeaders
-  Assert-ApiSuccess -Response $auditServicesResponse -Description "list services audit logs"
-  Assert-True ([int64]$auditServicesResponse.Json.data.total -ge 1) "services audit logs should not be empty"
-
-  $auditCronResponse = Invoke-ApiRequest -Method "GET" -Uri "$BackendBaseUrl/api/v1/audit/logs?module=cron&page=1&size=20" -Headers $authHeaders
-  Assert-ApiSuccess -Response $auditCronResponse -Description "list cron audit logs"
-  Assert-True ([int64]$auditCronResponse.Json.data.total -ge 1) "cron audit logs should not be empty"
+  Assert-AuditLogsAvailable -BaseUrl $BackendBaseUrl -Headers $authHeaders -Module "tasks"
+  Assert-AuditLogsAvailable -BaseUrl $BackendBaseUrl -Headers $authHeaders -Module "docker"
+  Assert-AuditLogsAvailable -BaseUrl $BackendBaseUrl -Headers $authHeaders -Module "services"
+  Assert-AuditLogsAvailable -BaseUrl $BackendBaseUrl -Headers $authHeaders -Module "cron"
 
   $Completed = $true
   Write-Host "Backend integration test passed."
