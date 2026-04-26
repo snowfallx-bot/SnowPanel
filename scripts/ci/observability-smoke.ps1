@@ -74,6 +74,58 @@ function Test-TcpPortOpen {
   }
 }
 
+function Wait-TcpPortReady {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$Description,
+    [Parameter(Mandatory = $true)]
+    [string]$Address,
+    [Parameter(Mandatory = $true)]
+    [int]$Port,
+    [int]$Attempts = 60,
+    [int]$DelaySeconds = 1,
+    [int]$TimeoutMilliseconds = 800
+  )
+
+  Wait-UntilReady -Description $Description -Attempts $Attempts -DelaySeconds $DelaySeconds -Check {
+    return Test-TcpPortOpen -Address $Address -Port $Port -TimeoutMilliseconds $TimeoutMilliseconds
+  }
+}
+
+function Wait-HttpStatusReady {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$Description,
+    [Parameter(Mandatory = $true)]
+    [string]$Uri,
+    [int[]]$ExpectedStatusCodes = @(200),
+    [int]$Attempts = 60,
+    [int]$DelaySeconds = 2
+  )
+
+  Wait-UntilReady -Description $Description -Attempts $Attempts -DelaySeconds $DelaySeconds -Check {
+    $response = Invoke-ApiRequest -Method "GET" -Uri $Uri -ExpectedStatusCodes $ExpectedStatusCodes
+    return $response.StatusCode -in $ExpectedStatusCodes
+  }
+}
+
+function Wait-JsonEndpointReady {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$Description,
+    [Parameter(Mandatory = $true)]
+    [string]$Uri,
+    [scriptblock]$Predicate = { param($json) return $null -ne $json },
+    [int]$Attempts = 60,
+    [int]$DelaySeconds = 2
+  )
+
+  Wait-UntilReady -Description $Description -Attempts $Attempts -DelaySeconds $DelaySeconds -Check {
+    $json = Invoke-JsonRequest -Method "GET" -Uri $Uri
+    return & $Predicate $json
+  }
+}
+
 Assert-DockerAvailable -ScriptPath "scripts/ci/observability-smoke.ps1"
 
 try {
@@ -94,10 +146,7 @@ try {
     }
     $env:AGENT_TARGET = $HostAgentTarget
 
-    Wait-UntilReady -Description "host core-agent metrics endpoint" -Attempts 30 -DelaySeconds 1 -Check {
-      $response = Invoke-ApiRequest -Method "GET" -Uri $HostAgentMetricsEndpoint -ExpectedStatusCodes @(200)
-      return $response.StatusCode -eq 200
-    }
+    Wait-HttpStatusReady -Description "host core-agent metrics endpoint" -Uri $HostAgentMetricsEndpoint -ExpectedStatusCodes @(200) -Attempts 30 -DelaySeconds 1
   } else {
     Remove-Item -Path Env:AGENT_TARGET -ErrorAction SilentlyContinue
   }
@@ -109,28 +158,18 @@ try {
 
   Invoke-ComposeCommand -ComposeArgs $ComposeArgs -Arguments (@("up", "-d", "--build") + $services)
 
-  Wait-UntilReady -Description "otel collector grpc endpoint" -Attempts 60 -DelaySeconds 1 -Check {
-    return Test-TcpPortOpen -Address "127.0.0.1" -Port $OtelCollectorGrpcPort -TimeoutMilliseconds 800
-  }
+  Wait-TcpPortReady -Description "otel collector grpc endpoint" -Address "127.0.0.1" -Port $OtelCollectorGrpcPort -Attempts 60 -DelaySeconds 1 -TimeoutMilliseconds 800
 
-  Wait-UntilReady -Description "otel collector http endpoint" -Attempts 60 -DelaySeconds 1 -Check {
-    return Test-TcpPortOpen -Address "127.0.0.1" -Port $OtelCollectorHttpPort -TimeoutMilliseconds 800
-  }
+  Wait-TcpPortReady -Description "otel collector http endpoint" -Address "127.0.0.1" -Port $OtelCollectorHttpPort -Attempts 60 -DelaySeconds 1 -TimeoutMilliseconds 800
 
   Wait-BackendReadyJson -BackendBaseUrl $BackendBaseUrl
 
-  Wait-UntilReady -Description "jaeger ui" -Check {
-    $response = Invoke-ApiRequest -Method "GET" -Uri $JaegerBaseUrl -ExpectedStatusCodes @(200)
-    return $response.StatusCode -eq 200
-  }
+  Wait-HttpStatusReady -Description "jaeger ui" -Uri $JaegerBaseUrl -ExpectedStatusCodes @(200)
 
-  Wait-UntilReady -Description "alertmanager api" -Check {
-    $status = Invoke-JsonRequest -Method "GET" -Uri "$AlertmanagerBaseUrl/api/v2/status"
-    return $null -ne $status
-  }
+  Wait-JsonEndpointReady -Description "alertmanager api" -Uri "$AlertmanagerBaseUrl/api/v2/status"
 
-  Wait-UntilReady -Description "prometheus rules api" -Check {
-    $rules = Invoke-JsonRequest -Method "GET" -Uri "$PrometheusBaseUrl/api/v1/rules"
+  Wait-JsonEndpointReady -Description "prometheus rules api" -Uri "$PrometheusBaseUrl/api/v1/rules" -Predicate {
+    param($rules)
     return $null -ne $rules -and $rules.status -eq "success"
   }
 
