@@ -38,7 +38,7 @@ $alertPayload = @(
 )
 
 Write-Host "Submitting synthetic alert '$AlertName' to Alertmanager ..."
-Invoke-ObservabilityJsonRequest -Method "POST" -Uri "$AlertmanagerBaseUrl/api/v2/alerts" -Body $alertPayload -ExpectedStatusCodes @(200, 202)
+Submit-AlertmanagerAlerts -AlertmanagerBaseUrl $AlertmanagerBaseUrl -Alerts $alertPayload
 
 $matchLabels = @{
   alertname = $AlertName

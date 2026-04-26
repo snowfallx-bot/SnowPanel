@@ -217,3 +217,14 @@ function Get-AlertmanagerActiveAlertGroups {
   $uri = Get-AlertmanagerApiUriWithFilters -AlertmanagerBaseUrl $AlertmanagerBaseUrl -ApiPath "/api/v2/alerts/groups" -Labels $Labels
   return Invoke-ObservabilityJsonRequest -Method "GET" -Uri $uri -ExpectedStatusCodes @(200)
 }
+
+function Submit-AlertmanagerAlerts {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$AlertmanagerBaseUrl,
+    [Parameter(Mandatory = $true)]
+    [object[]]$Alerts
+  )
+
+  return Invoke-ObservabilityJsonRequest -Method "POST" -Uri "$AlertmanagerBaseUrl/api/v2/alerts" -Body $Alerts -ExpectedStatusCodes @(200, 202)
+}

@@ -26,7 +26,7 @@ $baseLabels = @{
 }
 
 Write-Host "Submitting warning alert '$AlertName' to Alertmanager ..."
-Invoke-ObservabilityJsonRequest -Method "POST" -Uri "$AlertmanagerBaseUrl/api/v2/alerts" -Body @(
+Submit-AlertmanagerAlerts -AlertmanagerBaseUrl $AlertmanagerBaseUrl -Alerts @(
   (New-AlertmanagerSyntheticAlert `
     -AlertName $AlertName `
     -Severity "warning" `
@@ -36,7 +36,7 @@ Invoke-ObservabilityJsonRequest -Method "POST" -Uri "$AlertmanagerBaseUrl/api/v2
     -Description "Synthetic warning alert injected by scripts/observability/alertmanager-inhibition-smoke.ps1" `
     -StartsAt $startsAt `
     -EndsAt $endsAt)
-) -ExpectedStatusCodes @(200, 202)
+)
 
 Wait-ObservabilityCondition -Description "warning alert routing visibility" -TimeoutSeconds $WaitSeconds -TimeoutMessage "Warning alert '$AlertName' was not routed to $warningReceiver within ${WaitSeconds}s." -Check {
   $warningLabels = @{
@@ -55,7 +55,7 @@ Wait-ObservabilityCondition -Description "warning alert routing visibility" -Tim
 }
 
 Write-Host "Submitting critical alert '$AlertName' to trigger inhibition ..."
-Invoke-ObservabilityJsonRequest -Method "POST" -Uri "$AlertmanagerBaseUrl/api/v2/alerts" -Body @(
+Submit-AlertmanagerAlerts -AlertmanagerBaseUrl $AlertmanagerBaseUrl -Alerts @(
   (New-AlertmanagerSyntheticAlert `
     -AlertName $AlertName `
     -Severity "critical" `
@@ -65,7 +65,7 @@ Invoke-ObservabilityJsonRequest -Method "POST" -Uri "$AlertmanagerBaseUrl/api/v2
     -Description "Synthetic critical alert injected by scripts/observability/alertmanager-inhibition-smoke.ps1" `
     -StartsAt $startsAt `
     -EndsAt $endsAt)
-) -ExpectedStatusCodes @(200, 202)
+)
 
 Wait-ObservabilityCondition -Description "warning inhibited by critical" -TimeoutSeconds $WaitSeconds -TimeoutMessage "Critical/warning inhibition did not converge for '$AlertName' within ${WaitSeconds}s." -Check {
   $alerts = Get-AlertmanagerActiveAlerts -AlertmanagerBaseUrl $AlertmanagerBaseUrl -Labels $baseLabels
