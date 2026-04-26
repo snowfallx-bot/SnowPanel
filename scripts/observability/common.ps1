@@ -302,3 +302,24 @@ function Test-AlertmanagerLabelsMatch {
 
   return $true
 }
+
+function Find-AlertmanagerAlertByLabels {
+  param(
+    [Parameter(Mandatory = $true)]
+    [object]$Alerts,
+    [Parameter(Mandatory = $true)]
+    [hashtable]$Labels
+  )
+
+  foreach ($alert in @($Alerts)) {
+    if ($null -eq $alert) {
+      continue
+    }
+
+    if (Test-AlertmanagerLabelsMatch -Alert $alert -Labels $Labels) {
+      return $alert
+    }
+  }
+
+  return $null
+}

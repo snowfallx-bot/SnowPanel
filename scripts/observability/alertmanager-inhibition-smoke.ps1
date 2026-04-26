@@ -46,13 +46,11 @@ Wait-ObservabilityCondition -Description "warning alert routing visibility" -Tim
     severity  = "warning"
   }
   $alerts = Get-AlertmanagerActiveAlerts -AlertmanagerBaseUrl $AlertmanagerBaseUrl -Labels $warningLabels
-  foreach ($alert in $alerts) {
-    if (-not (Test-AlertmanagerLabelsMatch -Alert $alert -Labels $warningLabels)) {
-      continue
-    }
-    return (Test-AlertmanagerHasReceiver -Alert $alert -ReceiverName $warningReceiver)
+  $warningAlert = Find-AlertmanagerAlertByLabels -Alerts $alerts -Labels $warningLabels
+  if ($null -eq $warningAlert) {
+    return $false
   }
-  return $false
+  return (Test-AlertmanagerHasReceiver -Alert $warningAlert -ReceiverName $warningReceiver)
 }
 
 Write-Host "Submitting critical alert '$AlertName' to trigger inhibition ..."
@@ -83,15 +81,8 @@ Wait-ObservabilityCondition -Description "warning inhibited by critical" -Timeou
     severity  = "critical"
   }
 
-  foreach ($alert in $alerts) {
-    if (Test-AlertmanagerLabelsMatch -Alert $alert -Labels $warningLabels) {
-      $warningAlert = $alert
-      continue
-    }
-    if (Test-AlertmanagerLabelsMatch -Alert $alert -Labels $criticalLabels) {
-      $criticalAlert = $alert
-    }
-  }
+  $warningAlert = Find-AlertmanagerAlertByLabels -Alerts $alerts -Labels $warningLabels
+  $criticalAlert = Find-AlertmanagerAlertByLabels -Alerts $alerts -Labels $criticalLabels
 
   if ($null -eq $warningAlert -or $null -eq $criticalAlert) {
     return $false

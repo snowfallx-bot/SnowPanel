@@ -49,20 +49,18 @@ $matchLabels = @{
 
 Wait-ObservabilityCondition -Description "Alertmanager routed alert visibility" -TimeoutSeconds $WaitSeconds -TimeoutMessage "Synthetic alert '$AlertName' was not observed with receiver '$ExpectedReceiver' within ${WaitSeconds}s." -Check {
   $alerts = Get-AlertmanagerActiveAlerts -AlertmanagerBaseUrl $AlertmanagerBaseUrl -Labels $matchLabels
-  $matchedAlertFound = $false
   $matchIdentityLabels = @{
     alertname = $AlertName
     instance  = $Instance
   }
 
-  foreach ($alert in $alerts) {
-    if (-not (Test-AlertmanagerLabelsMatch -Alert $alert -Labels $matchIdentityLabels)) {
-      continue
-    }
-
-    $matchedAlertFound = $true
-    if (Test-AlertmanagerHasReceiver -Alert $alert -ReceiverName $ExpectedReceiver) {
-      return $true
+  $matchedAlertFound = $false
+  foreach ($alert in @($alerts)) {
+    if (Test-AlertmanagerLabelsMatch -Alert $alert -Labels $matchIdentityLabels) {
+      $matchedAlertFound = $true
+      if (Test-AlertmanagerHasReceiver -Alert $alert -ReceiverName $ExpectedReceiver) {
+        return $true
+      }
     }
   }
 
@@ -77,10 +75,9 @@ Wait-ObservabilityCondition -Description "Alertmanager routed alert visibility" 
       continue
     }
 
-    foreach ($groupAlert in $group.alerts) {
-      if (Test-AlertmanagerLabelsMatch -Alert $groupAlert -Labels $matchIdentityLabels) {
-        return $true
-      }
+    $groupAlert = Find-AlertmanagerAlertByLabels -Alerts $group.alerts -Labels $matchIdentityLabels
+    if ($null -ne $groupAlert) {
+      return $true
     }
   }
 
