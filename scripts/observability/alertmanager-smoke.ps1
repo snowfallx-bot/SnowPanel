@@ -42,14 +42,8 @@ $alertPayload = @(
 Write-Host "Submitting synthetic alert '$AlertName' to Alertmanager ..."
 Submit-AlertmanagerAlerts -AlertmanagerBaseUrl $AlertmanagerBaseUrl -Alerts $alertPayload
 
-$matchLabels = @{
-  alertname = $AlertName
-  instance  = $Instance
-  severity  = $Severity
-}
-
 Wait-ObservabilityCondition -Description "Alertmanager routed alert visibility" -TimeoutSeconds $WaitSeconds -TimeoutMessage "Synthetic alert '$AlertName' was not observed with receiver '$ExpectedReceiver' within ${WaitSeconds}s." -Check {
-  $alerts = Get-AlertmanagerActiveAlerts -AlertmanagerBaseUrl $AlertmanagerBaseUrl -Labels $matchLabels
+  $alerts = Get-AlertmanagerActiveAlerts -AlertmanagerBaseUrl $AlertmanagerBaseUrl
   $matchIdentityLabels = @{
     alertname = $AlertName
     instance  = $Instance
@@ -74,7 +68,7 @@ Wait-ObservabilityCondition -Description "Alertmanager routed alert visibility" 
     }
   }
 
-  $groups = Get-AlertmanagerActiveAlertGroups -AlertmanagerBaseUrl $AlertmanagerBaseUrl -Labels $matchLabels
+  $groups = Get-AlertmanagerActiveAlertGroups -AlertmanagerBaseUrl $AlertmanagerBaseUrl
   foreach ($group in $groups) {
     $groupReceiverName = Get-AlertmanagerReceiverName -Receiver $group.receiver
     if (-not [string]::IsNullOrWhiteSpace($groupReceiverName)) {

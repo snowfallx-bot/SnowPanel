@@ -22,11 +22,6 @@ $endsAt = $timeWindow.EndsAt
 $warningReceiver = Resolve-AlertmanagerReceiver -Severity "warning"
 $criticalReceiver = Resolve-AlertmanagerReceiver -Severity "critical"
 
-$baseLabels = @{
-  alertname = $AlertName
-  instance  = $Instance
-}
-
 Write-Host "Submitting warning alert '$AlertName' to Alertmanager ..."
 Submit-AlertmanagerAlerts -AlertmanagerBaseUrl $AlertmanagerBaseUrl -Alerts @(
   (New-AlertmanagerSyntheticAlert `
@@ -46,7 +41,7 @@ Wait-ObservabilityCondition -Description "warning alert routing visibility" -Tim
     instance  = $Instance
     severity  = "warning"
   }
-  $alerts = Get-AlertmanagerActiveAlerts -AlertmanagerBaseUrl $AlertmanagerBaseUrl -Labels $warningLabels
+  $alerts = Get-AlertmanagerActiveAlerts -AlertmanagerBaseUrl $AlertmanagerBaseUrl
   $warningAlert = Find-AlertmanagerAlertByLabels -Alerts $alerts -Labels $warningLabels
   if ($null -eq $warningAlert) {
     return $false
@@ -75,7 +70,7 @@ Submit-AlertmanagerAlerts -AlertmanagerBaseUrl $AlertmanagerBaseUrl -Alerts @(
 )
 
 Wait-ObservabilityCondition -Description "warning inhibited by critical" -TimeoutSeconds $WaitSeconds -TimeoutMessage "Critical/warning inhibition did not converge for '$AlertName' within ${WaitSeconds}s." -Check {
-  $alerts = Get-AlertmanagerActiveAlerts -AlertmanagerBaseUrl $AlertmanagerBaseUrl -Labels $baseLabels
+  $alerts = Get-AlertmanagerActiveAlerts -AlertmanagerBaseUrl $AlertmanagerBaseUrl
   $warningAlert = $null
   $criticalAlert = $null
   $warningLabels = @{
