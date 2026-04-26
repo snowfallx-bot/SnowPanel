@@ -56,6 +56,97 @@ function Assert-DockerAvailable {
   }
 }
 
+function Convert-HeaderValueToString {
+  param(
+    [Parameter(Mandatory = $false)]
+    [object]$Value
+  )
+
+  if ($null -eq $Value) {
+    return ""
+  }
+
+  if ($Value -is [System.Array]) {
+    return (($Value | ForEach-Object { [string]$_ }) -join ", ")
+  }
+
+  return [string]$Value
+}
+
+function Invoke-WebRequestCompat {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$Method,
+    [Parameter(Mandatory = $true)]
+    [string]$Uri,
+    [hashtable]$Headers = @{},
+    [string]$ContentType = "",
+    [string]$Body = ""
+  )
+
+  $supportsSkipHttpErrorCheck = (Get-Command Invoke-WebRequest).Parameters.ContainsKey("SkipHttpErrorCheck")
+  $requestParams = @{
+    Method  = $Method
+    Uri     = $Uri
+    Headers = $Headers
+  }
+
+  if ($supportsSkipHttpErrorCheck) {
+    $requestParams.SkipHttpErrorCheck = $true
+  }
+
+  if (-not [string]::IsNullOrWhiteSpace($ContentType)) {
+    $requestParams.ContentType = $ContentType
+  }
+
+  if (-not [string]::IsNullOrWhiteSpace($Body)) {
+    $requestParams.Body = $Body
+  }
+
+  try {
+    $response = Invoke-WebRequest @requestParams
+  } catch {
+    if ($supportsSkipHttpErrorCheck) {
+      throw
+    }
+
+    $exceptionResponse = $_.Exception.Response
+    if ($null -eq $exceptionResponse) {
+      throw
+    }
+
+    $stream = $exceptionResponse.GetResponseStream()
+    $reader = New-Object System.IO.StreamReader($stream)
+    $content = $reader.ReadToEnd()
+    $reader.Dispose()
+    $stream.Dispose()
+
+    $responseHeaders = @{}
+    foreach ($headerName in $exceptionResponse.Headers.AllKeys) {
+      $responseHeaders[[string]$headerName] = Convert-HeaderValueToString -Value $exceptionResponse.Headers.GetValues($headerName)
+    }
+
+    $response = [PSCustomObject]@{
+      StatusCode = [int]$exceptionResponse.StatusCode
+      Content    = [string]$content
+      Headers    = $responseHeaders
+    }
+  }
+
+  $headersMap = @{}
+  if ($null -ne $response.Headers) {
+    foreach ($headerName in $response.Headers.Keys) {
+      $headersMap[[string]$headerName] = Convert-HeaderValueToString -Value $response.Headers[$headerName]
+    }
+  }
+
+  return [PSCustomObject]@{
+    StatusCode = [int]$response.StatusCode
+    Content    = [string]$response.Content
+    Headers    = $headersMap
+  }
+}
+
 function Invoke-JsonRequest {
   param(
     [Parameter(Mandatory = $true)]
@@ -68,19 +159,14 @@ function Invoke-JsonRequest {
     [int]$JsonDepth = 20
   )
 
-  $requestParams = @{
-    Method             = $Method
-    Uri                = $Uri
-    Headers            = $Headers
-    SkipHttpErrorCheck = $true
-  }
-
+  $requestBody = ""
+  $contentType = ""
   if ($null -ne $Body) {
-    $requestParams.ContentType = "application/json"
-    $requestParams.Body = ($Body | ConvertTo-Json -Depth 10 -Compress)
+    $requestBody = ($Body | ConvertTo-Json -Depth 10 -Compress)
+    $contentType = "application/json"
   }
 
-  $response = Invoke-WebRequest @requestParams
+  $response = Invoke-WebRequestCompat -Method $Method -Uri $Uri -Headers $Headers -ContentType $contentType -Body $requestBody
   if ($response.StatusCode -notin $ExpectedStatusCodes) {
     throw "Expected status $($ExpectedStatusCodes -join ', ') from $Method $Uri, got $($response.StatusCode). Body: $($response.Content)"
   }
@@ -99,26 +185,28 @@ function Invoke-ApiRequest {
     [Parameter(Mandatory = $true)]
     [string]$Uri,
     [object]$Body = $null,
-    [hashtable]$Headers = @{}
+    [hashtable]$Headers = @{},
+    [int[]]$ExpectedStatusCodes = @(),
+    [int]$JsonDepth = 20
   )
 
-  $requestParams = @{
-    Method             = $Method
-    Uri                = $Uri
-    Headers            = $Headers
-    SkipHttpErrorCheck = $true
-  }
-
+  $requestBody = ""
+  $contentType = ""
   if ($null -ne $Body) {
-    $requestParams.ContentType = "application/json"
-    $requestParams.Body = ($Body | ConvertTo-Json -Depth 10 -Compress)
+    $requestBody = ($Body | ConvertTo-Json -Depth 10 -Compress)
+    $contentType = "application/json"
   }
 
-  $response = Invoke-WebRequest @requestParams
+  $response = Invoke-WebRequestCompat -Method $Method -Uri $Uri -Headers $Headers -ContentType $contentType -Body $requestBody
+
+  if ($ExpectedStatusCodes.Count -gt 0 -and $response.StatusCode -notin $ExpectedStatusCodes) {
+    throw "Expected status $($ExpectedStatusCodes -join ', ') from $Method $Uri, got $($response.StatusCode). Body: $($response.Content)"
+  }
+
   $json = $null
   if (-not [string]::IsNullOrWhiteSpace($response.Content)) {
     try {
-      $json = $response.Content | ConvertFrom-Json -Depth 20
+      $json = $response.Content | ConvertFrom-Json -Depth $JsonDepth
     } catch {
       $json = $null
     }
@@ -128,6 +216,7 @@ function Invoke-ApiRequest {
     StatusCode = [int]$response.StatusCode
     Content    = [string]$response.Content
     Json       = $json
+    Headers    = $response.Headers
   }
 }
 
@@ -214,7 +303,7 @@ function Wait-FrontendStartup {
   )
 
   Wait-UntilReady -Description $Description -Attempts $Attempts -DelaySeconds $DelaySeconds -Check {
-    $response = Invoke-WebRequest -Uri $FrontendBaseUrl -SkipHttpErrorCheck
+    $response = Invoke-WebRequestCompat -Method "GET" -Uri $FrontendBaseUrl
     return $response.StatusCode -eq 200
   }
 }

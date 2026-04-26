@@ -2,7 +2,8 @@ param(
   [ValidateSet("container-agent", "host-agent")]
   [string]$AgentMode = "container-agent",
   [string]$HostAgentTarget = "host.docker.internal:50051",
-  [string]$HostAgentMetricsBaseUrl = "http://127.0.0.1:9108"
+  [string]$HostAgentMetricsBaseUrl = "http://127.0.0.1:9108",
+  [string]$FailureLogDir = ".github/workflow-logs/observability-smoke"
 )
 
 $ErrorActionPreference = "Stop"
@@ -10,6 +11,7 @@ Set-StrictMode -Version Latest
 
 . (Join-Path $PSScriptRoot "common.ps1")
 
+$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $ProjectName = "snowpanel-obsv-smoke"
 $BackendPort = "18083"
 $PrometheusPort = "19090"
@@ -22,6 +24,10 @@ $AlertmanagerBaseUrl = "http://127.0.0.1:$AlertmanagerPort"
 $HostAgentMetricsEndpoint = $HostAgentMetricsBaseUrl.TrimEnd("/")
 if ($HostAgentMetricsEndpoint -notmatch "/metrics$") {
   $HostAgentMetricsEndpoint = "$HostAgentMetricsEndpoint/metrics"
+}
+$ResolvedFailureLogDir = $FailureLogDir
+if (-not [string]::IsNullOrWhiteSpace($ResolvedFailureLogDir) -and -not [System.IO.Path]::IsPathRooted($ResolvedFailureLogDir)) {
+  $ResolvedFailureLogDir = Join-Path $RepoRoot $ResolvedFailureLogDir
 }
 $BootstrapPassword = "ObsSmokeBootstrap1!"
 $RotatedPassword = "ObsSmokeRotated2!"
@@ -67,8 +73,8 @@ try {
     $env:AGENT_TARGET = $HostAgentTarget
 
     Wait-UntilReady -Description "host core-agent metrics endpoint" -Attempts 30 -DelaySeconds 1 -Check {
-      $response = Invoke-WebRequest -Method "GET" -Uri $HostAgentMetricsEndpoint -SkipHttpErrorCheck
-      if ([int]$response.StatusCode -ne 200) {
+      $response = Invoke-ApiRequest -Method "GET" -Uri $HostAgentMetricsEndpoint -ExpectedStatusCodes @(200)
+      if ($response.StatusCode -ne 200) {
         return $false
       }
       return $response.Content -match "snowpanel_core_agent_grpc_requests_total"
@@ -87,8 +93,8 @@ try {
   Wait-BackendReadyJson -BackendBaseUrl $BackendBaseUrl
 
   Wait-UntilReady -Description "jaeger ui" -Check {
-    $response = Invoke-WebRequest -Method "GET" -Uri $JaegerBaseUrl -SkipHttpErrorCheck
-    return [int]$response.StatusCode -eq 200
+    $response = Invoke-ApiRequest -Method "GET" -Uri $JaegerBaseUrl -ExpectedStatusCodes @(200)
+    return $response.StatusCode -eq 200
   }
 
   Wait-UntilReady -Description "alertmanager api" -Check {
@@ -124,6 +130,26 @@ try {
   if (-not $Completed) {
     Write-Host "Observability smoke test failed, printing compose status and logs..."
     Show-ComposeDiagnostics -ComposeArgs $ComposeArgs
+
+    if (-not [string]::IsNullOrWhiteSpace($ResolvedFailureLogDir)) {
+      New-Item -ItemType Directory -Force -Path $ResolvedFailureLogDir | Out-Null
+      $composePsLogFile = Join-Path $ResolvedFailureLogDir "compose-ps.$AgentMode.log"
+      $composeLogsFile = Join-Path $ResolvedFailureLogDir "compose-logs.$AgentMode.log"
+
+      try {
+        $composePsArgs = $ComposeArgs + @("ps")
+        (& docker @composePsArgs 2>&1) | Out-File -FilePath $composePsLogFile -Encoding utf8
+      } catch {
+        Write-Warning "Failed to capture compose ps log: $($_.Exception.Message)"
+      }
+
+      try {
+        $composeLogsArgs = $ComposeArgs + @("logs", "--no-color", "--timestamps", "--tail", "400")
+        (& docker @composeLogsArgs 2>&1) | Out-File -FilePath $composeLogsFile -Encoding utf8
+      } catch {
+        Write-Warning "Failed to capture compose logs: $($_.Exception.Message)"
+      }
+    }
   }
 
   Stop-ComposeStack -ComposeArgs $ComposeArgs

@@ -41,7 +41,7 @@ try {
   Assert-True ($meEnvelope.code -eq 0) "Auth me should succeed before password change"
   Assert-True ($meEnvelope.data.username -eq "admin") "Auth me returned unexpected user"
 
-  $passwordGateResponse = Invoke-WebRequest -Method "GET" -Uri "$BackendBaseUrl/api/v1/dashboard/summary" -Headers $bootstrapHeaders -SkipHttpErrorCheck
+  $passwordGateResponse = Invoke-ApiRequest -Method "GET" -Uri "$BackendBaseUrl/api/v1/dashboard/summary" -Headers $bootstrapHeaders -ExpectedStatusCodes @(403)
   Assert-True ($passwordGateResponse.StatusCode -eq 403) "Dashboard should be blocked until bootstrap password is rotated"
 
   $rotationResult = Invoke-BootstrapPasswordRotation -ApiBaseUrl $BackendBaseUrl -BootstrapPassword $BootstrapPassword -RotatedPassword $RotatedPassword -BootstrapAccessToken $bootstrapAccessToken
@@ -62,7 +62,9 @@ try {
   $activeRefreshToken = [string]$refreshEnvelope.data.refresh_token
   $authHeaders = @{ Authorization = "Bearer $activeAccessToken" }
 
-  $staleRefreshResponse = Invoke-WebRequest -Method "POST" -Uri "$BackendBaseUrl/api/v1/auth/refresh" -ContentType "application/json" -Body (@{ refresh_token = $rotatedRefreshToken } | ConvertTo-Json -Compress) -SkipHttpErrorCheck
+  $staleRefreshResponse = Invoke-ApiRequest -Method "POST" -Uri "$BackendBaseUrl/api/v1/auth/refresh" -Body @{
+    refresh_token = $rotatedRefreshToken
+  } -ExpectedStatusCodes @(401)
   Assert-True ($staleRefreshResponse.StatusCode -eq 401) "Old refresh token should be rejected after rotation"
 
   $dashboardEnvelope = Invoke-JsonRequest -Method "GET" -Uri "$BackendBaseUrl/api/v1/dashboard/summary" -Headers $authHeaders
@@ -104,10 +106,12 @@ try {
   $logoutEnvelope = Invoke-JsonRequest -Method "POST" -Uri "$BackendBaseUrl/api/v1/auth/logout" -Headers $authHeaders
   Assert-True ($logoutEnvelope.code -eq 0) "Logout failed"
 
-  $postLogoutResponse = Invoke-WebRequest -Method "GET" -Uri "$BackendBaseUrl/api/v1/auth/me" -Headers $authHeaders -SkipHttpErrorCheck
+  $postLogoutResponse = Invoke-ApiRequest -Method "GET" -Uri "$BackendBaseUrl/api/v1/auth/me" -Headers $authHeaders -ExpectedStatusCodes @(401)
   Assert-True ($postLogoutResponse.StatusCode -eq 401) "Access token should be rejected after logout"
 
-  $refreshAfterLogoutResponse = Invoke-WebRequest -Method "POST" -Uri "$BackendBaseUrl/api/v1/auth/refresh" -ContentType "application/json" -Body (@{ refresh_token = $activeRefreshToken } | ConvertTo-Json -Compress) -SkipHttpErrorCheck
+  $refreshAfterLogoutResponse = Invoke-ApiRequest -Method "POST" -Uri "$BackendBaseUrl/api/v1/auth/refresh" -Body @{
+    refresh_token = $activeRefreshToken
+  } -ExpectedStatusCodes @(401)
   Assert-True ($refreshAfterLogoutResponse.StatusCode -eq 401) "Refresh token should be rejected after logout"
 
   $Completed = $true

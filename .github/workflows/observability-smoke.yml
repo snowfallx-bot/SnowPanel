@@ -64,6 +64,14 @@ jobs:
         shell: pwsh
         run: ./scripts/ci/stop-host-agent.ps1
 
+      - name: Upload Observability Smoke Logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: observability-smoke-logs
+          path: .github/workflow-logs/observability-smoke
+          if-no-files-found: ignore
+
       - name: Upload Host-Agent Logs
         if: ${{ failure() && inputs.agent_mode == 'host-agent' }}
         uses: actions/upload-artifact@v4
