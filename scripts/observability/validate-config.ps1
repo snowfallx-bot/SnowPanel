@@ -6,6 +6,8 @@ param(
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
+. (Join-Path $PSScriptRoot "common.ps1")
+
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $prometheusDir = Join-Path $repoRoot "deploy\observability\prometheus"
 $alertmanagerDir = Join-Path $repoRoot "deploy\observability\alertmanager"
@@ -101,6 +103,21 @@ function Invoke-Amtool {
   }
 
   Invoke-ExternalCommand -Executable "amtool" -Arguments $LocalArguments
+}
+
+Write-Host "Validating observability script helpers ..."
+$helperLabels = @{
+  alertname = "SnowPanelSmokeAlert-critical"
+  instance  = "validate-config"
+  severity  = "critical"
+}
+$alertsUri = Get-AlertmanagerApiUriWithFilters -AlertmanagerBaseUrl "http://127.0.0.1:9093" -ApiPath "/api/v2/alerts" -Labels $helperLabels
+$groupsUri = Get-AlertmanagerApiUriWithFilters -AlertmanagerBaseUrl "http://127.0.0.1:9093" -ApiPath "/api/v2/alerts/groups" -Labels $helperLabels
+if ($alertsUri -notlike "http://127.0.0.1:9093/api/v2/alerts?active=true*") {
+  throw "Alertmanager alerts URI helper produced unexpected result: $alertsUri"
+}
+if ($groupsUri -notlike "http://127.0.0.1:9093/api/v2/alerts/groups?active=true*") {
+  throw "Alertmanager alert-groups URI helper produced unexpected result: $groupsUri"
 }
 
 Write-Host "Validating Prometheus config ..."
