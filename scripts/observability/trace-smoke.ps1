@@ -42,13 +42,16 @@ function Get-TraceServiceSet {
   )
 
   $serviceSet = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-  foreach ($span in $Trace.spans) {
-    $process = $Trace.processes.$($span.processID)
+  foreach ($span in (Get-TraceSpans -Trace $Trace)) {
+    if ($null -eq $span.processID) {
+      continue
+    }
+    $process = Get-TraceProcessById -Trace $Trace -ProcessId ([string]$span.processID)
     if ($null -ne $process -and -not [string]::IsNullOrWhiteSpace([string]$process.serviceName)) {
       [void]$serviceSet.Add([string]$process.serviceName)
     }
   }
-  return $serviceSet
+  return ,$serviceSet
 }
 
 function Get-TraceSpanServiceName {
@@ -59,12 +62,124 @@ function Get-TraceSpanServiceName {
     [object]$Span
   )
 
-  $process = $Trace.processes.$($Span.processID)
+  if ($null -eq $Span.processID) {
+    return ""
+  }
+
+  $process = Get-TraceProcessById -Trace $Trace -ProcessId ([string]$Span.processID)
   if ($null -eq $process) {
     return ""
   }
 
   return [string]$process.serviceName
+}
+
+function Get-TraceSpans {
+  param(
+    [Parameter(Mandatory = $true)]
+    [object]$Trace
+  )
+
+  if ($null -eq $Trace -or $null -eq $Trace.spans) {
+    return @()
+  }
+
+  if ($Trace.spans -is [string]) {
+    return @()
+  }
+
+  $spans = @()
+  if ($Trace.spans -is [System.Collections.IEnumerable]) {
+    foreach ($span in $Trace.spans) {
+      if ($null -ne $span) {
+        $spans += $span
+      }
+    }
+    return $spans
+  }
+
+  return @($Trace.spans)
+}
+
+function Get-TraceProcessById {
+  param(
+    [Parameter(Mandatory = $true)]
+    [object]$Trace,
+    [Parameter(Mandatory = $true)]
+    [string]$ProcessId
+  )
+
+  if ($null -eq $Trace -or $null -eq $Trace.processes -or [string]::IsNullOrWhiteSpace($ProcessId)) {
+    return $null
+  }
+
+  if ($Trace.processes -is [System.Collections.IDictionary]) {
+    return $Trace.processes[$ProcessId]
+  }
+
+  $namedProperty = $Trace.processes.PSObject.Properties[$ProcessId]
+  if ($null -ne $namedProperty) {
+    return $namedProperty.Value
+  }
+
+  foreach ($property in $Trace.processes.PSObject.Properties) {
+    if ([string]$property.Name -eq $ProcessId) {
+      return $property.Value
+    }
+  }
+
+  return $null
+}
+
+function Get-UniqueSortedStringValues {
+  param(
+    [Parameter(Mandatory = $true)]
+    [object]$InputObject
+  )
+
+  $valueSet = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+
+  if ($null -eq $InputObject) {
+    return @()
+  }
+
+  if ($InputObject -is [string]) {
+    if (-not [string]::IsNullOrWhiteSpace($InputObject)) {
+      [void]$valueSet.Add($InputObject)
+    }
+    $values = @()
+    foreach ($value in $valueSet) {
+      $values += $value
+    }
+    return $values | Sort-Object
+  }
+
+  if ($InputObject -is [System.Collections.IEnumerable]) {
+    foreach ($item in $InputObject) {
+      if ($null -eq $item) {
+        continue
+      }
+      $itemString = [string]$item
+      if (-not [string]::IsNullOrWhiteSpace($itemString)) {
+        [void]$valueSet.Add($itemString)
+      }
+    }
+    $values = @()
+    foreach ($value in $valueSet) {
+      $values += $value
+    }
+    return $values | Sort-Object
+  }
+
+  $singleValue = [string]$InputObject
+  if (-not [string]::IsNullOrWhiteSpace($singleValue)) {
+    [void]$valueSet.Add($singleValue)
+  }
+  $values = @()
+  foreach ($value in $valueSet) {
+    $values += $value
+  }
+  return $values | Sort-Object
 }
 
 function Get-TraceTagValue {
@@ -120,7 +235,7 @@ function Get-CoreAgentGrpcMethodsForRequest {
   )
 
   $methods = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-  foreach ($span in $Trace.spans) {
+  foreach ($span in (Get-TraceSpans -Trace $Trace)) {
     if ((Get-TraceSpanServiceName -Trace $Trace -Span $span) -ine "snowpanel-core-agent") {
       continue
     }
@@ -135,7 +250,7 @@ function Get-CoreAgentGrpcMethodsForRequest {
     }
   }
 
-  return $methods
+  return ,$methods
 }
 
 function Invoke-TraceTriggerRequest {
@@ -258,6 +373,12 @@ try {
       if ($null -eq $trace -or $null -eq $trace.spans -or $null -eq $trace.processes) {
         continue
       }
+
+      $traceSpans = Get-TraceSpans -Trace $trace
+      if ($traceSpans.Count -eq 0) {
+        continue
+      }
+
       $validTraceCount++
 
       $serviceSet = Get-TraceServiceSet -Trace $trace
@@ -268,7 +389,7 @@ try {
       }
 
       $latestSpanStart = 0
-      foreach ($span in $trace.spans) {
+      foreach ($span in $traceSpans) {
         if ($span.startTime -gt $latestSpanStart) {
           $latestSpanStart = [int64]$span.startTime
         }
@@ -291,7 +412,7 @@ try {
         }
       }
       if ($missingMethods.Count -gt 0) {
-        $observedMethods = ($coreGrpcMethods.ToArray() | Sort-Object) -join ", "
+        $observedMethods = (Get-UniqueSortedStringValues -InputObject $coreGrpcMethods) -join ", "
         if ([string]::IsNullOrWhiteSpace($observedMethods)) {
           $observedMethods = "(none)"
         }
@@ -316,8 +437,8 @@ try {
   throw "$($_.Exception.Message) Last observation: $script:lastObservation"
 }
 
-$serviceNames = (Get-TraceServiceSet -Trace $script:foundTrace).ToArray() | Sort-Object
-$coreMethods = ($script:foundCoreGrpcMethods.ToArray() | Sort-Object) -join ", "
+$serviceNames = Get-UniqueSortedStringValues -InputObject (Get-TraceServiceSet -Trace $script:foundTrace)
+$coreMethods = (Get-UniqueSortedStringValues -InputObject $script:foundCoreGrpcMethods) -join ", "
 Write-Host "Trace validation passed."
 Write-Host "trace_id: $($script:foundTrace.traceID)"
 Write-Host "services: $($serviceNames -join ', ')"
