@@ -19,6 +19,10 @@ $BackendBaseUrl = "http://127.0.0.1:$BackendPort"
 $PrometheusBaseUrl = "http://127.0.0.1:$PrometheusPort"
 $JaegerBaseUrl = "http://127.0.0.1:$JaegerPort"
 $AlertmanagerBaseUrl = "http://127.0.0.1:$AlertmanagerPort"
+$HostAgentMetricsEndpoint = $HostAgentMetricsBaseUrl.TrimEnd("/")
+if ($HostAgentMetricsEndpoint -notmatch "/metrics$") {
+  $HostAgentMetricsEndpoint = "$HostAgentMetricsEndpoint/metrics"
+}
 $BootstrapPassword = "ObsSmokeBootstrap1!"
 $RotatedPassword = "ObsSmokeRotated2!"
 $JwtSecret = "ObservabilitySmokeSecret_2026_Check_123!"
@@ -63,7 +67,7 @@ try {
     $env:AGENT_TARGET = $HostAgentTarget
 
     Wait-UntilReady -Description "host core-agent metrics endpoint" -Attempts 30 -DelaySeconds 1 -Check {
-      $response = Invoke-WebRequest -Method "GET" -Uri "$HostAgentMetricsBaseUrl/metrics" -SkipHttpErrorCheck
+      $response = Invoke-WebRequest -Method "GET" -Uri $HostAgentMetricsEndpoint -SkipHttpErrorCheck
       if ([int]$response.StatusCode -ne 200) {
         return $false
       }
