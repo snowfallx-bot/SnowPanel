@@ -55,18 +55,12 @@ Wait-ObservabilityCondition -Description "Alertmanager routed alert visibility" 
     instance  = $Instance
   }
 
-  $matchedAlertFound = $false
   foreach ($alert in @($alerts)) {
     if (Test-AlertmanagerLabelsMatch -Alert $alert -Labels $matchIdentityLabels) {
-      $matchedAlertFound = $true
       if (Test-AlertmanagerHasReceiver -Alert $alert -ReceiverName $ExpectedReceiver) {
         return $true
       }
     }
-  }
-
-  if (-not $matchedAlertFound) {
-    return $false
   }
 
   $groups = Get-AlertmanagerActiveAlertGroups -AlertmanagerBaseUrl $AlertmanagerBaseUrl -Labels $matchLabels
