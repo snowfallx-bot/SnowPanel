@@ -11,71 +11,76 @@
 下面是改动正文：
 
 ============
-本轮继续按“加快 P2-2 + 代码侧 P2-3 去重”推进，避免再做文档修补。
+本轮继续按“加快 P2-2 收口”为主线推进，保持只改代码与脚本，不修补业务文档。
 
 本轮实际改动
 
-1. 前端 API 路径编码去重
-   - 新增 `frontend/src/api/path.ts`：`withEncodedSegment(...)`
-   - 接入 `services.ts` / `docker.ts` / `cron.ts`，移除重复 `encodeURIComponent` 拼接。
+1. tracing 冒烟校验升级为“强关联”
+   - `scripts/observability/common.ps1`
+     - 新增 `Invoke-ObservabilityApiRequest`，统一返回 `status/content/json/headers`。
+   - `scripts/observability/trace-smoke.ps1`
+     - 触发 dashboard 后强校验响应 `X-Request-ID` 与请求一致；
+     - Jaeger 轮询从“仅两服务出现”升级为“request_id 精确关联”：
+       - backend span 必须带 `snowpanel.request_id=<request_id>`
+       - core-agent span 必须带同一 `snowpanel.request_id`
+       - core-agent `grpc.method` 必须覆盖：
+         - `/snowpanel.agent.v1.SystemService/GetSystemOverview`
+         - `/snowpanel.agent.v1.SystemService/GetRealtimeResource`
+     - 失败时输出最近观测信息，便于定位。
 
-2. observability 冒烟增强（从“有告警”升级到“路由正确”）
-   - `scripts/observability/alertmanager-smoke.ps1`
-   - 新增 `ExpectedReceiver` 参数（可自动按 `severity` 推导）。
-   - 轮询时不仅校验告警可见，还校验命中预期 receiver（`snowpanel-critical` / `snowpanel-warning`）。
-   - 已兼容两类 API 形态：优先读 `/api/v2/alerts` 的 `receivers`，若不足再回退 `/api/v2/alerts/groups` 校验 receiver。
-   - 输出增加 receiver 字段，便于排障。
-
-3. CI observability 覆盖 warning 路由
+2. observability-smoke 支持 host-agent 模式
    - `scripts/ci/observability-smoke.ps1`
-   - 在 full-smoke（critical）后，追加一次 warning synthetic alert 校验，确保两条路由都被实测。
+   - 新增参数：
+     - `-AgentMode container-agent|host-agent`（默认 container-agent）
+     - `-HostAgentTarget`（默认 `host.docker.internal:50051`）
+   - host-agent 模式下自动叠加 `docker-compose.host-agent.yml`，并按模式切换起服务集合（container 模式起 `core-agent`，host 模式不拉起容器内 agent）。
 
-4. CI 认证流程去重（bootstrap 登录 + 首次改密）
-   - `scripts/ci/common.ps1`
-   - 新增：`Invoke-BootstrapLogin`、`Invoke-BootstrapPasswordRotation`、`Initialize-BootstrapAdminSession`。
-   - 接入：
-     - `scripts/ci/compose-smoke.ps1`
-     - `scripts/ci/observability-smoke.ps1`
-     - `scripts/ci/backend-integration.ps1`
+3. 手动 workflow 支持选择 agent 模式
+   - `.github/workflows/observability-smoke.yml`
+   - `workflow_dispatch` 新增输入：
+     - `agent_mode`
+     - `host_agent_target`
+   - 调用 smoke 脚本时透传上述参数。
 
-5. 前端 FilesPage 重复逻辑收敛
-   - `frontend/src/pages/FilesPage.tsx`
-   - 统一 `filesQueryKey`，复用 invalidate 查询键。
-   - 移除无必要 `useMemo` 包装，`message` 改为直接表达式。
+4. Alertmanager 冒烟进一步降误判
+   - `scripts/observability/alertmanager-smoke.ps1`
+   - 默认 `Instance` 改为运行时唯一值（时间戳后缀），避免历史残留同名告警干扰；
+   - 查询 filter 从单一 `alertname` 扩展为 `alertname + instance + severity`（同时用于 `/alerts` 与 `/alerts/groups`），降低误命中概率。
 
 本轮本地验证
 
 1. 已执行并通过：
-   - `npx tsc --noEmit --pretty false`（frontend）
    - PowerShell 语法解析：
+     - `scripts/observability/common.ps1`
+     - `scripts/observability/trace-smoke.ps1`
      - `scripts/observability/alertmanager-smoke.ps1`
-     - `scripts/ci/common.ps1`
-     - `scripts/ci/compose-smoke.ps1`
      - `scripts/ci/observability-smoke.ps1`
-     - `scripts/ci/backend-integration.ps1`
 
 2. 说明：
-   - 当前环境未实跑 docker 相关冒烟链路；运行态验证仍需在具备 Docker 的环境完成。
+   - 当前环境未实跑 Docker 链路；`compose/host-agent` 运行态验收需在具备 Docker 且可访问 host-agent 的环境执行。
 
 commit 摘要
 
-- `79671a9 refactor(api): centralize encoded path segment builder`
-- `a73e60f test(observability): verify alert routing receivers in smoke scripts`
-- `922567e refactor(ci): share bootstrap auth flow helpers`
-- `1bfd0d2 refactor(ci): reuse bootstrap auth helper in backend integration`
-- `fa6bf77 refactor(files): reuse query key and simplify status message`
-- `00a4a6d test(observability): support receiver checks via alerts groups fallback`
+- `819bf19 test(observability): tighten trace correlation validation with request id`
+- `244d2e7 feat(ci): support host-agent mode in observability smoke script`
+- `cf375ca ci(observability): add host-agent mode inputs for smoke workflow`
+- `442fc5a test(observability): harden alert smoke filters and unique default instance`
 
 希望接下来的 AI 做什么
 
-1. 在 Docker 环境实跑 P2-2 关键链路：
-   - `pwsh -File ./scripts/ci/observability-smoke.ps1`
-   - 重点确认 critical/warning 两条 receiver 路由都通过。
+1. 在可执行环境做 P2-2 运行态验收（优先）：
+   - container-agent：
+     - `pwsh -File ./scripts/ci/observability-smoke.ps1 -AgentMode container-agent`
+   - host-agent：
+     - `pwsh -File ./scripts/ci/observability-smoke.ps1 -AgentMode host-agent -HostAgentTarget <host-agent:50051>`
+   - 重点确认 trace request_id 关联与 warning/critical 路由校验均通过。
 
-2. 继续代码侧 P2-3 清理（不做文档修补）：
-   - 优先清理 frontend/api 与 ci 脚本中残余重复流程和重复参数拼接。
+2. 若 host-agent 模式失败，优先定位：
+   - host-agent OTEL 导出端点是否指向可达 collector（通常主机 `127.0.0.1:4317`）；
+   - backend `AGENT_TARGET` 与 host-agent 监听地址是否一致；
+   - Jaeger 中 core-agent span 是否包含 `snowpanel.request_id` 与 `grpc.method`。
 
-3. 若 observability-smoke 实跑仍失败：
-   - 优先检查真实 Alertmanager 配置中的 receiver 命名是否仍为 `snowpanel-warning` / `snowpanel-critical`，避免配置与脚本断言不一致。
+3. 验收通过后，再继续 P2-3 代码清理：
+   - 优先清理脚本与前端页面的重复查询键、重复错误处理和重复请求包装逻辑（仍不动文档美化）。
 
 by: gpt-5.5
