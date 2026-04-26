@@ -10,68 +10,8 @@ param(
 
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
-$SupportsSkipHttpErrorCheck = (Get-Command Invoke-WebRequest).Parameters.ContainsKey("SkipHttpErrorCheck")
 
-function Invoke-JsonRequest {
-  param(
-    [Parameter(Mandatory = $true)]
-    [string]$Method,
-    [Parameter(Mandatory = $true)]
-    [string]$Uri,
-    [object]$Body = $null,
-    [int[]]$ExpectedStatusCodes = @(200)
-  )
-
-  $requestParams = @{
-    Method  = $Method
-    Uri     = $Uri
-    Headers = @{
-      "Content-Type" = "application/json"
-    }
-  }
-
-  if ($SupportsSkipHttpErrorCheck) {
-    $requestParams.SkipHttpErrorCheck = $true
-  }
-
-  if ($null -ne $Body) {
-    $requestParams.Body = ($Body | ConvertTo-Json -Depth 10 -Compress)
-  }
-
-  try {
-    $response = Invoke-WebRequest @requestParams
-  } catch {
-    if ($SupportsSkipHttpErrorCheck) {
-      throw
-    }
-
-    $exceptionResponse = $_.Exception.Response
-    if ($null -eq $exceptionResponse) {
-      throw
-    }
-
-    $stream = $exceptionResponse.GetResponseStream()
-    $reader = New-Object System.IO.StreamReader($stream)
-    $content = $reader.ReadToEnd()
-    $reader.Dispose()
-    $stream.Dispose()
-
-    $response = [PSCustomObject]@{
-      StatusCode = [int]$exceptionResponse.StatusCode
-      Content    = $content
-    }
-  }
-
-  if ($response.StatusCode -notin $ExpectedStatusCodes) {
-    throw "Expected status $($ExpectedStatusCodes -join ', ') from $Method $Uri, got $($response.StatusCode). Body: $($response.Content)"
-  }
-
-  if ([string]::IsNullOrWhiteSpace($response.Content)) {
-    return $null
-  }
-
-  return $response.Content | ConvertFrom-Json -Depth 20
-}
+. (Join-Path $PSScriptRoot "common.ps1")
 
 $startsAt = [DateTimeOffset]::UtcNow
 $endsAt = $startsAt.AddSeconds($AlertDurationSeconds)
@@ -94,14 +34,14 @@ $alertPayload = @(
 )
 
 Write-Host "Submitting synthetic alert '$AlertName' to Alertmanager ..."
-Invoke-JsonRequest -Method "POST" -Uri "$AlertmanagerBaseUrl/api/v2/alerts" -Body $alertPayload -ExpectedStatusCodes @(200, 202)
+Invoke-ObservabilityJsonRequest -Method "POST" -Uri "$AlertmanagerBaseUrl/api/v2/alerts" -Body $alertPayload -ExpectedStatusCodes @(200, 202)
 
 $deadline = (Get-Date).AddSeconds($WaitSeconds)
 $found = $false
 $encodedFilter = [System.Uri]::EscapeDataString("alertname=$AlertName")
 
 while ((Get-Date) -lt $deadline) {
-  $alerts = Invoke-JsonRequest -Method "GET" -Uri "$AlertmanagerBaseUrl/api/v2/alerts?active=true&filter=$encodedFilter" -ExpectedStatusCodes @(200)
+  $alerts = Invoke-ObservabilityJsonRequest -Method "GET" -Uri "$AlertmanagerBaseUrl/api/v2/alerts?active=true&filter=$encodedFilter" -ExpectedStatusCodes @(200)
   foreach ($alert in $alerts) {
     if ($alert.labels.alertname -eq $AlertName -and $alert.labels.instance -eq $Instance) {
       $found = $true

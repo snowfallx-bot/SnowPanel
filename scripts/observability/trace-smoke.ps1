@@ -9,70 +9,11 @@ param(
 
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
-$SupportsSkipHttpErrorCheck = (Get-Command Invoke-WebRequest).Parameters.ContainsKey("SkipHttpErrorCheck")
+
+. (Join-Path $PSScriptRoot "common.ps1")
 
 function New-RequestId {
   return "trace-e2e-$([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds())"
-}
-
-function Invoke-JsonRequest {
-  param(
-    [Parameter(Mandatory = $true)]
-    [string]$Method,
-    [Parameter(Mandatory = $true)]
-    [string]$Uri,
-    [hashtable]$Headers = @{},
-    [object]$Body = $null,
-    [int[]]$ExpectedStatusCodes = @(200)
-  )
-
-  $requestParams = @{
-    Method             = $Method
-    Uri                = $Uri
-    Headers            = $Headers
-  }
-
-  if ($SupportsSkipHttpErrorCheck) {
-    $requestParams.SkipHttpErrorCheck = $true
-  }
-
-  if ($null -ne $Body) {
-    $requestParams.ContentType = "application/json"
-    $requestParams.Body = ($Body | ConvertTo-Json -Depth 10 -Compress)
-  }
-
-  try {
-    $response = Invoke-WebRequest @requestParams
-  } catch {
-    if ($SupportsSkipHttpErrorCheck) {
-      throw
-    }
-
-    $exceptionResponse = $_.Exception.Response
-    if ($null -eq $exceptionResponse) {
-      throw
-    }
-
-    $stream = $exceptionResponse.GetResponseStream()
-    $reader = New-Object System.IO.StreamReader($stream)
-    $content = $reader.ReadToEnd()
-    $reader.Dispose()
-    $stream.Dispose()
-
-    $response = [PSCustomObject]@{
-      StatusCode = [int]$exceptionResponse.StatusCode
-      Content    = $content
-    }
-  }
-  if ($response.StatusCode -notin $ExpectedStatusCodes) {
-    throw "Expected status $($ExpectedStatusCodes -join ', ') from $Method $Uri, got $($response.StatusCode). Body: $($response.Content)"
-  }
-
-  if ([string]::IsNullOrWhiteSpace($response.Content)) {
-    return $null
-  }
-
-  return $response.Content | ConvertFrom-Json -Depth 20
 }
 
 function Get-TraceServiceSet {
@@ -103,7 +44,7 @@ $headers = @{
 }
 
 Write-Host "Triggering core-agent path via GET $BackendBaseUrl/api/v1/dashboard/summary ..."
-$dashboardEnvelope = Invoke-JsonRequest -Method "GET" -Uri "$BackendBaseUrl/api/v1/dashboard/summary" -Headers $headers -ExpectedStatusCodes @(200)
+$dashboardEnvelope = Invoke-ObservabilityJsonRequest -Method "GET" -Uri "$BackendBaseUrl/api/v1/dashboard/summary" -Headers $headers -ExpectedStatusCodes @(200)
 if ($dashboardEnvelope.code -ne 0) {
   throw "Dashboard request returned non-zero code: $($dashboardEnvelope | ConvertTo-Json -Depth 10 -Compress)"
 }
@@ -116,7 +57,7 @@ $foundTrace = $null
 
 while ((Get-Date) -lt $deadline) {
   $query = "$JaegerBaseUrl/api/traces?service=snowpanel-backend&lookback=1h&limit=50"
-  $tracesEnvelope = Invoke-JsonRequest -Method "GET" -Uri $query
+  $tracesEnvelope = Invoke-ObservabilityJsonRequest -Method "GET" -Uri $query
   foreach ($trace in $tracesEnvelope.data) {
     $serviceSet = Get-TraceServiceSet -Trace $trace
     $hasBackend = $serviceSet.Contains("snowpanel-backend")

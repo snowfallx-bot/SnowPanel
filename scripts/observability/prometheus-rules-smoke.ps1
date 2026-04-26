@@ -4,7 +4,8 @@ param(
 
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
-$SupportsSkipHttpErrorCheck = (Get-Command Invoke-WebRequest).Parameters.ContainsKey("SkipHttpErrorCheck")
+
+. (Join-Path $PSScriptRoot "common.ps1")
 
 $RequiredRecordingRules = @(
   "snowpanel:backend_http_total:rate5m",
@@ -28,60 +29,8 @@ $RequiredAlertRules = @(
   "SnowPanelBackendAvailabilitySLOCritical"
 )
 
-function Invoke-JsonRequest {
-  param(
-    [Parameter(Mandatory = $true)]
-    [string]$Method,
-    [Parameter(Mandatory = $true)]
-    [string]$Uri,
-    [int[]]$ExpectedStatusCodes = @(200)
-  )
-
-  $requestParams = @{
-    Method = $Method
-    Uri    = $Uri
-  }
-
-  if ($SupportsSkipHttpErrorCheck) {
-    $requestParams.SkipHttpErrorCheck = $true
-  }
-
-  try {
-    $response = Invoke-WebRequest @requestParams
-  } catch {
-    if ($SupportsSkipHttpErrorCheck) {
-      throw
-    }
-    $exceptionResponse = $_.Exception.Response
-    if ($null -eq $exceptionResponse) {
-      throw
-    }
-
-    $stream = $exceptionResponse.GetResponseStream()
-    $reader = New-Object System.IO.StreamReader($stream)
-    $content = $reader.ReadToEnd()
-    $reader.Dispose()
-    $stream.Dispose()
-
-    $response = [PSCustomObject]@{
-      StatusCode = [int]$exceptionResponse.StatusCode
-      Content    = $content
-    }
-  }
-
-  if ($response.StatusCode -notin $ExpectedStatusCodes) {
-    throw "Expected status $($ExpectedStatusCodes -join ', ') from $Method $Uri, got $($response.StatusCode). Body: $($response.Content)"
-  }
-
-  if ([string]::IsNullOrWhiteSpace($response.Content)) {
-    return $null
-  }
-
-  return $response.Content | ConvertFrom-Json -Depth 20
-}
-
 Write-Host "Checking Prometheus loaded rules via $PrometheusBaseUrl/api/v1/rules ..."
-$rulesEnvelope = Invoke-JsonRequest -Method "GET" -Uri "$PrometheusBaseUrl/api/v1/rules"
+$rulesEnvelope = Invoke-ObservabilityJsonRequest -Method "GET" -Uri "$PrometheusBaseUrl/api/v1/rules"
 
 if ($rulesEnvelope.status -ne "success") {
   throw "Prometheus rules API returned non-success status: $($rulesEnvelope | ConvertTo-Json -Depth 10 -Compress)"
