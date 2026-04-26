@@ -12,63 +12,58 @@
 
 ============
 
-本轮继续按“加快 P2-2”推进，重点补上“规则已加载”的自动校验，避免只检查配置语法但漏掉运行时规则注册问题。
+本轮继续按“加快 P2-2”推进，目标是把 observability 配置闸门从“语法校验”升级为“行为校验”。
 
 本轮实际改动
 
-1. 新增 Prometheus 规则加载冒烟脚本
-   - `scripts/observability/prometheus-rules-smoke.ps1`（新增）
-   - 对运行中的 `/api/v1/rules` 做检查：
-     - 校验关键 recording rules 是否存在
-     - 校验关键 alert rules 是否存在
-   - 覆盖本项目当前 SLO/分级告警基线（availability、error ratio、latency critical/warning 等）。
+1. 新增 Prometheus 告警规则单测文件
+   - `deploy/observability/prometheus/tests/snowpanel-alerts.test.yml`（新增）
+   - 覆盖关键 critical 告警触发路径：
+     - `SnowPanelBackendDown`
+     - `SnowPanelCoreAgentMetricsDown`
+     - `SnowPanelBackendAvailabilitySLOCritical`
+     - `SnowPanelCoreAgentGrpcErrorRateCritical`
 
-2. 将规则加载校验接入 observability 冒烟主流程
-   - `scripts/ci/observability-smoke.ps1`
-   - 新增：
-     - Prometheus rules API 就绪等待
-     - 调用 `prometheus-rules-smoke.ps1` 做规则存在性校验
-   - 顺序变为：配置校验 -> 栈启动 -> 规则加载校验 -> trace/alertmanager 冒烟。
+2. 将 `promtool test rules` 接入配置校验脚本
+   - `scripts/observability/validate-config.ps1`
+   - 在原有 `promtool check config` / `promtool check rules` / `amtool check-config` 基础上，新增：
+     - `promtool test rules /etc/prometheus/tests/snowpanel-alerts.test.yml`
 
-3. 文档入口同步
+3. 中英文文档与 roadmap 同步
    - `scripts/observability/README.md`
    - `scripts/ci/README.md`
-   - `docs/development.md`
-   - `docs/development.zh-CN.md`
-   - `docs/observability.md`
-   - `docs/observability.zh-CN.md`
+   - `docs/observability.md` / `docs/observability.zh-CN.md`
+   - `docs/development.md` / `docs/development.zh-CN.md`
+   - `docs/roadmap.md` / `docs/roadmap.zh-CN.md`
    - `.claude/progress.md`
-   - 新增脚本命令说明，并标注其在 observability 冒烟链路中的作用。
+   - 统一说明：`validate-config.ps1` 已包含告警规则单测闸门（不仅是配置语法检查）。
 
 本轮本地验证
 
 1. 已执行：
-   - `pwsh -File ./scripts/observability/prometheus-rules-smoke.ps1 -PrometheusBaseUrl http://127.0.0.1:1`
+   - PowerShell 语法解析校验 `scripts/observability/validate-config.ps1`
 
 2. 结果：
-   - 在不可达地址下按预期网络失败，说明脚本启动与失败路径正常。
+   - 语法通过。
 
 3. 环境限制：
-   - 当前机器仍无 `docker`，无法在本地跑通真实 `prometheus/api/v1/rules` 在线校验；
-   - 需在具备 Docker 的环境完成端到端验证。
+   - 当前机器无 `docker`，无法本地执行容器内 `promtool test rules` 的真实运行校验；
+   - 需在具备 Docker 的环境（或 CI）完成该链路验收。
 
 commit 摘要
 
-- `5165417 feat(observability): add prometheus rules smoke validation`
+- `b8b9a39 feat(observability): add promtool alert rule unit tests`
+- `3d30dd7 docs(observability): document promtool alert rule test gate`
 
 希望接下来的 AI 做什么
 
-1. 在有 Docker 的环境跑完整 P2-2 验收链路
+1. 在具备 Docker 的环境跑通 observability 闸门
    - `pwsh -File ./scripts/observability/validate-config.ps1`
-   - `pwsh -File ./scripts/ci/observability-smoke.ps1`
-   - 确认 `prometheus-rules-smoke` 通过（规则全部存在）
+   - 确认 `promtool test rules` 通过
 
-2. 接入真实通知通道并验证
-   - 以 `alertmanager.production.example.yml` 为模板
-   - 接入 warning/critical 实际 receiver
-   - 使用 `alertmanager-smoke.ps1` 做投递验收
-
-3. 然后继续清理 P2-3 尾项
-   - 聚焦非主文档与注释中的历史措辞
+2. 继续收口 P2-2 剩余项
+   - 将 `alertmanager.production.example.yml` 替换为真实 warning/critical 接收器配置
+   - 用 `pwsh -File ./scripts/observability/alertmanager-smoke.ps1` 做真实通知通道验收
+   - 在 compose / host-agent 两种模式完成 tracing 端到端实测留痕
 
 by: gpt-5.5
