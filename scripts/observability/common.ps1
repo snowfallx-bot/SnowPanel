@@ -141,3 +141,40 @@ function Test-AlertmanagerHasReceiver {
 
   return $false
 }
+
+function New-AlertmanagerSyntheticAlert {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$AlertName,
+    [Parameter(Mandatory = $true)]
+    [ValidateSet("critical", "warning")]
+    [string]$Severity,
+    [Parameter(Mandatory = $true)]
+    [string]$Instance,
+    [Parameter(Mandatory = $true)]
+    [string]$Source,
+    [Parameter(Mandatory = $true)]
+    [string]$Summary,
+    [Parameter(Mandatory = $true)]
+    [string]$Description,
+    [Parameter(Mandatory = $true)]
+    [DateTimeOffset]$StartsAt,
+    [Parameter(Mandatory = $true)]
+    [DateTimeOffset]$EndsAt
+  )
+
+  return @{
+    labels = @{
+      alertname = $AlertName
+      severity  = $Severity
+      instance  = $Instance
+      source    = $Source
+    }
+    annotations = @{
+      summary     = $Summary
+      description = $Description
+    }
+    startsAt = $StartsAt.ToString("o")
+    endsAt   = $EndsAt.ToString("o")
+  }
+}

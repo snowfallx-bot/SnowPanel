@@ -18,35 +18,23 @@ if ([string]::IsNullOrWhiteSpace($Instance)) {
 $startsAt = [DateTimeOffset]::UtcNow
 $endsAt = $startsAt.AddSeconds($AlertDurationSeconds)
 
-function New-SyntheticAlert {
-  param(
-    [Parameter(Mandatory = $true)]
-    [string]$Severity
-  )
-
-  return @{
-    labels = @{
-      alertname = $AlertName
-      severity  = $Severity
-      instance  = $Instance
-      source    = "snowpanel-inhibition-smoke"
-    }
-    annotations = @{
-      summary     = "SnowPanel Alertmanager inhibition smoke test"
-      description = "Synthetic $Severity alert injected by scripts/observability/alertmanager-inhibition-smoke.ps1"
-    }
-    startsAt = $startsAt.ToString("o")
-    endsAt   = $endsAt.ToString("o")
-  }
-}
-
 $baseFilterQuery = ConvertTo-AlertmanagerFilterQuery -Labels @{
   alertname = $AlertName
   instance  = $Instance
 }
 
 Write-Host "Submitting warning alert '$AlertName' to Alertmanager ..."
-Invoke-ObservabilityJsonRequest -Method "POST" -Uri "$AlertmanagerBaseUrl/api/v2/alerts" -Body @((New-SyntheticAlert -Severity "warning")) -ExpectedStatusCodes @(200, 202)
+Invoke-ObservabilityJsonRequest -Method "POST" -Uri "$AlertmanagerBaseUrl/api/v2/alerts" -Body @(
+  (New-AlertmanagerSyntheticAlert `
+    -AlertName $AlertName `
+    -Severity "warning" `
+    -Instance $Instance `
+    -Source "snowpanel-inhibition-smoke" `
+    -Summary "SnowPanel Alertmanager inhibition smoke test" `
+    -Description "Synthetic warning alert injected by scripts/observability/alertmanager-inhibition-smoke.ps1" `
+    -StartsAt $startsAt `
+    -EndsAt $endsAt)
+) -ExpectedStatusCodes @(200, 202)
 
 Wait-ObservabilityCondition -Description "warning alert routing visibility" -TimeoutSeconds $WaitSeconds -TimeoutMessage "Warning alert '$AlertName' was not routed to snowpanel-warning within ${WaitSeconds}s." -Check {
   $warningFilter = ConvertTo-AlertmanagerFilterQuery -Labels @{
@@ -65,7 +53,17 @@ Wait-ObservabilityCondition -Description "warning alert routing visibility" -Tim
 }
 
 Write-Host "Submitting critical alert '$AlertName' to trigger inhibition ..."
-Invoke-ObservabilityJsonRequest -Method "POST" -Uri "$AlertmanagerBaseUrl/api/v2/alerts" -Body @((New-SyntheticAlert -Severity "critical")) -ExpectedStatusCodes @(200, 202)
+Invoke-ObservabilityJsonRequest -Method "POST" -Uri "$AlertmanagerBaseUrl/api/v2/alerts" -Body @(
+  (New-AlertmanagerSyntheticAlert `
+    -AlertName $AlertName `
+    -Severity "critical" `
+    -Instance $Instance `
+    -Source "snowpanel-inhibition-smoke" `
+    -Summary "SnowPanel Alertmanager inhibition smoke test" `
+    -Description "Synthetic critical alert injected by scripts/observability/alertmanager-inhibition-smoke.ps1" `
+    -StartsAt $startsAt `
+    -EndsAt $endsAt)
+) -ExpectedStatusCodes @(200, 202)
 
 Wait-ObservabilityCondition -Description "warning inhibited by critical" -TimeoutSeconds $WaitSeconds -TimeoutMessage "Critical/warning inhibition did not converge for '$AlertName' within ${WaitSeconds}s." -Check {
   $alerts = Invoke-ObservabilityJsonRequest -Method "GET" -Uri "$AlertmanagerBaseUrl/api/v2/alerts?active=true&$baseFilterQuery" -ExpectedStatusCodes @(200)

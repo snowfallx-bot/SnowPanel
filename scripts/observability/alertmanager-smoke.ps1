@@ -26,20 +26,15 @@ $startsAt = [DateTimeOffset]::UtcNow
 $endsAt = $startsAt.AddSeconds($AlertDurationSeconds)
 
 $alertPayload = @(
-  @{
-    labels = @{
-      alertname = $AlertName
-      severity  = $Severity
-      instance  = $Instance
-      source    = "snowpanel-smoke-script"
-    }
-    annotations = @{
-      summary     = "SnowPanel Alertmanager smoke test"
-      description = "Synthetic alert injected by scripts/observability/alertmanager-smoke.ps1"
-    }
-    startsAt = $startsAt.ToString("o")
-    endsAt   = $endsAt.ToString("o")
-  }
+  (New-AlertmanagerSyntheticAlert `
+    -AlertName $AlertName `
+    -Severity $Severity `
+    -Instance $Instance `
+    -Source "snowpanel-smoke-script" `
+    -Summary "SnowPanel Alertmanager smoke test" `
+    -Description "Synthetic alert injected by scripts/observability/alertmanager-smoke.ps1" `
+    -StartsAt $startsAt `
+    -EndsAt $endsAt)
 )
 
 Write-Host "Submitting synthetic alert '$AlertName' to Alertmanager ..."
