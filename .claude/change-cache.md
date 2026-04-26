@@ -23,6 +23,7 @@
    - `scripts/observability/alertmanager-smoke.ps1`
    - 新增 `ExpectedReceiver` 参数（可自动按 `severity` 推导）。
    - 轮询时不仅校验告警可见，还校验命中预期 receiver（`snowpanel-critical` / `snowpanel-warning`）。
+   - 已兼容两类 API 形态：优先读 `/api/v2/alerts` 的 `receivers`，若不足再回退 `/api/v2/alerts/groups` 校验 receiver。
    - 输出增加 receiver 字段，便于排障。
 
 3. CI observability 覆盖 warning 路由
@@ -63,6 +64,7 @@ commit 摘要
 - `922567e refactor(ci): share bootstrap auth flow helpers`
 - `1bfd0d2 refactor(ci): reuse bootstrap auth helper in backend integration`
 - `fa6bf77 refactor(files): reuse query key and simplify status message`
+- `00a4a6d test(observability): support receiver checks via alerts groups fallback`
 
 希望接下来的 AI 做什么
 
@@ -73,7 +75,7 @@ commit 摘要
 2. 继续代码侧 P2-3 清理（不做文档修补）：
    - 优先清理 frontend/api 与 ci 脚本中残余重复流程和重复参数拼接。
 
-3. 如 observability-smoke 实跑出现失败：
-   - 优先排查 Alertmanager `/api/v2/alerts` 返回结构中 `receivers` 字段形态差异，并在脚本里兼容处理。
+3. 若 observability-smoke 实跑仍失败：
+   - 优先检查真实 Alertmanager 配置中的 receiver 命名是否仍为 `snowpanel-warning` / `snowpanel-critical`，避免配置与脚本断言不一致。
 
 by: gpt-5.5
