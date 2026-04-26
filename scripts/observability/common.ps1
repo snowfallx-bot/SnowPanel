@@ -69,3 +69,75 @@ function Wait-ObservabilityCondition {
     throw
   }
 }
+
+function Resolve-AlertmanagerReceiver {
+  param(
+    [Parameter(Mandatory = $true)]
+    [ValidateSet("critical", "warning")]
+    [string]$Severity
+  )
+
+  switch ($Severity) {
+    "critical" { return "snowpanel-critical" }
+    "warning" { return "snowpanel-warning" }
+    default { throw "Unsupported severity '$Severity' for default receiver resolution." }
+  }
+}
+
+function ConvertTo-AlertmanagerFilterQuery {
+  param(
+    [Parameter(Mandatory = $true)]
+    [hashtable]$Labels
+  )
+
+  $filters = @()
+  foreach ($entry in $Labels.GetEnumerator()) {
+    $key = [string]$entry.Key
+    $value = [string]$entry.Value
+    if ([string]::IsNullOrWhiteSpace($key) -or [string]::IsNullOrWhiteSpace($value)) {
+      continue
+    }
+
+    $filters += "filter=$([System.Uri]::EscapeDataString("$key=$value"))"
+  }
+
+  return [string]::Join("&", $filters)
+}
+
+function Get-AlertmanagerReceiverNames {
+  param(
+    [Parameter(Mandatory = $true)]
+    [object]$Alert
+  )
+
+  if ($null -eq $Alert.receivers) {
+    return @()
+  }
+
+  $names = @()
+  foreach ($receiver in $Alert.receivers) {
+    $name = if ($receiver -is [string]) { [string]$receiver } else { [string]$receiver.name }
+    if (-not [string]::IsNullOrWhiteSpace($name)) {
+      $names += $name
+    }
+  }
+
+  return $names
+}
+
+function Test-AlertmanagerHasReceiver {
+  param(
+    [Parameter(Mandatory = $true)]
+    [object]$Alert,
+    [Parameter(Mandatory = $true)]
+    [string]$ReceiverName
+  )
+
+  foreach ($name in (Get-AlertmanagerReceiverNames -Alert $Alert)) {
+    if ($name -ieq $ReceiverName) {
+      return $true
+    }
+  }
+
+  return $false
+}

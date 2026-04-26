@@ -40,43 +40,26 @@ function New-SyntheticAlert {
   }
 }
 
-function Alert-HasReceiver {
-  param(
-    [Parameter(Mandatory = $true)]
-    [object]$Alert,
-    [Parameter(Mandatory = $true)]
-    [string]$ReceiverName
-  )
-
-  if ($null -eq $Alert.receivers) {
-    return $false
-  }
-
-  foreach ($receiver in $Alert.receivers) {
-    $name = if ($receiver -is [string]) { [string]$receiver } else { [string]$receiver.name }
-    if (-not [string]::IsNullOrWhiteSpace($name) -and $name -ieq $ReceiverName) {
-      return $true
-    }
-  }
-
-  return $false
+$baseFilterQuery = ConvertTo-AlertmanagerFilterQuery -Labels @{
+  alertname = $AlertName
+  instance  = $Instance
 }
-
-$encodedAlertNameFilter = [System.Uri]::EscapeDataString("alertname=$AlertName")
-$encodedInstanceFilter = [System.Uri]::EscapeDataString("instance=$Instance")
-$baseFilterQuery = "filter=$encodedAlertNameFilter&filter=$encodedInstanceFilter"
 
 Write-Host "Submitting warning alert '$AlertName' to Alertmanager ..."
 Invoke-ObservabilityJsonRequest -Method "POST" -Uri "$AlertmanagerBaseUrl/api/v2/alerts" -Body @((New-SyntheticAlert -Severity "warning")) -ExpectedStatusCodes @(200, 202)
 
 Wait-ObservabilityCondition -Description "warning alert routing visibility" -TimeoutSeconds $WaitSeconds -TimeoutMessage "Warning alert '$AlertName' was not routed to snowpanel-warning within ${WaitSeconds}s." -Check {
-  $warningFilter = "$baseFilterQuery&filter=$([System.Uri]::EscapeDataString('severity=warning'))"
+  $warningFilter = ConvertTo-AlertmanagerFilterQuery -Labels @{
+    alertname = $AlertName
+    instance  = $Instance
+    severity  = "warning"
+  }
   $alerts = Invoke-ObservabilityJsonRequest -Method "GET" -Uri "$AlertmanagerBaseUrl/api/v2/alerts?active=true&$warningFilter" -ExpectedStatusCodes @(200)
   foreach ($alert in $alerts) {
     if ($alert.labels.alertname -ne $AlertName -or $alert.labels.instance -ne $Instance -or $alert.labels.severity -ne "warning") {
       continue
     }
-    return (Alert-HasReceiver -Alert $alert -ReceiverName "snowpanel-warning")
+    return (Test-AlertmanagerHasReceiver -Alert $alert -ReceiverName "snowpanel-warning")
   }
   return $false
 }
@@ -104,7 +87,7 @@ Wait-ObservabilityCondition -Description "warning inhibited by critical" -Timeou
     return $false
   }
 
-  if (-not (Alert-HasReceiver -Alert $criticalAlert -ReceiverName "snowpanel-critical")) {
+  if (-not (Test-AlertmanagerHasReceiver -Alert $criticalAlert -ReceiverName "snowpanel-critical")) {
     return $false
   }
 
