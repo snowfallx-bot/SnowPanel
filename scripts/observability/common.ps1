@@ -219,11 +219,12 @@ function Get-AlertmanagerApiUriWithFilters {
   )
 
   $filterQuery = ConvertTo-AlertmanagerFilterQuery -Labels $Labels
+  $baseUri = "{0}{1}" -f $AlertmanagerBaseUrl, $ApiPath
   if ([string]::IsNullOrWhiteSpace($filterQuery)) {
-    return "$AlertmanagerBaseUrl$ApiPath?active=true"
+    return "${baseUri}?active=true"
   }
 
-  return "$AlertmanagerBaseUrl$ApiPath?active=true&$filterQuery"
+  return "${baseUri}?active=true&$filterQuery"
 }
 
 function Get-AlertmanagerActiveAlerts {
@@ -234,7 +235,12 @@ function Get-AlertmanagerActiveAlerts {
   )
 
   $uri = Get-AlertmanagerApiUriWithFilters -AlertmanagerBaseUrl $AlertmanagerBaseUrl -ApiPath "/api/v2/alerts" -Labels $Labels
-  return Invoke-ObservabilityJsonRequest -Method "GET" -Uri $uri -ExpectedStatusCodes @(200)
+  $response = Invoke-ObservabilityJsonRequest -Method "GET" -Uri $uri -ExpectedStatusCodes @(200)
+  if ($null -eq $response) {
+    return @()
+  }
+
+  return @($response)
 }
 
 function Get-AlertmanagerActiveAlertGroups {
@@ -245,7 +251,12 @@ function Get-AlertmanagerActiveAlertGroups {
   )
 
   $uri = Get-AlertmanagerApiUriWithFilters -AlertmanagerBaseUrl $AlertmanagerBaseUrl -ApiPath "/api/v2/alerts/groups" -Labels $Labels
-  return Invoke-ObservabilityJsonRequest -Method "GET" -Uri $uri -ExpectedStatusCodes @(200)
+  $response = Invoke-ObservabilityJsonRequest -Method "GET" -Uri $uri -ExpectedStatusCodes @(200)
+  if ($null -eq $response) {
+    return @()
+  }
+
+  return @($response)
 }
 
 function Submit-AlertmanagerAlerts {
@@ -335,7 +346,7 @@ function Test-AlertmanagerLabelsMatch {
 
 function Find-AlertmanagerAlertByLabels {
   param(
-    [Parameter(Mandatory = $true)]
+    [AllowNull()]
     [object]$Alerts,
     [Parameter(Mandatory = $true)]
     [hashtable]$Labels
