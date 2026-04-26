@@ -71,7 +71,7 @@ Wait-ObservabilityCondition -Description "Alertmanager routed alert visibility" 
 
   $groups = Get-AlertmanagerActiveAlertGroups -AlertmanagerBaseUrl $AlertmanagerBaseUrl -Labels $matchLabels
   foreach ($group in $groups) {
-    $groupReceiverName = [string]$group.receiver.name
+    $groupReceiverName = Get-AlertmanagerReceiverName -Receiver $group.receiver
     if ([string]::IsNullOrWhiteSpace($groupReceiverName) -or $groupReceiverName -ine $ExpectedReceiver) {
       continue
     }

@@ -125,6 +125,36 @@ function Get-AlertmanagerReceiverNames {
   return $names
 }
 
+function Get-AlertmanagerReceiverName {
+  param(
+    [Parameter(Mandatory = $true)]
+    [AllowNull()]
+    [object]$Receiver
+  )
+
+  if ($null -eq $Receiver) {
+    return ""
+  }
+
+  if ($Receiver -is [string]) {
+    return [string]$Receiver
+  }
+
+  if ($Receiver -is [System.Collections.IDictionary]) {
+    if ($Receiver.Contains("name")) {
+      return [string]$Receiver["name"]
+    }
+    return ""
+  }
+
+  $nameProperty = $Receiver.PSObject.Properties["name"]
+  if ($null -eq $nameProperty) {
+    return ""
+  }
+
+  return [string]$nameProperty.Value
+}
+
 function Test-AlertmanagerHasReceiver {
   param(
     [Parameter(Mandatory = $true)]
