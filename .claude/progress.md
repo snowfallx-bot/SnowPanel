@@ -167,6 +167,7 @@ P2-3：清理“原型痕迹”和重复逻辑
   - 已同步 `docs/roadmap.md` / `docs/roadmap.zh-CN.md`：纳入 observability 配置校验闸门（脚本 + CI job）进展。
   - 已新增 `scripts/observability/prometheus-rules-smoke.ps1` 校验运行中 Prometheus 是否加载关键 recording/alert 规则，并接入 `scripts/ci/observability-smoke.ps1`。
   - 已新增 `deploy/observability/prometheus/tests/snowpanel-alerts.test.yml` 并将 `promtool test rules` 接入 `scripts/observability/validate-config.ps1`，把关键 critical 告警行为回归纳入 observability 配置闸门。
+  - 已扩展 `snowpanel-alerts.test.yml` 覆盖 warning-only 阈值场景，新增“warning 触发且 critical 不触发”断言，降低 SLO 告警分级回归风险。
 - 当前判断：进行中。
 
 【建议剩余执行顺序】
