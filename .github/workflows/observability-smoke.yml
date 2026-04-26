@@ -16,6 +16,11 @@ on:
         type: string
         required: false
         default: host.docker.internal:50051
+      host_agent_metrics_base_url:
+        description: "Host core-agent metrics base URL when agent_mode=host-agent"
+        type: string
+        required: false
+        default: http://127.0.0.1:9108
 
 permissions:
   contents: read
@@ -111,7 +116,7 @@ jobs:
 
       - name: Run Observability Smoke Test
         shell: pwsh
-        run: ./scripts/ci/observability-smoke.ps1 -AgentMode "${{ inputs.agent_mode }}" -HostAgentTarget "${{ inputs.host_agent_target }}"
+        run: ./scripts/ci/observability-smoke.ps1 -AgentMode "${{ inputs.agent_mode }}" -HostAgentTarget "${{ inputs.host_agent_target }}" -HostAgentMetricsBaseUrl "${{ inputs.host_agent_metrics_base_url }}"
 
       - name: Stop Core-Agent On Host
         if: ${{ always() && inputs.agent_mode == 'host-agent' }}
