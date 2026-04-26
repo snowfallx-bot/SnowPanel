@@ -89,6 +89,15 @@ try {
     -TraceWaitSeconds 45 `
     -AlertWaitSeconds 30
 
+  $alertSmokeScript = Join-Path $PSScriptRoot "..\observability\alertmanager-smoke.ps1"
+  & $alertSmokeScript `
+    -AlertmanagerBaseUrl $AlertmanagerBaseUrl `
+    -AlertName "SnowPanelSmokeAlertWarning" `
+    -Severity "warning" `
+    -Instance "smoke-warning-route" `
+    -AlertDurationSeconds 120 `
+    -WaitSeconds 30
+
   $Completed = $true
   Write-Host "Observability smoke test passed."
 } finally {
