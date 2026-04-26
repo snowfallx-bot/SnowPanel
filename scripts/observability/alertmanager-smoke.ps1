@@ -4,7 +4,7 @@ param(
   [ValidateSet("critical", "warning")]
   [string]$Severity = "critical",
   [string]$ExpectedReceiver = "",
-  [string]$Instance = "smoke-local",
+  [string]$Instance = "",
   [int]$AlertDurationSeconds = 120,
   [int]$WaitSeconds = 20
 )
@@ -20,6 +20,10 @@ if ([string]::IsNullOrWhiteSpace($ExpectedReceiver)) {
     "warning" { $ExpectedReceiver = "snowpanel-warning" }
     default { throw "Unsupported severity '$Severity' for default receiver resolution." }
   }
+}
+
+if ([string]::IsNullOrWhiteSpace($Instance)) {
+  $Instance = "smoke-local-$([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds())"
 }
 
 $startsAt = [DateTimeOffset]::UtcNow
@@ -45,10 +49,13 @@ $alertPayload = @(
 Write-Host "Submitting synthetic alert '$AlertName' to Alertmanager ..."
 Invoke-ObservabilityJsonRequest -Method "POST" -Uri "$AlertmanagerBaseUrl/api/v2/alerts" -Body $alertPayload -ExpectedStatusCodes @(200, 202)
 
-$encodedFilter = [System.Uri]::EscapeDataString("alertname=$AlertName")
+$encodedAlertNameFilter = [System.Uri]::EscapeDataString("alertname=$AlertName")
+$encodedInstanceFilter = [System.Uri]::EscapeDataString("instance=$Instance")
+$encodedSeverityFilter = [System.Uri]::EscapeDataString("severity=$Severity")
+$filterQuery = "filter=$encodedAlertNameFilter&filter=$encodedInstanceFilter&filter=$encodedSeverityFilter"
 
 Wait-ObservabilityCondition -Description "Alertmanager routed alert visibility" -TimeoutSeconds $WaitSeconds -TimeoutMessage "Synthetic alert '$AlertName' was not observed with receiver '$ExpectedReceiver' within ${WaitSeconds}s." -Check {
-  $alerts = Invoke-ObservabilityJsonRequest -Method "GET" -Uri "$AlertmanagerBaseUrl/api/v2/alerts?active=true&filter=$encodedFilter" -ExpectedStatusCodes @(200)
+  $alerts = Invoke-ObservabilityJsonRequest -Method "GET" -Uri "$AlertmanagerBaseUrl/api/v2/alerts?active=true&$filterQuery" -ExpectedStatusCodes @(200)
   $matchedAlertFound = $false
 
   foreach ($alert in $alerts) {
@@ -73,7 +80,7 @@ Wait-ObservabilityCondition -Description "Alertmanager routed alert visibility" 
     return $false
   }
 
-  $groups = Invoke-ObservabilityJsonRequest -Method "GET" -Uri "$AlertmanagerBaseUrl/api/v2/alerts/groups?active=true&filter=$encodedFilter" -ExpectedStatusCodes @(200)
+  $groups = Invoke-ObservabilityJsonRequest -Method "GET" -Uri "$AlertmanagerBaseUrl/api/v2/alerts/groups?active=true&$filterQuery" -ExpectedStatusCodes @(200)
   foreach ($group in $groups) {
     $groupReceiverName = [string]$group.receiver.name
     if ([string]::IsNullOrWhiteSpace($groupReceiverName) -or $groupReceiverName -ine $ExpectedReceiver) {
