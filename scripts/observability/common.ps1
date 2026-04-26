@@ -1,4 +1,4 @@
-function Invoke-ObservabilityJsonRequest {
+function Invoke-ObservabilityApiRequest {
   param(
     [Parameter(Mandatory = $true)]
     [string]$Method,
@@ -54,11 +54,51 @@ function Invoke-ObservabilityJsonRequest {
     throw "Expected status $($ExpectedStatusCodes -join ', ') from $Method $Uri, got $($response.StatusCode). Body: $($response.Content)"
   }
 
-  if ([string]::IsNullOrWhiteSpace($response.Content)) {
-    return $null
+  $headers = @{}
+  if ($null -ne $response.Headers) {
+    foreach ($headerName in $response.Headers.Keys) {
+      $headers[[string]$headerName] = [string]$response.Headers[$headerName]
+    }
   }
 
-  return $response.Content | ConvertFrom-Json -Depth $JsonDepth
+  $json = $null
+  if (-not [string]::IsNullOrWhiteSpace($response.Content)) {
+    try {
+      $json = $response.Content | ConvertFrom-Json -Depth $JsonDepth
+    } catch {
+      $json = $null
+    }
+  }
+
+  return [PSCustomObject]@{
+    StatusCode = [int]$response.StatusCode
+    Content    = [string]$response.Content
+    Json       = $json
+    Headers    = $headers
+  }
+}
+
+function Invoke-ObservabilityJsonRequest {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$Method,
+    [Parameter(Mandatory = $true)]
+    [string]$Uri,
+    [hashtable]$Headers = @{},
+    [object]$Body = $null,
+    [int[]]$ExpectedStatusCodes = @(200),
+    [int]$JsonDepth = 20
+  )
+
+  $response = Invoke-ObservabilityApiRequest `
+    -Method $Method `
+    -Uri $Uri `
+    -Headers $Headers `
+    -Body $Body `
+    -ExpectedStatusCodes $ExpectedStatusCodes `
+    -JsonDepth $JsonDepth
+
+  return $response.Json
 }
 
 function Wait-ObservabilityCondition {
