@@ -60,24 +60,8 @@ try {
   $rulesSmokeScript = Join-Path $PSScriptRoot "..\observability\prometheus-rules-smoke.ps1"
   & $rulesSmokeScript -PrometheusBaseUrl $PrometheusBaseUrl
 
-  $loginEnvelope = Invoke-JsonRequest -Method "POST" -Uri "$BackendBaseUrl/api/v1/auth/login" -Body @{
-    username = "admin"
-    password = $BootstrapPassword
-  }
-  Assert-True ($loginEnvelope.code -eq 0) "Bootstrap login failed"
-  Assert-True ($loginEnvelope.data.user.must_change_password -eq $true) "Bootstrap admin should require password rotation"
-
-  $bootstrapToken = [string]$loginEnvelope.data.access_token
-  $bootstrapHeaders = @{ Authorization = "Bearer $bootstrapToken" }
-
-  $changePasswordEnvelope = Invoke-JsonRequest -Method "POST" -Uri "$BackendBaseUrl/api/v1/auth/change-password" -Headers $bootstrapHeaders -Body @{
-    current_password = $BootstrapPassword
-    new_password = $RotatedPassword
-  }
-  Assert-True ($changePasswordEnvelope.code -eq 0) "Password rotation failed"
-  Assert-True ($changePasswordEnvelope.data.user.must_change_password -eq $false) "Rotated user should clear must_change_password"
-
-  $activeToken = [string]$changePasswordEnvelope.data.access_token
+  $bootstrapSession = Initialize-BootstrapAdminSession -ApiBaseUrl $BackendBaseUrl -BootstrapPassword $BootstrapPassword -RotatedPassword $RotatedPassword
+  $activeToken = $bootstrapSession.RotatedAccessToken
   Assert-True (-not [string]::IsNullOrWhiteSpace($activeToken)) "Rotated session access token should not be empty"
 
   $fullSmokeScript = Join-Path $PSScriptRoot "..\observability\full-smoke.ps1"

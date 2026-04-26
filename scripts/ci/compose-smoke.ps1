@@ -32,16 +32,10 @@ try {
   Wait-FrontendStartup -FrontendBaseUrl $FrontendBaseUrl
   Wait-FrontendProxyHealth -FrontendBaseUrl $FrontendBaseUrl
 
-  $loginEnvelope = Invoke-JsonRequest -Method "POST" -Uri "$FrontendBaseUrl/api/v1/auth/login" -Body @{
-    username = "admin"
-    password = $BootstrapPassword
-  }
-  Assert-True ($loginEnvelope.code -eq 0) "Login via frontend proxy failed"
-  Assert-True ($loginEnvelope.data.user.must_change_password -eq $true) "Bootstrap admin should require password rotation on first login"
-
-  $bootstrapAccessToken = [string]$loginEnvelope.data.access_token
-  $bootstrapRefreshToken = [string]$loginEnvelope.data.refresh_token
-  $bootstrapHeaders = @{ Authorization = "Bearer $bootstrapAccessToken" }
+  $loginResult = Invoke-BootstrapLogin -LoginBaseUrl $FrontendBaseUrl -BootstrapPassword $BootstrapPassword
+  $bootstrapAccessToken = $loginResult.BootstrapAccessToken
+  $bootstrapRefreshToken = $loginResult.BootstrapRefreshToken
+  $bootstrapHeaders = $loginResult.BootstrapHeaders
 
   $meEnvelope = Invoke-JsonRequest -Method "GET" -Uri "$BackendBaseUrl/api/v1/auth/me" -Headers $bootstrapHeaders
   Assert-True ($meEnvelope.code -eq 0) "Auth me should succeed before password change"
@@ -50,15 +44,10 @@ try {
   $passwordGateResponse = Invoke-WebRequest -Method "GET" -Uri "$BackendBaseUrl/api/v1/dashboard/summary" -Headers $bootstrapHeaders -SkipHttpErrorCheck
   Assert-True ($passwordGateResponse.StatusCode -eq 403) "Dashboard should be blocked until bootstrap password is rotated"
 
-  $changePasswordEnvelope = Invoke-JsonRequest -Method "POST" -Uri "$BackendBaseUrl/api/v1/auth/change-password" -Headers $bootstrapHeaders -Body @{
-    current_password = $BootstrapPassword
-    new_password = $RotatedPassword
-  }
-  Assert-True ($changePasswordEnvelope.code -eq 0) "Password change failed"
-  Assert-True ($changePasswordEnvelope.data.user.must_change_password -eq $false) "Rotated session should clear must_change_password"
-
-  $rotatedAccessToken = [string]$changePasswordEnvelope.data.access_token
-  $rotatedRefreshToken = [string]$changePasswordEnvelope.data.refresh_token
+  $rotationResult = Invoke-BootstrapPasswordRotation -ApiBaseUrl $BackendBaseUrl -BootstrapPassword $BootstrapPassword -RotatedPassword $RotatedPassword -BootstrapAccessToken $bootstrapAccessToken
+  $changePasswordEnvelope = $rotationResult.ChangePasswordEnvelope
+  $rotatedAccessToken = $rotationResult.RotatedAccessToken
+  $rotatedRefreshToken = $rotationResult.RotatedRefreshToken
   Assert-True ($rotatedAccessToken -ne $bootstrapAccessToken) "Password change should rotate access token"
   Assert-True ($rotatedRefreshToken -ne $bootstrapRefreshToken) "Password change should rotate refresh token"
 

@@ -233,3 +233,98 @@ function Wait-FrontendProxyHealth {
     return $proxyHealth.code -eq 0 -and $proxyHealth.data.checks.database -eq "up" -and $proxyHealth.data.checks.agent -eq "up"
   }
 }
+
+function Invoke-BootstrapLogin {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$LoginBaseUrl,
+    [Parameter(Mandatory = $true)]
+    [string]$BootstrapPassword,
+    [string]$Username = "admin"
+  )
+
+  $loginEnvelope = Invoke-JsonRequest -Method "POST" -Uri "$LoginBaseUrl/api/v1/auth/login" -Body @{
+    username = $Username
+    password = $BootstrapPassword
+  }
+  Assert-True ($loginEnvelope.code -eq 0) "Bootstrap login failed for user '$Username'"
+  Assert-True ([bool]$loginEnvelope.data.user.must_change_password) "Bootstrap user '$Username' should require password rotation"
+
+  $bootstrapAccessToken = [string]$loginEnvelope.data.access_token
+  $bootstrapRefreshToken = [string]$loginEnvelope.data.refresh_token
+  Assert-True (-not [string]::IsNullOrWhiteSpace($bootstrapAccessToken)) "Bootstrap login returned empty access token"
+  Assert-True (-not [string]::IsNullOrWhiteSpace($bootstrapRefreshToken)) "Bootstrap login returned empty refresh token"
+
+  return [PSCustomObject]@{
+    LoginEnvelope         = $loginEnvelope
+    BootstrapAccessToken  = $bootstrapAccessToken
+    BootstrapRefreshToken = $bootstrapRefreshToken
+    BootstrapHeaders      = @{ Authorization = "Bearer $bootstrapAccessToken" }
+  }
+}
+
+function Invoke-BootstrapPasswordRotation {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$ApiBaseUrl,
+    [Parameter(Mandatory = $true)]
+    [string]$BootstrapPassword,
+    [Parameter(Mandatory = $true)]
+    [string]$RotatedPassword,
+    [Parameter(Mandatory = $true)]
+    [string]$BootstrapAccessToken,
+    [string]$Username = "admin"
+  )
+
+  $bootstrapHeaders = @{ Authorization = "Bearer $BootstrapAccessToken" }
+  $changePasswordEnvelope = Invoke-JsonRequest -Method "POST" -Uri "$ApiBaseUrl/api/v1/auth/change-password" -Headers $bootstrapHeaders -Body @{
+    current_password = $BootstrapPassword
+    new_password     = $RotatedPassword
+  }
+  Assert-True ($changePasswordEnvelope.code -eq 0) "Password rotation failed for user '$Username'"
+  Assert-True (-not [bool]$changePasswordEnvelope.data.user.must_change_password) "Rotated user '$Username' should clear must_change_password"
+
+  $rotatedAccessToken = [string]$changePasswordEnvelope.data.access_token
+  $rotatedRefreshToken = [string]$changePasswordEnvelope.data.refresh_token
+  Assert-True (-not [string]::IsNullOrWhiteSpace($rotatedAccessToken)) "Password rotation returned empty access token"
+  Assert-True (-not [string]::IsNullOrWhiteSpace($rotatedRefreshToken)) "Password rotation returned empty refresh token"
+
+  return [PSCustomObject]@{
+    ChangePasswordEnvelope = $changePasswordEnvelope
+    RotatedAccessToken    = $rotatedAccessToken
+    RotatedRefreshToken   = $rotatedRefreshToken
+    RotatedHeaders        = @{ Authorization = "Bearer $rotatedAccessToken" }
+  }
+}
+
+function Initialize-BootstrapAdminSession {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$ApiBaseUrl,
+    [Parameter(Mandatory = $true)]
+    [string]$BootstrapPassword,
+    [Parameter(Mandatory = $true)]
+    [string]$RotatedPassword,
+    [string]$LoginBaseUrl = "",
+    [string]$Username = "admin"
+  )
+
+  $resolvedLoginBaseUrl = $LoginBaseUrl
+  if ([string]::IsNullOrWhiteSpace($resolvedLoginBaseUrl)) {
+    $resolvedLoginBaseUrl = $ApiBaseUrl
+  }
+
+  $loginResult = Invoke-BootstrapLogin -LoginBaseUrl $resolvedLoginBaseUrl -BootstrapPassword $BootstrapPassword -Username $Username
+  $rotationResult = Invoke-BootstrapPasswordRotation -ApiBaseUrl $ApiBaseUrl -BootstrapPassword $BootstrapPassword -RotatedPassword $RotatedPassword -BootstrapAccessToken $loginResult.BootstrapAccessToken -Username $Username
+
+  return [PSCustomObject]@{
+    LoginEnvelope          = $loginResult.LoginEnvelope
+    ChangePasswordEnvelope = $rotationResult.ChangePasswordEnvelope
+    BootstrapAccessToken   = $loginResult.BootstrapAccessToken
+    BootstrapRefreshToken  = $loginResult.BootstrapRefreshToken
+    RotatedAccessToken     = $rotationResult.RotatedAccessToken
+    RotatedRefreshToken    = $rotationResult.RotatedRefreshToken
+    BootstrapHeaders       = $loginResult.BootstrapHeaders
+    RotatedHeaders         = $rotationResult.RotatedHeaders
+  }
+}
