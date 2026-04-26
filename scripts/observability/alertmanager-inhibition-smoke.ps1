@@ -46,7 +46,7 @@ Wait-ObservabilityCondition -Description "warning alert routing visibility" -Tim
   }
   $alerts = Get-AlertmanagerActiveAlerts -AlertmanagerBaseUrl $AlertmanagerBaseUrl -Labels $warningLabels
   foreach ($alert in $alerts) {
-    if ($alert.labels.alertname -ne $AlertName -or $alert.labels.instance -ne $Instance -or $alert.labels.severity -ne "warning") {
+    if (-not (Test-AlertmanagerLabelsMatch -Alert $alert -Labels $warningLabels)) {
       continue
     }
     return (Test-AlertmanagerHasReceiver -Alert $alert -ReceiverName $warningReceiver)
@@ -71,15 +71,24 @@ Wait-ObservabilityCondition -Description "warning inhibited by critical" -Timeou
   $alerts = Get-AlertmanagerActiveAlerts -AlertmanagerBaseUrl $AlertmanagerBaseUrl -Labels $baseLabels
   $warningAlert = $null
   $criticalAlert = $null
+  $warningLabels = @{
+    alertname = $AlertName
+    instance  = $Instance
+    severity  = "warning"
+  }
+  $criticalLabels = @{
+    alertname = $AlertName
+    instance  = $Instance
+    severity  = "critical"
+  }
 
   foreach ($alert in $alerts) {
-    if ($alert.labels.alertname -ne $AlertName -or $alert.labels.instance -ne $Instance) {
+    if (Test-AlertmanagerLabelsMatch -Alert $alert -Labels $warningLabels) {
+      $warningAlert = $alert
       continue
     }
-
-    switch ([string]$alert.labels.severity) {
-      "warning" { $warningAlert = $alert }
-      "critical" { $criticalAlert = $alert }
+    if (Test-AlertmanagerLabelsMatch -Alert $alert -Labels $criticalLabels) {
+      $criticalAlert = $alert
     }
   }
 

@@ -228,3 +228,55 @@ function Submit-AlertmanagerAlerts {
 
   return Invoke-ObservabilityJsonRequest -Method "POST" -Uri "$AlertmanagerBaseUrl/api/v2/alerts" -Body $Alerts -ExpectedStatusCodes @(200, 202)
 }
+
+function Get-AlertmanagerLabelValue {
+  param(
+    [Parameter(Mandatory = $true)]
+    [object]$Alert,
+    [Parameter(Mandatory = $true)]
+    [string]$Key
+  )
+
+  if ($null -eq $Alert -or $null -eq $Alert.labels -or [string]::IsNullOrWhiteSpace($Key)) {
+    return ""
+  }
+
+  $labels = $Alert.labels
+  if ($labels -is [System.Collections.IDictionary]) {
+    if ($labels.Contains($Key)) {
+      return [string]$labels[$Key]
+    }
+    return ""
+  }
+
+  $property = $labels.PSObject.Properties[$Key]
+  if ($null -eq $property) {
+    return ""
+  }
+
+  return [string]$property.Value
+}
+
+function Test-AlertmanagerLabelsMatch {
+  param(
+    [Parameter(Mandatory = $true)]
+    [object]$Alert,
+    [Parameter(Mandatory = $true)]
+    [hashtable]$Labels
+  )
+
+  foreach ($entry in $Labels.GetEnumerator()) {
+    $expectedKey = [string]$entry.Key
+    $expectedValue = [string]$entry.Value
+    if ([string]::IsNullOrWhiteSpace($expectedKey) -or [string]::IsNullOrWhiteSpace($expectedValue)) {
+      continue
+    }
+
+    $actualValue = Get-AlertmanagerLabelValue -Alert $Alert -Key $expectedKey
+    if ($actualValue -ine $expectedValue) {
+      return $false
+    }
+  }
+
+  return $true
+}
