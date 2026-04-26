@@ -17,8 +17,9 @@ import { CronTask } from "@/types/cron";
 
 export function CronPage() {
   const queryClient = useQueryClient();
+  const cronTasksQueryKey = ["cron", "tasks"] as const;
   const [expression, setExpression] = useState("*/5 * * * *");
-  const [command, setCommand] = useState("echo 'hello from snowpanel'");
+  const [command, setCommand] = useState("backup");
   const [enabled, setEnabled] = useState(true);
   const [feedback, setFeedback] = useState("");
   const [filterKeyword, setFilterKeyword] = useState("");
@@ -32,21 +33,25 @@ export function CronPage() {
   const [editingEnabled, setEditingEnabled] = useState(true);
 
   const tasksQuery = useQuery({
-    queryKey: ["cron", "tasks"],
+    queryKey: cronTasksQueryKey,
     queryFn: listCronTasks
   });
   const tasksLoadError = tasksQuery.isError
     ? describeApiError(tasksQuery.error, "Failed to load cron tasks.")
     : null;
 
+  function describeCronMutationError(error: unknown, fallback: string) {
+    return describeApiError(error, fallback).message;
+  }
+
   const createMutation = useMutation({
     mutationFn: createCronTask,
     onSuccess(result) {
       setFeedback(`Created task: ${result.task.id}`);
-      queryClient.invalidateQueries({ queryKey: ["cron", "tasks"] });
+      queryClient.invalidateQueries({ queryKey: cronTasksQueryKey });
     },
     onError(error) {
-      setFeedback(error instanceof Error ? error.message : "Create cron task failed");
+      setFeedback(describeCronMutationError(error, "Create cron task failed"));
     }
   });
 
@@ -56,10 +61,10 @@ export function CronPage() {
     onSuccess(result) {
       setFeedback(`Updated task: ${result.task.id}`);
       setEditingId(null);
-      queryClient.invalidateQueries({ queryKey: ["cron", "tasks"] });
+      queryClient.invalidateQueries({ queryKey: cronTasksQueryKey });
     },
     onError(error) {
-      setFeedback(error instanceof Error ? error.message : "Update cron task failed");
+      setFeedback(describeCronMutationError(error, "Update cron task failed"));
     }
   });
 
@@ -68,10 +73,10 @@ export function CronPage() {
       enabled ? enableCronTask(id) : disableCronTask(id),
     onSuccess(result) {
       setFeedback(`Updated task state: ${result.task.id} -> ${result.task.enabled ? "enabled" : "disabled"}`);
-      queryClient.invalidateQueries({ queryKey: ["cron", "tasks"] });
+      queryClient.invalidateQueries({ queryKey: cronTasksQueryKey });
     },
     onError(error) {
-      setFeedback(error instanceof Error ? error.message : "Toggle cron task failed");
+      setFeedback(describeCronMutationError(error, "Toggle cron task failed"));
     }
   });
 
@@ -79,16 +84,12 @@ export function CronPage() {
     mutationFn: deleteCronTask,
     onSuccess(result) {
       setFeedback(`Deleted task: ${result.id}`);
-      queryClient.invalidateQueries({ queryKey: ["cron", "tasks"] });
+      queryClient.invalidateQueries({ queryKey: cronTasksQueryKey });
     },
     onError(error) {
-      setFeedback(error instanceof Error ? error.message : "Delete cron task failed");
+      setFeedback(describeCronMutationError(error, "Delete cron task failed"));
     }
   });
-
-  const message = useMemo(() => {
-    return feedback;
-  }, [feedback]);
 
   const displayedTasks = useMemo(() => {
     const keyword = filterKeyword.trim().toLowerCase();
@@ -188,7 +189,9 @@ export function CronPage() {
     <div className="space-y-4">
       <div>
         <h2 className="text-2xl font-semibold text-slate-900">Cron Tasks</h2>
-        <p className="text-sm text-slate-500">Create and manage scheduled jobs with validation and enable/disable controls.</p>
+        <p className="text-sm text-slate-500">
+          Create and manage scheduled jobs with command-template allowlist validation and enable/disable controls.
+        </p>
       </div>
 
       <Card>
@@ -198,7 +201,11 @@ export function CronPage() {
         <CardContent>
           <form className="grid gap-3 md:grid-cols-[1fr_2fr_auto_auto]" onSubmit={handleCreate}>
             <Input onChange={(event) => setExpression(event.target.value)} placeholder="*/5 * * * *" value={expression} />
-            <Input onChange={(event) => setCommand(event.target.value)} placeholder="command" value={command} />
+            <Input
+              onChange={(event) => setCommand(event.target.value)}
+              placeholder="command template key (e.g. backup)"
+              value={command}
+            />
             <label className="flex items-center gap-2 text-sm text-slate-700">
               <input
                 checked={enabled}
@@ -222,7 +229,7 @@ export function CronPage() {
           <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_180px_200px_auto]">
             <Input
               onChange={(event) => setFilterKeyword(event.target.value)}
-              placeholder="Filter by id, expression, or command"
+              placeholder="Filter by id, expression, or command key"
               value={filterKeyword}
             />
             <select
@@ -371,8 +378,8 @@ export function CronPage() {
         </CardContent>
       </Card>
 
-      {message && (
-        <p className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">{message}</p>
+      {feedback && (
+        <p className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">{feedback}</p>
       )}
     </div>
   );

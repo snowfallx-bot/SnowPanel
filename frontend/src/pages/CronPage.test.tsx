@@ -126,7 +126,7 @@ describe("CronPage", () => {
     fireEvent.change(sortSelect, { target: { value: "id-desc" } });
     expect(visibleTaskIds()).toEqual(["task-z", "task-m", "task-a"]);
 
-    fireEvent.change(screen.getByPlaceholderText("Filter by id, expression, or command"), {
+    fireEvent.change(screen.getByPlaceholderText("Filter by id, expression, or command key"), {
       target: { value: "backup" }
     });
     expect(screen.getByText("Showing 1 / 3 tasks")).toBeInTheDocument();
@@ -140,7 +140,7 @@ describe("CronPage", () => {
     renderCronPage();
     await screen.findByText("Showing 3 / 3 tasks");
 
-    const keywordInput = screen.getByPlaceholderText("Filter by id, expression, or command");
+    const keywordInput = screen.getByPlaceholderText("Filter by id, expression, or command key");
     const [stateSelect, sortSelect] = screen.getAllByRole("combobox");
     const clearButton = screen.getByRole("button", { name: "Clear filters" });
 
@@ -167,7 +167,7 @@ describe("CronPage", () => {
     fireEvent.change(screen.getByPlaceholderText("*/5 * * * *"), {
       target: { value: "0 */6 * * *" }
     });
-    fireEvent.change(screen.getByPlaceholderText("command"), {
+    fireEvent.change(screen.getByPlaceholderText("command template key (e.g. backup)"), {
       target: { value: "backup-nightly" }
     });
     fireEvent.click(screen.getAllByRole("checkbox")[0]);
