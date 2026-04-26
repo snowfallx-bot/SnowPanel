@@ -1,0 +1,54 @@
+rule_files:
+  - /etc/prometheus/alerts/snowpanel-alerts.yml
+
+evaluation_interval: 1m
+
+tests:
+  - name: "SnowPanel observability critical alerts should fire under sustained unhealthy signals"
+    interval: 1m
+    input_series:
+      - series: 'up{job="snowpanel-backend"}'
+        values: '0+0x30'
+      - series: 'up{job="snowpanel-core-agent-compose"}'
+        values: '0+0x30'
+      - series: 'up{job="snowpanel-core-agent-host"}'
+        values: '0+0x30'
+
+      - series: 'snowpanel_http_requests_total{route="/api/v1/dashboard/summary",status="200"}'
+        values: '0+100x30'
+      - series: 'snowpanel_http_requests_total{route="/api/v1/dashboard/summary",status="500"}'
+        values: '0+5x30'
+
+      - series: 'snowpanel_core_agent_grpc_requests_total{outcome="ok"}'
+        values: '0+90x30'
+      - series: 'snowpanel_core_agent_grpc_requests_total{outcome="error"}'
+        values: '0+10x30'
+
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: SnowPanelBackendDown
+        exp_alerts:
+          - exp_labels:
+              alertname: SnowPanelBackendDown
+              severity: critical
+
+      - eval_time: 4m
+        alertname: SnowPanelCoreAgentMetricsDown
+        exp_alerts:
+          - exp_labels:
+              alertname: SnowPanelCoreAgentMetricsDown
+              severity: critical
+
+      - eval_time: 16m
+        alertname: SnowPanelBackendAvailabilitySLOCritical
+        exp_alerts:
+          - exp_labels:
+              alertname: SnowPanelBackendAvailabilitySLOCritical
+              severity: critical
+
+      - eval_time: 16m
+        alertname: SnowPanelCoreAgentGrpcErrorRateCritical
+        exp_alerts:
+          - exp_labels:
+              alertname: SnowPanelCoreAgentGrpcErrorRateCritical
+              severity: critical

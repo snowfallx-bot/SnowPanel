@@ -13,6 +13,7 @@ if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $prometheusDir = Join-Path $repoRoot "deploy\observability\prometheus"
 $alertmanagerDir = Join-Path $repoRoot "deploy\observability\alertmanager"
+$prometheusRuleTestFile = "/etc/prometheus/tests/snowpanel-alerts.test.yml"
 
 function Invoke-Docker {
   param(
@@ -40,6 +41,14 @@ Invoke-Docker -Arguments @(
   "-v", "${prometheusDir}:/etc/prometheus:ro",
   $PrometheusImage,
   "/bin/sh", "-lc", "promtool check rules /etc/prometheus/alerts/*.yml"
+)
+
+Write-Host "Running Prometheus alert rule unit tests ..."
+Invoke-Docker -Arguments @(
+  "run", "--rm",
+  "-v", "${prometheusDir}:/etc/prometheus:ro",
+  $PrometheusImage,
+  "promtool", "test", "rules", $prometheusRuleTestFile
 )
 
 Write-Host "Validating Alertmanager baseline config ..."
