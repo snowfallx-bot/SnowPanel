@@ -90,25 +90,8 @@ try {
 
   Wait-BackendReadyApi -BackendBaseUrl $BackendBaseUrl
 
-  $loginResponse = Invoke-ApiRequest -Method "POST" -Uri "$BackendBaseUrl/api/v1/auth/login" -Body @{
-    username = "admin"
-    password = $BootstrapPassword
-  }
-  Assert-ApiSuccess -Response $loginResponse -Description "bootstrap login"
-  Assert-True ([bool]$loginResponse.Json.data.user.must_change_password) "bootstrap admin should require password rotation"
-
-  $bootstrapToken = [string]$loginResponse.Json.data.access_token
-  $bootstrapHeaders = @{ Authorization = "Bearer $bootstrapToken" }
-
-  $changePasswordResponse = Invoke-ApiRequest -Method "POST" -Uri "$BackendBaseUrl/api/v1/auth/change-password" -Headers $bootstrapHeaders -Body @{
-    current_password = $BootstrapPassword
-    new_password     = $RotatedPassword
-  }
-  Assert-ApiSuccess -Response $changePasswordResponse -Description "change bootstrap password"
-  Assert-True (-not [bool]$changePasswordResponse.Json.data.user.must_change_password) "must_change_password should be false after rotation"
-
-  $authToken = [string]$changePasswordResponse.Json.data.access_token
-  $authHeaders = @{ Authorization = "Bearer $authToken" }
+  $bootstrapSession = Initialize-BootstrapAdminSession -ApiBaseUrl $BackendBaseUrl -BootstrapPassword $BootstrapPassword -RotatedPassword $RotatedPassword
+  $authHeaders = $bootstrapSession.RotatedHeaders
 
   $servicesResponse = Invoke-ApiRequest -Method "GET" -Uri "$BackendBaseUrl/api/v1/services" -Headers $authHeaders
   Assert-SuccessOrKnownFailure -Response $servicesResponse -Description "list services" -AllowedFailureStatusCodes @(502, 503) -AllowedFailureCodes @(3001, 5001, 5003) -OnSuccess {
