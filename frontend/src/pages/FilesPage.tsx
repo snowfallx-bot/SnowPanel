@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { QueryErrorCard } from "@/components/ui/query-error-card";
-import { ApiError } from "@/lib/http";
+import { ApiError, describeApiError } from "@/lib/http";
 import { FileEntry } from "@/types/file";
 
 const readLimitOptions = [
@@ -74,14 +74,11 @@ function describeFileApiError(error: unknown, fallback: string) {
       case 4007:
         return "Dangerous path is blocked by security policy.";
       default:
-        return error.message || fallback;
+        return describeApiError(error, fallback).message;
     }
   }
 
-  if (error instanceof Error) {
-    return error.message || fallback;
-  }
-  return fallback;
+  return describeApiError(error, fallback).message;
 }
 
 function formatProgress(current: number, total: number | null) {
