@@ -122,7 +122,8 @@ try {
     -AlertmanagerBaseUrl $AlertmanagerBaseUrl `
     -TraceWaitSeconds 45 `
     -AlertWaitSeconds 30 `
-    -ValidateAllAlertSeverities
+    -ValidateAllAlertSeverities `
+    -ValidateInhibition
 
   $Completed = $true
   Write-Host "Observability smoke test passed."

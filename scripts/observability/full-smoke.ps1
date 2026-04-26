@@ -16,7 +16,9 @@ param(
   [string]$Severity = "critical",
   [int]$AlertDurationSeconds = 120,
   [int]$AlertWaitSeconds = 20,
-  [switch]$ValidateAllAlertSeverities
+  [switch]$ValidateAllAlertSeverities,
+  [switch]$ValidateInhibition,
+  [string]$InhibitionAlertName = "SnowPanelInhibitionSmokeAlert"
 )
 
 $ErrorActionPreference = "Stop"
@@ -25,6 +27,7 @@ Set-StrictMode -Version Latest
 $commonScript = Join-Path $PSScriptRoot "common.ps1"
 $traceScript = Join-Path $PSScriptRoot "trace-smoke.ps1"
 $alertScript = Join-Path $PSScriptRoot "alertmanager-smoke.ps1"
+$inhibitionScript = Join-Path $PSScriptRoot "alertmanager-inhibition-smoke.ps1"
 . $commonScript
 
 $resolvedAccessToken = $AccessToken
@@ -90,4 +93,18 @@ foreach ($severityToRun in $severitiesToRun) {
   & $alertScript @alertArgs
 }
 
-Write-Host "Observability full smoke passed (trace + alertmanager severities: $($severitiesToRun -join ', '))."
+if ($ValidateInhibition) {
+  Write-Host "Running alertmanager inhibition smoke validation ..."
+  & $inhibitionScript `
+    -AlertmanagerBaseUrl $AlertmanagerBaseUrl `
+    -AlertName $InhibitionAlertName `
+    -AlertDurationSeconds $AlertDurationSeconds `
+    -WaitSeconds $AlertWaitSeconds
+}
+
+$summary = "Observability full smoke passed (trace + alertmanager severities: $($severitiesToRun -join ', ')"
+if ($ValidateInhibition) {
+  $summary += " + inhibition"
+}
+$summary += ")."
+Write-Host $summary
