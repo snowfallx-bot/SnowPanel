@@ -34,6 +34,9 @@ $ComposeArgs = @(
   "compose",
   "--project-name", $ProjectName
 )
+if ($AgentMode -eq "container-agent") {
+  $ComposeArgs += @("--profile", "container-agent")
+}
 $composeFiles | ForEach-Object {
   $ComposeArgs += @("-f", $_)
 }
@@ -54,6 +57,9 @@ try {
   $env:DEFAULT_ADMIN_PASSWORD = $BootstrapPassword
   $env:LOGIN_ATTEMPT_STORE = "redis"
   if ($AgentMode -eq "host-agent") {
+    if ([string]::IsNullOrWhiteSpace($HostAgentTarget)) {
+      throw "HostAgentTarget must not be empty when AgentMode=host-agent."
+    }
     $env:AGENT_TARGET = $HostAgentTarget
 
     Wait-UntilReady -Description "host core-agent metrics endpoint" -Attempts 30 -DelaySeconds 1 -Check {
@@ -63,6 +69,8 @@ try {
       }
       return $response.Content -match "snowpanel_core_agent_grpc_requests_total"
     }
+  } else {
+    Remove-Item -Path Env:AGENT_TARGET -ErrorAction SilentlyContinue
   }
 
   $services = @("postgres", "redis", "backend", "jaeger", "otel-collector", "alertmanager", "prometheus")
