@@ -35,12 +35,20 @@ impl TracingGuard {
             return Ok(Self::disabled());
         }
 
-        let endpoint = cfg.otlp_endpoint.trim();
-        if endpoint.is_empty() {
+        let raw_endpoint = cfg.otlp_endpoint.trim();
+        if raw_endpoint.is_empty() {
             return Err(anyhow!(
                 "OTEL_EXPORTER_OTLP_ENDPOINT is required when OTEL_TRACING_ENABLED=true"
             ));
         }
+
+        let endpoint = if raw_endpoint.contains("://") {
+            raw_endpoint.to_string()
+        } else if cfg.otlp_insecure {
+            format!("http://{raw_endpoint}")
+        } else {
+            format!("https://{raw_endpoint}")
+        };
 
         if !cfg.otlp_insecure && endpoint.starts_with("http://") {
             return Err(anyhow!(
@@ -50,7 +58,7 @@ impl TracingGuard {
 
         let exporter_builder = opentelemetry_otlp::SpanExporter::builder()
             .with_tonic()
-            .with_endpoint(endpoint.to_string());
+            .with_endpoint(endpoint);
 
         let exporter = exporter_builder
             .build()
