@@ -40,14 +40,16 @@ export function DockerPage() {
   );
   const [imageFilter, setImageFilter] = useState(() => searchParams.get("image") || "");
   const [activeActionKey, setActiveActionKey] = useState("");
+  const dockerContainersQueryKey = ["docker", "containers"] as const;
+  const dockerImagesQueryKey = ["docker", "images"] as const;
 
   const containersQuery = useQuery({
-    queryKey: ["docker", "containers"],
+    queryKey: dockerContainersQueryKey,
     queryFn: listDockerContainers
   });
 
   const imagesQuery = useQuery({
-    queryKey: ["docker", "images"],
+    queryKey: dockerImagesQueryKey,
     queryFn: listDockerImages
   });
   const containersLoadError = containersQuery.isError
@@ -56,6 +58,18 @@ export function DockerPage() {
   const imagesLoadError = imagesQuery.isError
     ? describeApiError(imagesQuery.error, "Failed to load docker images.")
     : null;
+
+  function describeDockerMutationError(error: unknown, fallback: string) {
+    return describeApiError(error, fallback).message;
+  }
+
+  async function runMutationAction(action: () => Promise<unknown>) {
+    try {
+      await action();
+    } catch {
+      // onError already updates feedback; avoid unhandled promise rejection from event handlers.
+    }
+  }
 
   const actionMutation = useMutation({
     mutationFn: async (payload: { id: string; action: DockerAction }) => {
@@ -73,10 +87,10 @@ export function DockerPage() {
     },
     onSuccess(result, payload) {
       setFeedback(`${payload.action} success: ${result.id} -> ${result.state}`);
-      queryClient.invalidateQueries({ queryKey: ["docker", "containers"] });
+      queryClient.invalidateQueries({ queryKey: dockerContainersQueryKey });
     },
     onError(error) {
-      setFeedback(error instanceof Error ? error.message : "Docker action failed");
+      setFeedback(describeDockerMutationError(error, "Docker action failed"));
     },
     onSettled() {
       setActiveActionKey("");
@@ -131,10 +145,6 @@ export function DockerPage() {
     });
   }, [imageFilter, imagesQuery.data?.images]);
 
-  const message = useMemo(() => {
-    return feedback;
-  }, [feedback]);
-
   const hasActiveFilters = useMemo(
     () => filter.trim() !== "" || stateFilter !== "all" || imageFilter.trim() !== "",
     [filter, imageFilter, stateFilter]
@@ -173,11 +183,7 @@ export function DockerPage() {
     if (!confirmed) {
       return;
     }
-    try {
-      await actionMutation.mutateAsync({ id: item.id || item.name, action });
-    } catch {
-      // onError already updates feedback; avoid unhandled promise rejection from event handler.
-    }
+    await runMutationAction(() => actionMutation.mutateAsync({ id: item.id || item.name, action }));
   }
 
   function isActionPending(item: DockerContainerInfo, action: DockerAction) {
@@ -186,8 +192,8 @@ export function DockerPage() {
 
   function refreshAll() {
     setFeedback("Refreshing docker data...");
-    queryClient.invalidateQueries({ queryKey: ["docker", "containers"] });
-    queryClient.invalidateQueries({ queryKey: ["docker", "images"] });
+    queryClient.invalidateQueries({ queryKey: dockerContainersQueryKey });
+    queryClient.invalidateQueries({ queryKey: dockerImagesQueryKey });
   }
 
   function clearFilters() {
@@ -376,8 +382,8 @@ export function DockerPage() {
         </CardContent>
       </Card>
 
-      {message && (
-        <p className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">{message}</p>
+      {feedback && (
+        <p className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">{feedback}</p>
       )}
     </div>
   );
