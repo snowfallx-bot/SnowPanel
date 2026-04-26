@@ -52,3 +52,46 @@ tests:
           - exp_labels:
               alertname: SnowPanelCoreAgentGrpcErrorRateCritical
               severity: critical
+
+  - name: "SnowPanel warning-only thresholds should not escalate to critical"
+    interval: 1m
+    input_series:
+      - series: 'up{job="snowpanel-backend"}'
+        values: '1+0x30'
+      - series: 'up{job="snowpanel-core-agent-compose"}'
+        values: '1+0x30'
+      - series: 'up{job="snowpanel-core-agent-host"}'
+        values: '1+0x30'
+
+      - series: 'snowpanel_http_requests_total{route="/api/v1/dashboard/summary",status="200"}'
+        values: '0+198x30'
+      - series: 'snowpanel_http_requests_total{route="/api/v1/dashboard/summary",status="500"}'
+        values: '0+2x30'
+
+      - series: 'snowpanel_core_agent_grpc_requests_total{outcome="ok"}'
+        values: '0+97x30'
+      - series: 'snowpanel_core_agent_grpc_requests_total{outcome="error"}'
+        values: '0+3x30'
+
+    alert_rule_test:
+      - eval_time: 16m
+        alertname: SnowPanelBackendAvailabilitySLOWarning
+        exp_alerts:
+          - exp_labels:
+              alertname: SnowPanelBackendAvailabilitySLOWarning
+              severity: warning
+
+      - eval_time: 16m
+        alertname: SnowPanelBackendAvailabilitySLOCritical
+        exp_alerts: []
+
+      - eval_time: 11m
+        alertname: SnowPanelCoreAgentGrpcErrorRateHigh
+        exp_alerts:
+          - exp_labels:
+              alertname: SnowPanelCoreAgentGrpcErrorRateHigh
+              severity: warning
+
+      - eval_time: 11m
+        alertname: SnowPanelCoreAgentGrpcErrorRateCritical
+        exp_alerts: []
