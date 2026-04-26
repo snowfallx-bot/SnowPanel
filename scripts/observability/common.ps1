@@ -60,3 +60,30 @@ function Invoke-ObservabilityJsonRequest {
 
   return $response.Content | ConvertFrom-Json -Depth $JsonDepth
 }
+
+function Wait-ObservabilityCondition {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$Description,
+    [Parameter(Mandatory = $true)]
+    [int]$TimeoutSeconds,
+    [Parameter(Mandatory = $true)]
+    [scriptblock]$Check,
+    [int]$IntervalSeconds = 2,
+    [string]$TimeoutMessage = ""
+  )
+
+  $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+  while ((Get-Date) -lt $deadline) {
+    if (& $Check) {
+      return
+    }
+    Start-Sleep -Seconds $IntervalSeconds
+  }
+
+  if (-not [string]::IsNullOrWhiteSpace($TimeoutMessage)) {
+    throw $TimeoutMessage
+  }
+
+  throw "Timed out waiting for $Description within ${TimeoutSeconds}s."
+}

@@ -52,10 +52,9 @@ if ($dashboardEnvelope.code -ne 0) {
 Write-Host "Dashboard request succeeded. request_id=$RequestId"
 Write-Host "Polling Jaeger API for correlated trace (timeout=${TraceWaitSeconds}s) ..."
 
-$deadline = (Get-Date).AddSeconds($TraceWaitSeconds)
 $foundTrace = $null
 
-while ((Get-Date) -lt $deadline) {
+Wait-ObservabilityCondition -Description "Jaeger correlated trace" -TimeoutSeconds $TraceWaitSeconds -TimeoutMessage "No cross-service trace found in Jaeger within ${TraceWaitSeconds}s. Check OTEL env vars, collector health, and Jaeger ingestion." -Check {
   $query = "$JaegerBaseUrl/api/traces?service=snowpanel-backend&lookback=1h&limit=50"
   $tracesEnvelope = Invoke-ObservabilityJsonRequest -Method "GET" -Uri $query
   foreach ($trace in $tracesEnvelope.data) {
@@ -78,18 +77,10 @@ while ((Get-Date) -lt $deadline) {
     }
 
     $foundTrace = $trace
-    break
+    return $true
   }
 
-  if ($null -ne $foundTrace) {
-    break
-  }
-
-  Start-Sleep -Seconds 2
-}
-
-if ($null -eq $foundTrace) {
-  throw "No cross-service trace found in Jaeger within ${TraceWaitSeconds}s. Check OTEL env vars, collector health, and Jaeger ingestion."
+  return $false
 }
 
 $serviceNames = (Get-TraceServiceSet -Trace $foundTrace).ToArray() | Sort-Object

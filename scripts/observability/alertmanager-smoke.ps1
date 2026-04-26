@@ -36,28 +36,18 @@ $alertPayload = @(
 Write-Host "Submitting synthetic alert '$AlertName' to Alertmanager ..."
 Invoke-ObservabilityJsonRequest -Method "POST" -Uri "$AlertmanagerBaseUrl/api/v2/alerts" -Body $alertPayload -ExpectedStatusCodes @(200, 202)
 
-$deadline = (Get-Date).AddSeconds($WaitSeconds)
-$found = $false
 $encodedFilter = [System.Uri]::EscapeDataString("alertname=$AlertName")
 
-while ((Get-Date) -lt $deadline) {
+Wait-ObservabilityCondition -Description "Alertmanager alert visibility" -TimeoutSeconds $WaitSeconds -TimeoutMessage "Synthetic alert '$AlertName' was not observed in Alertmanager within ${WaitSeconds}s." -Check {
   $alerts = Invoke-ObservabilityJsonRequest -Method "GET" -Uri "$AlertmanagerBaseUrl/api/v2/alerts?active=true&filter=$encodedFilter" -ExpectedStatusCodes @(200)
   foreach ($alert in $alerts) {
     if ($alert.labels.alertname -eq $AlertName -and $alert.labels.instance -eq $Instance) {
       $found = $true
-      break
+      return $true
     }
   }
 
-  if ($found) {
-    break
-  }
-
-  Start-Sleep -Seconds 2
-}
-
-if (-not $found) {
-  throw "Synthetic alert '$AlertName' was not observed in Alertmanager within ${WaitSeconds}s."
+  return $false
 }
 
 Write-Host "Alertmanager smoke test passed."
