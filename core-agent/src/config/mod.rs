@@ -42,8 +42,8 @@ impl Config {
             .ok()
             .map(|raw| parse_bool(&raw))
             .unwrap_or(false);
-        let tracing_service_name = env::var("OTEL_SERVICE_NAME")
-            .unwrap_or_else(|_| "snowpanel-core-agent".to_string());
+        let tracing_service_name =
+            env::var("OTEL_SERVICE_NAME").unwrap_or_else(|_| "snowpanel-core-agent".to_string());
         let tracing_service_version =
             env::var("OTEL_SERVICE_VERSION").unwrap_or_else(|_| String::new());
         let otlp_endpoint = env::var("OTEL_EXPORTER_OTLP_ENDPOINT").unwrap_or_default();

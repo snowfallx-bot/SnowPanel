@@ -19,9 +19,10 @@ async fn main() -> Result<()> {
         Err(err) => {
             eprintln!("otel tracing disabled: {err:#}");
             tracing_subscriber::fmt()
-                .with_env_filter(tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(
-                    |_| tracing_subscriber::EnvFilter::new("info"),
-                ))
+                .with_env_filter(
+                    tracing_subscriber::EnvFilter::try_from_default_env()
+                        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
+                )
                 .init();
             observability::tracing::TracingGuard::disabled()
         }
@@ -40,10 +41,9 @@ async fn main() -> Result<()> {
     )?;
 
     if metrics_enabled {
-        tokio::try_join!(
-            async { server.run(&addr).await },
-            async { observability::metrics::run_metrics_server(&metrics_addr).await }
-        )?;
+        tokio::try_join!(async { server.run(&addr).await }, async {
+            observability::metrics::run_metrics_server(&metrics_addr).await
+        })?;
         return Ok(());
     }
 

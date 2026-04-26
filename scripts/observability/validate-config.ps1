@@ -76,7 +76,7 @@ function Invoke-Promtool {
 
   if ($useDocker) {
     Invoke-ExternalCommand -Executable "docker" -Arguments (
-      @("run", "--rm", "-v", "${prometheusDir}:/etc/prometheus:ro", $PrometheusImage, "promtool") + $ContainerArguments
+      @("run", "--rm", "--entrypoint", "promtool", "-v", "${prometheusDir}:/etc/prometheus:ro", $PrometheusImage) + $ContainerArguments
     )
     return
   }
@@ -95,7 +95,7 @@ function Invoke-Amtool {
 
   if ($useDocker) {
     Invoke-ExternalCommand -Executable "docker" -Arguments (
-      @("run", "--rm", "-v", "${alertmanagerDir}:/etc/alertmanager:ro", $AlertmanagerImage, "amtool") + $ContainerArguments
+      @("run", "--rm", "--entrypoint", "amtool", "-v", "${alertmanagerDir}:/etc/alertmanager:ro", $AlertmanagerImage) + $ContainerArguments
     )
     return
   }
