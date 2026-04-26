@@ -17,7 +17,8 @@ param(
   [ValidateSet("critical", "warning")]
   [string]$Severity = "critical",
   [int]$AlertDurationSeconds = 120,
-  [int]$AlertWaitSeconds = 20,
+  [ValidateRange(10, 300)]
+  [int]$AlertWaitSeconds = 60,
   [switch]$ValidateAllAlertSeverities,
   [switch]$ValidateInhibition,
   [string]$InhibitionAlertName = "SnowPanelInhibitionSmokeAlert"

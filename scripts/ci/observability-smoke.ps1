@@ -147,6 +147,7 @@ try {
   Assert-True (-not [string]::IsNullOrWhiteSpace($activeToken)) "Rotated session access token should not be empty"
 
   $fullSmokeScript = Join-Path $PSScriptRoot "..\observability\full-smoke.ps1"
+  # Alertmanager baseline group_wait is 30s; keep smoke timeout comfortably above the routing boundary.
   & $fullSmokeScript `
     -AccessToken $activeToken `
     -BackendBaseUrl $BackendBaseUrl `
@@ -154,7 +155,7 @@ try {
     -AlertmanagerBaseUrl $AlertmanagerBaseUrl `
     -TraceWaitSeconds 75 `
     -TraceTriggerRetryIntervalSeconds 6 `
-    -AlertWaitSeconds 30 `
+    -AlertWaitSeconds 60 `
     -ValidateAllAlertSeverities `
     -ValidateInhibition
 

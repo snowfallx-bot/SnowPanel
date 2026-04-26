@@ -6,7 +6,8 @@ param(
   [string]$ExpectedReceiver = "",
   [string]$Instance = "",
   [int]$AlertDurationSeconds = 120,
-  [int]$WaitSeconds = 20
+  [ValidateRange(10, 300)]
+  [int]$WaitSeconds = 60
 )
 
 $ErrorActionPreference = "Stop"

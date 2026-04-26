@@ -3,7 +3,8 @@ param(
   [string]$AlertName = "SnowPanelInhibitionSmokeAlert",
   [string]$Instance = "",
   [int]$AlertDurationSeconds = 180,
-  [int]$WaitSeconds = 30
+  [ValidateRange(10, 300)]
+  [int]$WaitSeconds = 60
 )
 
 $ErrorActionPreference = "Stop"
