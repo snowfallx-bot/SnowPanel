@@ -1,4 +1,4 @@
-import { ChangeEvent, DragEvent, FormEvent, useMemo, useState } from "react";
+import { ChangeEvent, DragEvent, FormEvent, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createDirectory,
@@ -114,9 +114,10 @@ export function FilesPage() {
   const [downloading, setDownloading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const filesQueryKey = ["files", path] as const;
 
   const listQuery = useQuery({
-    queryKey: ["files", path],
+    queryKey: filesQueryKey,
     queryFn: () => listFiles(path)
   });
 
@@ -156,7 +157,7 @@ export function FilesPage() {
     mutationFn: renameFile,
     onSuccess(result) {
       setFeedback(`Renamed: ${result.source_path} -> ${result.target_path}`);
-      queryClient.invalidateQueries({ queryKey: ["files", path] });
+      queryClient.invalidateQueries({ queryKey: filesQueryKey });
       if (selectedPath === result.source_path) {
         setSelectedPath(result.target_path);
       }
@@ -172,7 +173,7 @@ export function FilesPage() {
     onSuccess() {
       setMkdirName("");
       setFeedback("Directory created.");
-      queryClient.invalidateQueries({ queryKey: ["files", path] });
+      queryClient.invalidateQueries({ queryKey: filesQueryKey });
     },
     onError(error) {
       setFeedback(describeFileApiError(error, "Failed to create directory"));
@@ -183,7 +184,7 @@ export function FilesPage() {
     mutationFn: deleteFile,
     onSuccess() {
       setFeedback("Path deleted.");
-      queryClient.invalidateQueries({ queryKey: ["files", path] });
+      queryClient.invalidateQueries({ queryKey: filesQueryKey });
       if (selectedPath) {
         setSelectedPath("");
         setSelectedContent("");
@@ -196,12 +197,7 @@ export function FilesPage() {
     }
   });
 
-  const message = useMemo(() => {
-    if (uploadProgressText) {
-      return uploadProgressText;
-    }
-    return feedback;
-  }, [feedback, uploadProgressText]);
+  const message = uploadProgressText || feedback;
 
   const currentPath = listQuery.data?.current_path || path;
   const currentEntries = listQuery.data?.entries || [];
@@ -262,7 +258,7 @@ export function FilesPage() {
     });
     setSelectedContent(content);
     setFeedback("File saved.");
-    queryClient.invalidateQueries({ queryKey: ["files", path] });
+    queryClient.invalidateQueries({ queryKey: filesQueryKey });
   }
 
   async function handleDelete(entry: FileEntry) {
@@ -391,7 +387,7 @@ export function FilesPage() {
         setUploadProgressText(`Uploading: ${formatProgress(uploadedBytes, totalBytes)}`);
       });
       setFeedback(`Uploaded ${file.name} (${result.uploaded_bytes} bytes) to ${result.path}`);
-      queryClient.invalidateQueries({ queryKey: ["files", path] });
+      queryClient.invalidateQueries({ queryKey: filesQueryKey });
     } catch (error) {
       setFeedback(describeFileApiError(error, "Upload failed"));
     } finally {
