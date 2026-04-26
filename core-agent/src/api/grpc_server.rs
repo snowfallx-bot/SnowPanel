@@ -434,14 +434,9 @@ where
 }
 
 fn request_logging_interceptor(request: Request<()>) -> Result<Request<()>, Status> {
-    let grpc_method = request.uri().path().to_string();
     let request_id = request_id_from_metadata(request.metadata());
 
-    info!(
-        request_id = request_id.as_str(),
-        grpc_method = grpc_method.as_str(),
-        "core-agent grpc request"
-    );
+    info!(request_id = request_id.as_str(), "core-agent grpc request");
 
     Ok(request)
 }
