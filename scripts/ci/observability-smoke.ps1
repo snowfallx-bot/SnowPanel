@@ -40,10 +40,7 @@ try {
 
   Invoke-ComposeCommand -ComposeArgs $ComposeArgs -Arguments @("up", "-d", "--build", "postgres", "redis", "core-agent", "backend", "jaeger", "otel-collector", "alertmanager", "prometheus")
 
-  Wait-UntilReady -Description "backend readiness" -Check {
-    $ready = Invoke-JsonRequest -Method "GET" -Uri "$BackendBaseUrl/ready"
-    return $ready.code -eq 0 -and $ready.data.checks.database -eq "up" -and $ready.data.checks.agent -eq "up"
-  }
+  Wait-BackendReadyJson -BackendBaseUrl $BackendBaseUrl
 
   Wait-UntilReady -Description "jaeger ui" -Check {
     $response = Invoke-WebRequest -Method "GET" -Uri $JaegerBaseUrl -SkipHttpErrorCheck

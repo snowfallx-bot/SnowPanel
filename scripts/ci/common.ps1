@@ -169,3 +169,67 @@ function Wait-UntilReady {
 
   throw "Timed out waiting for $Description"
 }
+
+function Wait-BackendReadyJson {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$BackendBaseUrl,
+    [string]$Description = "backend readiness",
+    [int]$Attempts = 60,
+    [int]$DelaySeconds = 2
+  )
+
+  Wait-UntilReady -Description $Description -Attempts $Attempts -DelaySeconds $DelaySeconds -Check {
+    $ready = Invoke-JsonRequest -Method "GET" -Uri "$BackendBaseUrl/ready"
+    return $ready.code -eq 0 -and $ready.data.checks.database -eq "up" -and $ready.data.checks.agent -eq "up"
+  }
+}
+
+function Wait-BackendReadyApi {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$BackendBaseUrl,
+    [string]$Description = "backend readiness",
+    [int]$Attempts = 60,
+    [int]$DelaySeconds = 2
+  )
+
+  Wait-UntilReady -Description $Description -Attempts $Attempts -DelaySeconds $DelaySeconds -Check {
+    $ready = Invoke-ApiRequest -Method "GET" -Uri "$BackendBaseUrl/ready"
+    return $ready.StatusCode -eq 200 -and
+      $null -ne $ready.Json -and
+      [int]$ready.Json.code -eq 0 -and
+      [string]$ready.Json.data.checks.database -eq "up" -and
+      [string]$ready.Json.data.checks.agent -eq "up"
+  }
+}
+
+function Wait-FrontendStartup {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$FrontendBaseUrl,
+    [string]$Description = "frontend startup",
+    [int]$Attempts = 60,
+    [int]$DelaySeconds = 2
+  )
+
+  Wait-UntilReady -Description $Description -Attempts $Attempts -DelaySeconds $DelaySeconds -Check {
+    $response = Invoke-WebRequest -Uri $FrontendBaseUrl -SkipHttpErrorCheck
+    return $response.StatusCode -eq 200
+  }
+}
+
+function Wait-FrontendProxyHealth {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$FrontendBaseUrl,
+    [string]$Description = "frontend proxy health",
+    [int]$Attempts = 60,
+    [int]$DelaySeconds = 2
+  )
+
+  Wait-UntilReady -Description $Description -Attempts $Attempts -DelaySeconds $DelaySeconds -Check {
+    $proxyHealth = Invoke-JsonRequest -Method "GET" -Uri "$FrontendBaseUrl/health"
+    return $proxyHealth.code -eq 0 -and $proxyHealth.data.checks.database -eq "up" -and $proxyHealth.data.checks.agent -eq "up"
+  }
+}

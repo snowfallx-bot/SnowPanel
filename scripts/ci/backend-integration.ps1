@@ -88,14 +88,7 @@ try {
 
   Invoke-ComposeCommand -ComposeArgs $ComposeArgs -Arguments @("up", "-d", "--build", "postgres", "redis", "core-agent", "backend")
 
-  Wait-UntilReady -Description "backend readiness" -Check {
-    $ready = Invoke-ApiRequest -Method "GET" -Uri "$BackendBaseUrl/ready"
-    return $ready.StatusCode -eq 200 -and
-      $null -ne $ready.Json -and
-      [int]$ready.Json.code -eq 0 -and
-      [string]$ready.Json.data.checks.database -eq "up" -and
-      [string]$ready.Json.data.checks.agent -eq "up"
-  }
+  Wait-BackendReadyApi -BackendBaseUrl $BackendBaseUrl
 
   $loginResponse = Invoke-ApiRequest -Method "POST" -Uri "$BackendBaseUrl/api/v1/auth/login" -Body @{
     username = "admin"

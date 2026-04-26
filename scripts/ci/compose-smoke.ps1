@@ -28,20 +28,9 @@ try {
 
   Invoke-ComposeCommand -ComposeArgs $ComposeArgs -Arguments @("up", "-d", "--build", "postgres", "redis", "core-agent", "backend", "frontend")
 
-  Wait-UntilReady -Description "backend readiness" -Check {
-    $ready = Invoke-JsonRequest -Method "GET" -Uri "$BackendBaseUrl/ready"
-    return $ready.code -eq 0 -and $ready.data.checks.database -eq "up" -and $ready.data.checks.agent -eq "up"
-  }
-
-  Wait-UntilReady -Description "frontend startup" -Check {
-    $response = Invoke-WebRequest -Uri $FrontendBaseUrl -SkipHttpErrorCheck
-    return $response.StatusCode -eq 200
-  }
-
-  Wait-UntilReady -Description "frontend proxy health" -Check {
-    $proxyHealth = Invoke-JsonRequest -Method "GET" -Uri "$FrontendBaseUrl/health"
-    return $proxyHealth.code -eq 0 -and $proxyHealth.data.checks.database -eq "up" -and $proxyHealth.data.checks.agent -eq "up"
-  }
+  Wait-BackendReadyJson -BackendBaseUrl $BackendBaseUrl
+  Wait-FrontendStartup -FrontendBaseUrl $FrontendBaseUrl
+  Wait-FrontendProxyHealth -FrontendBaseUrl $FrontendBaseUrl
 
   $loginEnvelope = Invoke-JsonRequest -Method "POST" -Uri "$FrontendBaseUrl/api/v1/auth/login" -Body @{
     username = "admin"
