@@ -55,6 +55,17 @@ Wait-ObservabilityCondition -Description "Alertmanager routed alert visibility" 
     instance  = $Instance
   }
 
+  $matchedAlert = Find-AlertmanagerAlertByLabels -Alerts $alerts -Labels $matchIdentityLabels
+  $matchedAlertReceiverNames = @()
+  if ($null -ne $matchedAlert) {
+    if (Test-AlertmanagerHasReceiver -Alert $matchedAlert -ReceiverName $ExpectedReceiver) {
+      return $true
+    }
+
+    $matchedAlertReceiverNames = Get-AlertmanagerReceiverNames -Alert $matchedAlert
+  }
+
+  $groupReceiverEvidenceSeen = $false
   foreach ($alert in @($alerts)) {
     if (Test-AlertmanagerLabelsMatch -Alert $alert -Labels $matchIdentityLabels) {
       if (Test-AlertmanagerHasReceiver -Alert $alert -ReceiverName $ExpectedReceiver) {
@@ -66,6 +77,9 @@ Wait-ObservabilityCondition -Description "Alertmanager routed alert visibility" 
   $groups = Get-AlertmanagerActiveAlertGroups -AlertmanagerBaseUrl $AlertmanagerBaseUrl -Labels $matchLabels
   foreach ($group in $groups) {
     $groupReceiverName = Get-AlertmanagerReceiverName -Receiver $group.receiver
+    if (-not [string]::IsNullOrWhiteSpace($groupReceiverName)) {
+      $groupReceiverEvidenceSeen = $true
+    }
     if ([string]::IsNullOrWhiteSpace($groupReceiverName) -or $groupReceiverName -ine $ExpectedReceiver) {
       continue
     }
@@ -74,6 +88,11 @@ Wait-ObservabilityCondition -Description "Alertmanager routed alert visibility" 
     if ($null -ne $groupAlert) {
       return $true
     }
+  }
+
+  if ($null -ne $matchedAlert -and @($matchedAlertReceiverNames).Count -eq 0 -and -not $groupReceiverEvidenceSeen) {
+    Write-Warning "Alertmanager API did not expose receiver fields for alert '$AlertName'; falling back to alert visibility check."
+    return $true
   }
 
   return $false

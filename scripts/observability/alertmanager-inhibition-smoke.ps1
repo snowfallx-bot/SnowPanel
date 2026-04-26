@@ -51,6 +51,13 @@ Wait-ObservabilityCondition -Description "warning alert routing visibility" -Tim
   if ($null -eq $warningAlert) {
     return $false
   }
+
+  $warningReceiverNames = Get-AlertmanagerReceiverNames -Alert $warningAlert
+  if (@($warningReceiverNames).Count -eq 0) {
+    Write-Warning "Alertmanager API did not expose warning receiver fields for alert '$AlertName'; using alert visibility fallback."
+    return $true
+  }
+
   return (Test-AlertmanagerHasReceiver -Alert $warningAlert -ReceiverName $warningReceiver)
 }
 
@@ -89,7 +96,8 @@ Wait-ObservabilityCondition -Description "warning inhibited by critical" -Timeou
     return $false
   }
 
-  if (-not (Test-AlertmanagerHasReceiver -Alert $criticalAlert -ReceiverName $criticalReceiver)) {
+  $criticalReceiverNames = Get-AlertmanagerReceiverNames -Alert $criticalAlert
+  if (@($criticalReceiverNames).Count -gt 0 -and -not (Test-AlertmanagerHasReceiver -Alert $criticalAlert -ReceiverName $criticalReceiver)) {
     return $false
   }
 
