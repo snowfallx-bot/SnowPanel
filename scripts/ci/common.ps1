@@ -266,6 +266,18 @@ function Wait-UntilReady {
   throw "Timed out waiting for $Description"
 }
 
+function Test-BackendReadyChecks {
+  param(
+    [Parameter(Mandatory = $false)]
+    [object]$Envelope
+  )
+
+  return $null -ne $Envelope -and
+    [int]$Envelope.code -eq 0 -and
+    [string]$Envelope.data.checks.database -eq "up" -and
+    [string]$Envelope.data.checks.agent -eq "up"
+}
+
 function Wait-BackendReadyJson {
   param(
     [Parameter(Mandatory = $true)]
@@ -277,7 +289,7 @@ function Wait-BackendReadyJson {
 
   Wait-UntilReady -Description $Description -Attempts $Attempts -DelaySeconds $DelaySeconds -Check {
     $ready = Invoke-JsonRequest -Method "GET" -Uri "$BackendBaseUrl/ready"
-    return $ready.code -eq 0 -and $ready.data.checks.database -eq "up" -and $ready.data.checks.agent -eq "up"
+    return Test-BackendReadyChecks -Envelope $ready
   }
 }
 
@@ -293,10 +305,7 @@ function Wait-BackendReadyApi {
   Wait-UntilReady -Description $Description -Attempts $Attempts -DelaySeconds $DelaySeconds -Check {
     $ready = Invoke-ApiRequest -Method "GET" -Uri "$BackendBaseUrl/ready"
     return $ready.StatusCode -eq 200 -and
-      $null -ne $ready.Json -and
-      [int]$ready.Json.code -eq 0 -and
-      [string]$ready.Json.data.checks.database -eq "up" -and
-      [string]$ready.Json.data.checks.agent -eq "up"
+      (Test-BackendReadyChecks -Envelope $ready.Json)
   }
 }
 
