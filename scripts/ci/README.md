@@ -17,4 +17,4 @@ Runs Playwright E2E coverage against the compose stack.
 ## `observability-smoke.ps1`
 
 Brings up compose + observability stack (`prometheus`, `alertmanager`, `otel-collector`, `jaeger`) and runs end-to-end observability smoke via `scripts/observability/full-smoke.ps1`.
-It also runs `scripts/observability/validate-config.ps1` and `scripts/observability/prometheus-rules-smoke.ps1` to catch config/rule issues before runtime checks.
+It also runs `scripts/observability/validate-config.ps1` (including `promtool test rules`) and `scripts/observability/prometheus-rules-smoke.ps1` to catch config/rule issues before runtime checks.

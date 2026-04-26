@@ -45,7 +45,7 @@
 - `make logs-observability`：查看 Prometheus、Alertmanager、OTel Collector、Jaeger 日志
 - `make logs-host-agent-observability`：查看宿主机 Agent + 可观测性模式下的 observability 日志
 - `pwsh -File ./scripts/observability/trace-smoke.ps1 -AccessToken "<access_token>"`：触发一次 core-agent 请求，并校验 Jaeger 中 backend/core-agent spans 是否串联
-- `pwsh -File ./scripts/observability/validate-config.ps1`：用 `promtool`/`amtool` 校验 observability 配置文件
+- `pwsh -File ./scripts/observability/validate-config.ps1`：用 `promtool`/`amtool` 校验 observability 配置文件，并执行告警规则单测（`promtool test rules`）
 - `pwsh -File ./scripts/observability/prometheus-rules-smoke.ps1 -PrometheusBaseUrl "http://127.0.0.1:9090"`：校验 Prometheus 已加载必需的 SLO recording 与告警规则
 - `pwsh -File ./scripts/observability/alertmanager-smoke.ps1`：注入一条合成告警并确认 Alertmanager 可见
 - `pwsh -File ./scripts/observability/full-smoke.ps1 -AccessToken "<access_token>"`：一条命令串行完成 tracing + alertmanager 两项冒烟校验

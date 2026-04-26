@@ -27,7 +27,7 @@ Key parameters:
 
 ## `validate-config.ps1`
 
-Validate Prometheus and Alertmanager configs by running `promtool`/`amtool` inside official container images.
+Validate Prometheus and Alertmanager configs by running `promtool`/`amtool` inside official container images, including `promtool test rules` for alert rule unit tests.
 
 ```powershell
 pwsh -File ./scripts/observability/validate-config.ps1
