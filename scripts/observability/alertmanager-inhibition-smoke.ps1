@@ -18,7 +18,7 @@ if ([string]::IsNullOrWhiteSpace($Instance)) {
 $startsAt = [DateTimeOffset]::UtcNow
 $endsAt = $startsAt.AddSeconds($AlertDurationSeconds)
 
-$baseFilterQuery = ConvertTo-AlertmanagerFilterQuery -Labels @{
+$baseLabels = @{
   alertname = $AlertName
   instance  = $Instance
 }
@@ -37,12 +37,12 @@ Invoke-ObservabilityJsonRequest -Method "POST" -Uri "$AlertmanagerBaseUrl/api/v2
 ) -ExpectedStatusCodes @(200, 202)
 
 Wait-ObservabilityCondition -Description "warning alert routing visibility" -TimeoutSeconds $WaitSeconds -TimeoutMessage "Warning alert '$AlertName' was not routed to snowpanel-warning within ${WaitSeconds}s." -Check {
-  $warningFilter = ConvertTo-AlertmanagerFilterQuery -Labels @{
+  $warningLabels = @{
     alertname = $AlertName
     instance  = $Instance
     severity  = "warning"
   }
-  $alerts = Invoke-ObservabilityJsonRequest -Method "GET" -Uri "$AlertmanagerBaseUrl/api/v2/alerts?active=true&$warningFilter" -ExpectedStatusCodes @(200)
+  $alerts = Get-AlertmanagerActiveAlerts -AlertmanagerBaseUrl $AlertmanagerBaseUrl -Labels $warningLabels
   foreach ($alert in $alerts) {
     if ($alert.labels.alertname -ne $AlertName -or $alert.labels.instance -ne $Instance -or $alert.labels.severity -ne "warning") {
       continue
@@ -66,7 +66,7 @@ Invoke-ObservabilityJsonRequest -Method "POST" -Uri "$AlertmanagerBaseUrl/api/v2
 ) -ExpectedStatusCodes @(200, 202)
 
 Wait-ObservabilityCondition -Description "warning inhibited by critical" -TimeoutSeconds $WaitSeconds -TimeoutMessage "Critical/warning inhibition did not converge for '$AlertName' within ${WaitSeconds}s." -Check {
-  $alerts = Invoke-ObservabilityJsonRequest -Method "GET" -Uri "$AlertmanagerBaseUrl/api/v2/alerts?active=true&$baseFilterQuery" -ExpectedStatusCodes @(200)
+  $alerts = Get-AlertmanagerActiveAlerts -AlertmanagerBaseUrl $AlertmanagerBaseUrl -Labels $baseLabels
   $warningAlert = $null
   $criticalAlert = $null
 

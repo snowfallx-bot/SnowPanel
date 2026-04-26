@@ -178,3 +178,42 @@ function New-AlertmanagerSyntheticAlert {
     endsAt   = $EndsAt.ToString("o")
   }
 }
+
+function Get-AlertmanagerApiUriWithFilters {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$AlertmanagerBaseUrl,
+    [Parameter(Mandatory = $true)]
+    [string]$ApiPath,
+    [hashtable]$Labels = @{}
+  )
+
+  $filterQuery = ConvertTo-AlertmanagerFilterQuery -Labels $Labels
+  if ([string]::IsNullOrWhiteSpace($filterQuery)) {
+    return "$AlertmanagerBaseUrl$ApiPath?active=true"
+  }
+
+  return "$AlertmanagerBaseUrl$ApiPath?active=true&$filterQuery"
+}
+
+function Get-AlertmanagerActiveAlerts {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$AlertmanagerBaseUrl,
+    [hashtable]$Labels = @{}
+  )
+
+  $uri = Get-AlertmanagerApiUriWithFilters -AlertmanagerBaseUrl $AlertmanagerBaseUrl -ApiPath "/api/v2/alerts" -Labels $Labels
+  return Invoke-ObservabilityJsonRequest -Method "GET" -Uri $uri -ExpectedStatusCodes @(200)
+}
+
+function Get-AlertmanagerActiveAlertGroups {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$AlertmanagerBaseUrl,
+    [hashtable]$Labels = @{}
+  )
+
+  $uri = Get-AlertmanagerApiUriWithFilters -AlertmanagerBaseUrl $AlertmanagerBaseUrl -ApiPath "/api/v2/alerts/groups" -Labels $Labels
+  return Invoke-ObservabilityJsonRequest -Method "GET" -Uri $uri -ExpectedStatusCodes @(200)
+}

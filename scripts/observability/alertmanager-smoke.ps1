@@ -40,14 +40,14 @@ $alertPayload = @(
 Write-Host "Submitting synthetic alert '$AlertName' to Alertmanager ..."
 Invoke-ObservabilityJsonRequest -Method "POST" -Uri "$AlertmanagerBaseUrl/api/v2/alerts" -Body $alertPayload -ExpectedStatusCodes @(200, 202)
 
-$filterQuery = ConvertTo-AlertmanagerFilterQuery -Labels @{
+$matchLabels = @{
   alertname = $AlertName
   instance  = $Instance
   severity  = $Severity
 }
 
 Wait-ObservabilityCondition -Description "Alertmanager routed alert visibility" -TimeoutSeconds $WaitSeconds -TimeoutMessage "Synthetic alert '$AlertName' was not observed with receiver '$ExpectedReceiver' within ${WaitSeconds}s." -Check {
-  $alerts = Invoke-ObservabilityJsonRequest -Method "GET" -Uri "$AlertmanagerBaseUrl/api/v2/alerts?active=true&$filterQuery" -ExpectedStatusCodes @(200)
+  $alerts = Get-AlertmanagerActiveAlerts -AlertmanagerBaseUrl $AlertmanagerBaseUrl -Labels $matchLabels
   $matchedAlertFound = $false
 
   foreach ($alert in $alerts) {
@@ -65,7 +65,7 @@ Wait-ObservabilityCondition -Description "Alertmanager routed alert visibility" 
     return $false
   }
 
-  $groups = Invoke-ObservabilityJsonRequest -Method "GET" -Uri "$AlertmanagerBaseUrl/api/v2/alerts/groups?active=true&$filterQuery" -ExpectedStatusCodes @(200)
+  $groups = Get-AlertmanagerActiveAlertGroups -AlertmanagerBaseUrl $AlertmanagerBaseUrl -Labels $matchLabels
   foreach ($group in $groups) {
     $groupReceiverName = [string]$group.receiver.name
     if ([string]::IsNullOrWhiteSpace($groupReceiverName) -or $groupReceiverName -ine $ExpectedReceiver) {
