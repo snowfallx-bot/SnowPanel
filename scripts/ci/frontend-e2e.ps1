@@ -15,18 +15,6 @@ $TestFilesPath = "/tmp"
 $ComposeArgs = @("compose", "--project-name", $ProjectName)
 $Completed = $false
 
-function Invoke-Compose {
-  param(
-    [Parameter(Mandatory = $true)]
-    [string[]]$Arguments
-  )
-
-  & docker @ComposeArgs @Arguments
-  if ($LASTEXITCODE -ne 0) {
-    throw "docker compose $($Arguments -join ' ') failed with exit code $LASTEXITCODE"
-  }
-}
-
 try {
   $env:APP_ENV = "production"
   $env:BACKEND_PORT = $BackendPort
@@ -35,7 +23,7 @@ try {
   $env:DEFAULT_ADMIN_PASSWORD = $BootstrapPassword
   $env:LOGIN_ATTEMPT_STORE = "redis"
 
-  Invoke-Compose -Arguments @("up", "-d", "--build", "postgres", "redis", "core-agent", "backend", "frontend")
+  Invoke-ComposeCommand -ComposeArgs $ComposeArgs -Arguments @("up", "-d", "--build", "postgres", "redis", "core-agent", "backend", "frontend")
 
   Wait-UntilReady -Description "backend readiness" -Check {
     $ready = Invoke-JsonRequest -Method "GET" -Uri "$BackendBaseUrl/ready"
@@ -75,19 +63,19 @@ try {
   if (-not $Completed) {
     Write-Host "Frontend e2e failed, printing compose status and logs..."
     try {
-      Invoke-Compose -Arguments @("ps")
+      Invoke-ComposeCommand -ComposeArgs $ComposeArgs -Arguments @("ps")
     } catch {
       Write-Warning $_.Exception.Message
     }
     try {
-      Invoke-Compose -Arguments @("logs", "--no-color", "--tail", "200")
+      Invoke-ComposeCommand -ComposeArgs $ComposeArgs -Arguments @("logs", "--no-color", "--tail", "200")
     } catch {
       Write-Warning $_.Exception.Message
     }
   }
 
   try {
-    Invoke-Compose -Arguments @("down", "-v", "--remove-orphans")
+    Invoke-ComposeCommand -ComposeArgs $ComposeArgs -Arguments @("down", "-v", "--remove-orphans")
   } catch {
     Write-Warning $_.Exception.Message
   }

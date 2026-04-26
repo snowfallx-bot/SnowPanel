@@ -1,3 +1,17 @@
+function Invoke-ComposeCommand {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string[]]$ComposeArgs,
+    [Parameter(Mandatory = $true)]
+    [string[]]$Arguments
+  )
+
+  & docker @ComposeArgs @Arguments
+  if ($LASTEXITCODE -ne 0) {
+    throw "docker compose $($Arguments -join ' ') failed with exit code $LASTEXITCODE"
+  }
+}
+
 function Invoke-JsonRequest {
   param(
     [Parameter(Mandatory = $true)]

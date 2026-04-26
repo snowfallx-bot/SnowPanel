@@ -27,18 +27,6 @@ if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
   throw "docker command not found. Install Docker/Compose before running scripts/ci/observability-smoke.ps1."
 }
 
-function Invoke-Compose {
-  param(
-    [Parameter(Mandatory = $true)]
-    [string[]]$Arguments
-  )
-
-  & docker @ComposeArgs @Arguments
-  if ($LASTEXITCODE -ne 0) {
-    throw "docker compose $($Arguments -join ' ') failed with exit code $LASTEXITCODE"
-  }
-}
-
 try {
   $validateScript = Join-Path $PSScriptRoot "..\observability\validate-config.ps1"
   & $validateScript
@@ -52,7 +40,7 @@ try {
   $env:DEFAULT_ADMIN_PASSWORD = $BootstrapPassword
   $env:LOGIN_ATTEMPT_STORE = "redis"
 
-  Invoke-Compose -Arguments @("up", "-d", "--build", "postgres", "redis", "core-agent", "backend", "jaeger", "otel-collector", "alertmanager", "prometheus")
+  Invoke-ComposeCommand -ComposeArgs $ComposeArgs -Arguments @("up", "-d", "--build", "postgres", "redis", "core-agent", "backend", "jaeger", "otel-collector", "alertmanager", "prometheus")
 
   Wait-UntilReady -Description "backend readiness" -Check {
     $ready = Invoke-JsonRequest -Method "GET" -Uri "$BackendBaseUrl/ready"
@@ -112,19 +100,19 @@ try {
   if (-not $Completed) {
     Write-Host "Observability smoke test failed, printing compose status and logs..."
     try {
-      Invoke-Compose -Arguments @("ps")
+      Invoke-ComposeCommand -ComposeArgs $ComposeArgs -Arguments @("ps")
     } catch {
       Write-Warning $_.Exception.Message
     }
     try {
-      Invoke-Compose -Arguments @("logs", "--no-color", "--tail", "200")
+      Invoke-ComposeCommand -ComposeArgs $ComposeArgs -Arguments @("logs", "--no-color", "--tail", "200")
     } catch {
       Write-Warning $_.Exception.Message
     }
   }
 
   try {
-    Invoke-Compose -Arguments @("down", "-v", "--remove-orphans")
+    Invoke-ComposeCommand -ComposeArgs $ComposeArgs -Arguments @("down", "-v", "--remove-orphans")
   } catch {
     Write-Warning $_.Exception.Message
   }
