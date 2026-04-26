@@ -30,7 +30,11 @@ tests:
         exp_alerts:
           - exp_labels:
               alertname: SnowPanelBackendDown
+              job: snowpanel-backend
               severity: critical
+            exp_annotations:
+              summary: SnowPanel backend is down
+              description: Prometheus cannot scrape backend /metrics for 2 minutes.
 
       - eval_time: 4m
         alertname: SnowPanelCoreAgentMetricsDown
@@ -38,6 +42,9 @@ tests:
           - exp_labels:
               alertname: SnowPanelCoreAgentMetricsDown
               severity: critical
+            exp_annotations:
+              summary: SnowPanel core-agent metrics endpoint is down
+              description: Neither compose-mode nor host-mode core-agent metrics endpoint is reachable.
 
       - eval_time: 16m
         alertname: SnowPanelBackendAvailabilitySLOCritical
@@ -45,6 +52,9 @@ tests:
           - exp_labels:
               alertname: SnowPanelBackendAvailabilitySLOCritical
               severity: critical
+            exp_annotations:
+              summary: SnowPanel backend availability SLO is critically low
+              description: Backend 5xx-based availability has been below 98% for 10 minutes.
 
       - eval_time: 16m
         alertname: SnowPanelCoreAgentGrpcErrorRateCritical
@@ -52,6 +62,9 @@ tests:
           - exp_labels:
               alertname: SnowPanelCoreAgentGrpcErrorRateCritical
               severity: critical
+            exp_annotations:
+              summary: Core-agent gRPC error rate is critically high
+              description: Core-agent gRPC error ratio has exceeded 5% for 10 minutes.
 
   - name: "SnowPanel warning-only thresholds should not escalate to critical"
     interval: 1m
@@ -74,12 +87,15 @@ tests:
         values: '0+3x30'
 
     alert_rule_test:
-      - eval_time: 16m
+      - eval_time: 21m
         alertname: SnowPanelBackendAvailabilitySLOWarning
         exp_alerts:
           - exp_labels:
               alertname: SnowPanelBackendAvailabilitySLOWarning
               severity: warning
+            exp_annotations:
+              summary: SnowPanel backend availability SLO is degrading
+              description: Backend 5xx-based availability has been below 99.5% for 15 minutes.
 
       - eval_time: 16m
         alertname: SnowPanelBackendAvailabilitySLOCritical
@@ -91,6 +107,9 @@ tests:
           - exp_labels:
               alertname: SnowPanelCoreAgentGrpcErrorRateHigh
               severity: warning
+            exp_annotations:
+              summary: Core-agent gRPC error rate is high
+              description: Core-agent gRPC error ratio has exceeded 2% for 10 minutes.
 
       - eval_time: 11m
         alertname: SnowPanelCoreAgentGrpcErrorRateCritical
