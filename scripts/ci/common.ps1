@@ -73,6 +73,25 @@ function Convert-HeaderValueToString {
   return [string]$Value
 }
 
+function Get-JsonHttpBodyOptions {
+  param(
+    [object]$Body = $null,
+    [int]$JsonDepth = 10
+  )
+
+  if ($null -eq $Body) {
+    return [PSCustomObject]@{
+      RequestBody = ""
+      ContentType = ""
+    }
+  }
+
+  return [PSCustomObject]@{
+    RequestBody = (ConvertTo-Json -InputObject $Body -Depth $JsonDepth -Compress)
+    ContentType = "application/json"
+  }
+}
+
 function Invoke-WebRequestCompat {
   param(
     [Parameter(Mandatory = $true)]
@@ -159,14 +178,8 @@ function Invoke-JsonRequest {
     [int]$JsonDepth = 20
   )
 
-  $requestBody = ""
-  $contentType = ""
-  if ($null -ne $Body) {
-    $requestBody = (ConvertTo-Json -InputObject $Body -Depth 10 -Compress)
-    $contentType = "application/json"
-  }
-
-  $response = Invoke-WebRequestCompat -Method $Method -Uri $Uri -Headers $Headers -ContentType $contentType -Body $requestBody
+  $requestOptions = Get-JsonHttpBodyOptions -Body $Body
+  $response = Invoke-WebRequestCompat -Method $Method -Uri $Uri -Headers $Headers -ContentType $requestOptions.ContentType -Body $requestOptions.RequestBody
   if ($response.StatusCode -notin $ExpectedStatusCodes) {
     throw "Expected status $($ExpectedStatusCodes -join ', ') from $Method $Uri, got $($response.StatusCode). Body: $($response.Content)"
   }
@@ -190,14 +203,8 @@ function Invoke-ApiRequest {
     [int]$JsonDepth = 20
   )
 
-  $requestBody = ""
-  $contentType = ""
-  if ($null -ne $Body) {
-    $requestBody = (ConvertTo-Json -InputObject $Body -Depth 10 -Compress)
-    $contentType = "application/json"
-  }
-
-  $response = Invoke-WebRequestCompat -Method $Method -Uri $Uri -Headers $Headers -ContentType $contentType -Body $requestBody
+  $requestOptions = Get-JsonHttpBodyOptions -Body $Body
+  $response = Invoke-WebRequestCompat -Method $Method -Uri $Uri -Headers $Headers -ContentType $requestOptions.ContentType -Body $requestOptions.RequestBody
 
   if ($ExpectedStatusCodes.Count -gt 0 -and $response.StatusCode -notin $ExpectedStatusCodes) {
     throw "Expected status $($ExpectedStatusCodes -join ', ') from $Method $Uri, got $($response.StatusCode). Body: $($response.Content)"
