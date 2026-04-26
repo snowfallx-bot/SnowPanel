@@ -49,11 +49,14 @@ $encodedFilter = [System.Uri]::EscapeDataString("alertname=$AlertName")
 
 Wait-ObservabilityCondition -Description "Alertmanager routed alert visibility" -TimeoutSeconds $WaitSeconds -TimeoutMessage "Synthetic alert '$AlertName' was not observed with receiver '$ExpectedReceiver' within ${WaitSeconds}s." -Check {
   $alerts = Invoke-ObservabilityJsonRequest -Method "GET" -Uri "$AlertmanagerBaseUrl/api/v2/alerts?active=true&filter=$encodedFilter" -ExpectedStatusCodes @(200)
+  $matchedAlertFound = $false
+
   foreach ($alert in $alerts) {
     if ($alert.labels.alertname -ne $AlertName -or $alert.labels.instance -ne $Instance) {
       continue
     }
 
+    $matchedAlertFound = $true
     if ($null -eq $alert.receivers) {
       continue
     }
@@ -61,6 +64,24 @@ Wait-ObservabilityCondition -Description "Alertmanager routed alert visibility" 
     foreach ($receiver in $alert.receivers) {
       $receiverName = if ($receiver -is [string]) { [string]$receiver } else { [string]$receiver.name }
       if (-not [string]::IsNullOrWhiteSpace($receiverName) -and $receiverName -ieq $ExpectedReceiver) {
+        return $true
+      }
+    }
+  }
+
+  if (-not $matchedAlertFound) {
+    return $false
+  }
+
+  $groups = Invoke-ObservabilityJsonRequest -Method "GET" -Uri "$AlertmanagerBaseUrl/api/v2/alerts/groups?active=true&filter=$encodedFilter" -ExpectedStatusCodes @(200)
+  foreach ($group in $groups) {
+    $groupReceiverName = [string]$group.receiver.name
+    if ([string]::IsNullOrWhiteSpace($groupReceiverName) -or $groupReceiverName -ine $ExpectedReceiver) {
+      continue
+    }
+
+    foreach ($groupAlert in $group.alerts) {
+      if ($groupAlert.labels.alertname -eq $AlertName -and $groupAlert.labels.instance -eq $Instance) {
         return $true
       }
     }
