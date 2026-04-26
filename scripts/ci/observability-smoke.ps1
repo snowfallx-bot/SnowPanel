@@ -1,3 +1,9 @@
+param(
+  [ValidateSet("container-agent", "host-agent")]
+  [string]$AgentMode = "container-agent",
+  [string]$HostAgentTarget = "host.docker.internal:50051"
+)
+
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
@@ -15,12 +21,21 @@ $AlertmanagerBaseUrl = "http://127.0.0.1:$AlertmanagerPort"
 $BootstrapPassword = "ObsSmokeBootstrap1!"
 $RotatedPassword = "ObsSmokeRotated2!"
 $JwtSecret = "ObservabilitySmokeSecret_2026_Check_123!"
+$composeFiles = @(
+  "docker-compose.yml",
+  "docker-compose.observability.yml"
+)
+if ($AgentMode -eq "host-agent") {
+  $composeFiles += "docker-compose.host-agent.yml"
+}
+
 $ComposeArgs = @(
   "compose",
-  "--project-name", $ProjectName,
-  "-f", "docker-compose.yml",
-  "-f", "docker-compose.observability.yml"
+  "--project-name", $ProjectName
 )
+$composeFiles | ForEach-Object {
+  $ComposeArgs += @("-f", $_)
+}
 $Completed = $false
 
 Assert-DockerAvailable -ScriptPath "scripts/ci/observability-smoke.ps1"
@@ -37,8 +52,16 @@ try {
   $env:JWT_SECRET = $JwtSecret
   $env:DEFAULT_ADMIN_PASSWORD = $BootstrapPassword
   $env:LOGIN_ATTEMPT_STORE = "redis"
+  if ($AgentMode -eq "host-agent") {
+    $env:AGENT_TARGET = $HostAgentTarget
+  }
 
-  Invoke-ComposeCommand -ComposeArgs $ComposeArgs -Arguments @("up", "-d", "--build", "postgres", "redis", "core-agent", "backend", "jaeger", "otel-collector", "alertmanager", "prometheus")
+  $services = @("postgres", "redis", "backend", "jaeger", "otel-collector", "alertmanager", "prometheus")
+  if ($AgentMode -eq "container-agent") {
+    $services = @("postgres", "redis", "core-agent", "backend", "jaeger", "otel-collector", "alertmanager", "prometheus")
+  }
+
+  Invoke-ComposeCommand -ComposeArgs $ComposeArgs -Arguments (@("up", "-d", "--build") + $services)
 
   Wait-BackendReadyJson -BackendBaseUrl $BackendBaseUrl
 
