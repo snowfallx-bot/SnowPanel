@@ -57,7 +57,7 @@ $Completed = $false
 function Test-TcpPortOpen {
   param(
     [Parameter(Mandatory = $true)]
-    [string]$Host,
+    [string]$Address,
     [Parameter(Mandatory = $true)]
     [int]$Port,
     [int]$TimeoutMilliseconds = 1000
@@ -65,7 +65,7 @@ function Test-TcpPortOpen {
 
   $client = [System.Net.Sockets.TcpClient]::new()
   try {
-    $connectTask = $client.ConnectAsync($Host, $Port)
+    $connectTask = $client.ConnectAsync($Address, $Port)
     return $connectTask.Wait($TimeoutMilliseconds) -and $client.Connected
   } catch {
     return $false
@@ -110,11 +110,11 @@ try {
   Invoke-ComposeCommand -ComposeArgs $ComposeArgs -Arguments (@("up", "-d", "--build") + $services)
 
   Wait-UntilReady -Description "otel collector grpc endpoint" -Attempts 60 -DelaySeconds 1 -Check {
-    return Test-TcpPortOpen -Host "127.0.0.1" -Port $OtelCollectorGrpcPort -TimeoutMilliseconds 800
+    return Test-TcpPortOpen -Address "127.0.0.1" -Port $OtelCollectorGrpcPort -TimeoutMilliseconds 800
   }
 
   Wait-UntilReady -Description "otel collector http endpoint" -Attempts 60 -DelaySeconds 1 -Check {
-    return Test-TcpPortOpen -Host "127.0.0.1" -Port $OtelCollectorHttpPort -TimeoutMilliseconds 800
+    return Test-TcpPortOpen -Address "127.0.0.1" -Port $OtelCollectorHttpPort -TimeoutMilliseconds 800
   }
 
   Wait-BackendReadyJson -BackendBaseUrl $BackendBaseUrl
