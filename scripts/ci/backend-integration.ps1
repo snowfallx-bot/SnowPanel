@@ -81,20 +81,18 @@ function Wait-ForTaskTerminal {
     [int]$DelaySeconds = 1
   )
 
-  $terminalTaskDetail = $null
-  Wait-UntilReady -Description "task $TaskID terminal status" -Attempts $Attempts -DelaySeconds $DelaySeconds -Check {
+  for ($attempt = 1; $attempt -le $Attempts; $attempt++) {
     $detailResponse = Invoke-ApiRequest -Method "GET" -Uri "$BaseUrl/api/v1/tasks/$TaskID" -Headers $Headers
     Assert-ApiSuccess -Response $detailResponse -Description "fetch task detail $TaskID"
     $status = [string]$detailResponse.Json.data.summary.status
     if ($status -in @("success", "failed", "canceled")) {
-      $terminalTaskDetail = $detailResponse.Json.data
-      return $true
+      return $detailResponse.Json.data
     }
 
-    return $false
+    Start-Sleep -Seconds $DelaySeconds
   }
 
-  return $terminalTaskDetail
+  throw "Timed out waiting for task $TaskID to reach terminal status"
 }
 
 try {
