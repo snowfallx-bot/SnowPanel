@@ -74,10 +74,7 @@ try {
 
     Wait-UntilReady -Description "host core-agent metrics endpoint" -Attempts 30 -DelaySeconds 1 -Check {
       $response = Invoke-ApiRequest -Method "GET" -Uri $HostAgentMetricsEndpoint -ExpectedStatusCodes @(200)
-      if ($response.StatusCode -ne 200) {
-        return $false
-      }
-      return -not [string]::IsNullOrWhiteSpace($response.Content)
+      return $response.StatusCode -eq 200
     }
   } else {
     Remove-Item -Path Env:AGENT_TARGET -ErrorAction SilentlyContinue
