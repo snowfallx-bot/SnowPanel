@@ -11,76 +11,61 @@
 下面是改动正文：
 
 ============
-本轮继续按“加快 P2-2 收口”推进，重点从“脚本可跑”升级到“host-agent 模式可在 workflow 里直接执行”。
+本轮继续按“加快 P2-2 收口”推进，核心是把 observability 冒烟链路再收敛一层并提高 host-agent 模式的执行稳健性。
 
 本轮实际改动
 
-1. host-agent 观测冒烟工作流真正可执行
+1. full-smoke 统一双严重级别告警校验入口
+   - `scripts/observability/full-smoke.ps1`
+   - 新增 `-ValidateAllAlertSeverities` 开关：
+     - 开启后会在一次 full-smoke 中依次校验 `critical` + `warning`
+     - 自动为不同严重级别生成区分的告警名后缀，避免互相干扰
+   - 保留原有默认行为（不加开关时仍只校验单一 severity）。
+
+2. CI observability 冒烟去掉重复 warning 调用
+   - `scripts/ci/observability-smoke.ps1`
+   - 改为只调用一次 `full-smoke.ps1 -ValidateAllAlertSeverities`，删除原先重复的单独 warning 调用段。
+   - 同时补强执行稳健性：
+     - `container-agent` 模式显式启用 compose profile：`--profile container-agent`
+     - `container-agent` 模式下主动清理 `AGENT_TARGET`，避免环境串扰误连 host-agent
+     - `host-agent` 模式下新增 `HostAgentTarget` 非空校验
+
+3. host-agent workflow 端口/指标地址与输入对齐
    - `.github/workflows/observability-smoke.yml`
-   - 在 `agent_mode=host-agent` 时新增完整链路：
-     - 安装 Rust toolchain
-     - 构建 `core-agent` release 二进制
-     - 在 runner 宿主机后台启动 `core-agent`
-     - 轮询 `127.0.0.1:50051` 端口直到 ready
-     - 失败时上传 host-agent 日志 artifact
-     - 结束时回收 host-agent 进程
-   - workflow 新增输入：
-     - `host_agent_metrics_base_url`
-   - 运行 smoke 脚本时透传：
-     - `agent_mode`
-     - `host_agent_target`
-     - `host_agent_metrics_base_url`
-
-2. host-agent 模式下的 CI 脚本前置探测
-   - `scripts/ci/observability-smoke.ps1`
-   - 新增参数 `-HostAgentMetricsBaseUrl`（默认 `http://127.0.0.1:9108`）
-   - 在 `host-agent` 模式下，先探测宿主机 `core-agent` `/metrics` 可用且包含关键指标，再继续拉起 backend/observability 栈。
-
-3. warning 告警冒烟去固定实例名
-   - `scripts/ci/observability-smoke.ps1`
-   - 调用 `alertmanager-smoke.ps1` 时不再传固定 `-Instance`，直接复用其唯一默认实例，避免历史同名告警干扰。
-
-4. tracing 冒烟强关联校验（本轮起始已并入）
-   - `scripts/observability/common.ps1`
-     - 新增 `Invoke-ObservabilityApiRequest`，统一返回 `status/content/json/headers`
-   - `scripts/observability/trace-smoke.ps1`
-     - 强校验响应 `X-Request-ID`
-     - 校验 Jaeger 中同一 request_id 的 backend/core-agent 关联
-     - 校验 core-agent 必含两个关键 `grpc.method` span
+   - 在启动宿主机 core-agent 时，不再把端口写死为 `50051`：
+     - 从 `host_agent_target` 解析端口并用于 `CORE_AGENT_PORT` 与就绪探测
+     - 从 `host_agent_metrics_base_url` 解析端口并用于 `CORE_AGENT_METRICS_PORT`
+   - 避免“输入改了，但宿主机 core-agent 仍按默认端口启动”的不一致问题。
 
 本轮本地验证
 
 1. 已执行并通过：
    - PowerShell 语法解析：
+     - `scripts/observability/full-smoke.ps1`
      - `scripts/ci/observability-smoke.ps1`
-     - `scripts/observability/common.ps1`
-     - `scripts/observability/trace-smoke.ps1`
 
 2. 说明：
-   - 当前环境未实跑 Docker + host-agent 全链路；运行态验收需在具备 Docker 的环境执行 workflow 或脚本实跑。
+   - 当前环境未实跑 Docker/Actions；运行态验收需在 GitHub workflow 或具备 Docker 的环境执行。
 
 commit 摘要
 
-- `819bf19 test(observability): tighten trace correlation validation with request id`
-- `866535d ci(observability): bootstrap host core-agent for host-mode smoke runs`
-- `e267437 test(ci): preflight host-agent metrics in observability smoke`
-- `0fa9da9 ci(observability): expose host-agent metrics input for smoke workflow`
-- `75c948e test(ci): let warning alert smoke use unique default instance`
+- `fbc9751 refactor(observability): unify dual-severity alert checks via full smoke`
+- `02b1d90 test(ci): harden observability smoke env isolation and profile selection`
+- `639583f ci(observability): align host-agent bootstrap ports with workflow inputs`
 
 希望接下来的 AI 做什么
 
-1. 优先执行运行态验收（P2-2 最关键）：
-   - 手动 workflow 触发两次：
-     - `agent_mode=container-agent`
-     - `agent_mode=host-agent`
-   - 确认两次都通过 trace + alert 双冒烟。
+1. 直接触发 `Observability Smoke` workflow 两次做验收：
+   - `agent_mode=container-agent`
+   - `agent_mode=host-agent`
+   - 关注是否都通过 trace 强关联 + alert 双级别校验。
 
-2. 若 host-agent 模式失败，优先排查：
-   - workflow 中 host-agent 是否在 smoke 前成功监听 `50051`
-   - `host_agent_target` 与 backend 实际连通是否一致
-   - Jaeger 中 core-agent span 是否带 `snowpanel.request_id` 与必需 `grpc.method`
+2. 若 host-agent 模式失败，优先检查：
+   - workflow 日志里解析出的 `host_agent_target` 端口是否与 backend 连接目标一致
+   - host-agent 启动日志是否有 OTLP 导出错误（collector 端口不可达）
+   - Jaeger 中是否出现同 request_id 的 backend/core-agent span 以及必需 grpc.method。
 
 3. 验收通过后继续 P2-3（仅代码）：
-   - 继续清理脚本中重复 wait/request 逻辑，不做文档修补。
+   - 继续收敛脚本重复逻辑，不补文档。
 
 by: gpt-5.5
