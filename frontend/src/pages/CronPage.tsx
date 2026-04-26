@@ -135,13 +135,17 @@ export function CronPage() {
     [enabledFilter, filterKeyword, sortMode]
   );
 
+  async function runMutationAction(action: () => Promise<unknown>) {
+    try {
+      await action();
+    } catch {
+      // onError handlers already update feedback.
+    }
+  }
+
   async function handleCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    try {
-      await createMutation.mutateAsync({ expression, command, enabled });
-    } catch {
-      // onError already updates feedback.
-    }
+    await runMutationAction(() => createMutation.mutateAsync({ expression, command, enabled }));
   }
 
   function beginEdit(task: CronTask) {
@@ -152,18 +156,16 @@ export function CronPage() {
   }
 
   async function saveEdit(taskId: string) {
-    try {
-      await updateMutation.mutateAsync({
+    await runMutationAction(() =>
+      updateMutation.mutateAsync({
         id: taskId,
         payload: {
           expression: editingExpression,
           command: editingCommand,
           enabled: editingEnabled
         }
-      });
-    } catch {
-      // onError already updates feedback.
-    }
+      })
+    );
   }
 
   async function handleDelete(taskId: string) {
@@ -171,11 +173,7 @@ export function CronPage() {
     if (!confirmed) {
       return;
     }
-    try {
-      await deleteMutation.mutateAsync(taskId);
-    } catch {
-      // onError already updates feedback.
-    }
+    await runMutationAction(() => deleteMutation.mutateAsync(taskId));
   }
 
   function clearTaskFilters() {
