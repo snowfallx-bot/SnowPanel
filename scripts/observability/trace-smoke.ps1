@@ -219,27 +219,27 @@ $requiredCoreGrpcMethods = @(
   "/snowpanel.agent.v1.SystemService/GetSystemOverview",
   "/snowpanel.agent.v1.SystemService/GetRealtimeResource"
 )
-$triggerCount = 0
-$nextTriggerAtSeconds = [double][Math]::Max(1, $TriggerRetryIntervalSeconds)
+$script:triggerCount = 0
+$script:nextTriggerAtSeconds = [double][Math]::Max(1, $TriggerRetryIntervalSeconds)
 $triggerStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
 
 Write-Host "Triggering core-agent path via GET $BackendBaseUrl/api/v1/dashboard/summary ..."
 Invoke-TraceTriggerRequest -AccessToken $AccessToken -BackendBaseUrl $BackendBaseUrl -RequestId $RequestId
-$triggerCount++
-Write-Host "Dashboard request succeeded. request_id=$RequestId trigger_count=$triggerCount"
+$script:triggerCount++
+Write-Host "Dashboard request succeeded. request_id=$RequestId trigger_count=$script:triggerCount"
 Write-Host "Polling Jaeger API for correlated trace (timeout=${TraceWaitSeconds}s, retry_interval=${TriggerRetryIntervalSeconds}s) ..."
 
-$foundTrace = $null
-$foundCoreGrpcMethods = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-$lastObservation = "No traces fetched yet. trigger_count=0."
+$script:foundTrace = $null
+$script:foundCoreGrpcMethods = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+$script:lastObservation = "No traces fetched yet. trigger_count=0."
 
 try {
   Wait-ObservabilityCondition -Description "Jaeger correlated trace" -TimeoutSeconds $TraceWaitSeconds -TimeoutMessage "No request-correlated cross-service trace found in Jaeger within ${TraceWaitSeconds}s. Check OTEL env vars, collector health, and Jaeger ingestion." -Check {
-    if ($triggerStopwatch.Elapsed.TotalSeconds -ge $nextTriggerAtSeconds) {
+    if ($triggerStopwatch.Elapsed.TotalSeconds -ge $script:nextTriggerAtSeconds) {
       Invoke-TraceTriggerRequest -AccessToken $AccessToken -BackendBaseUrl $BackendBaseUrl -RequestId $RequestId
-      $triggerCount++
-      $nextTriggerAtSeconds += [double][Math]::Max(1, $TriggerRetryIntervalSeconds)
-      Write-Host "Re-triggered dashboard request for trace capture. request_id=$RequestId trigger_count=$triggerCount"
+      $script:triggerCount++
+      $script:nextTriggerAtSeconds += [double][Math]::Max(1, $TriggerRetryIntervalSeconds)
+      Write-Host "Re-triggered dashboard request for trace capture. request_id=$RequestId trigger_count=$script:triggerCount"
     }
 
     $traceCandidates = Get-JaegerTraceCandidates -JaegerBaseUrl $JaegerBaseUrl
@@ -249,7 +249,7 @@ try {
       if (-not [string]::IsNullOrWhiteSpace($traceCandidates.FallbackError)) {
         $fallbackSuffix = " global_fallback_error=$($traceCandidates.FallbackError)"
       }
-      $lastObservation = "Jaeger returned 0 traces via $($traceCandidates.Source). trigger_count=$triggerCount.$fallbackSuffix"
+      $script:lastObservation = "Jaeger returned 0 traces via $($traceCandidates.Source). trigger_count=$script:triggerCount.$fallbackSuffix"
       return $false
     }
 
@@ -279,7 +279,7 @@ try {
       }
 
       if (-not (Trace-HasRequestIdForService -Trace $trace -ServiceName "snowpanel-backend" -RequestId $RequestId)) {
-        $lastObservation = "Found cross-service trace $($trace.traceID) after request start, but backend span missing snowpanel.request_id=$RequestId."
+        $script:lastObservation = "Found cross-service trace $($trace.traceID) after request start, but backend span missing snowpanel.request_id=$RequestId."
         continue
       }
 
@@ -295,32 +295,32 @@ try {
         if ([string]::IsNullOrWhiteSpace($observedMethods)) {
           $observedMethods = "(none)"
         }
-        $lastObservation = "Found trace $($trace.traceID) with request_id=$RequestId, but missing expected core-agent grpc.method tags: $($missingMethods -join ', '). Observed: $observedMethods"
+        $script:lastObservation = "Found trace $($trace.traceID) with request_id=$RequestId, but missing expected core-agent grpc.method tags: $($missingMethods -join ', '). Observed: $observedMethods"
         continue
       }
 
-      $foundTrace = $trace
-      $foundCoreGrpcMethods = $coreGrpcMethods
+      $script:foundTrace = $trace
+      $script:foundCoreGrpcMethods = $coreGrpcMethods
       return $true
     }
 
     if ($validTraceCount -eq 0) {
-      $lastObservation = "Jaeger returned $($traces.Count) trace envelopes, but none had valid spans/processes. trigger_count=$triggerCount."
+      $script:lastObservation = "Jaeger returned $($traces.Count) trace envelopes, but none had valid spans/processes. trigger_count=$script:triggerCount."
       return $false
     }
 
-    $lastObservation = "Jaeger returned $validTraceCount valid traces, but none matched request_id=$RequestId with required cross-service spans. trigger_count=$triggerCount."
+    $script:lastObservation = "Jaeger returned $validTraceCount valid traces, but none matched request_id=$RequestId with required cross-service spans. trigger_count=$script:triggerCount."
     return $false
   }
 } catch {
-  throw "$($_.Exception.Message) Last observation: $lastObservation"
+  throw "$($_.Exception.Message) Last observation: $script:lastObservation"
 }
 
-$serviceNames = (Get-TraceServiceSet -Trace $foundTrace).ToArray() | Sort-Object
-$coreMethods = ($foundCoreGrpcMethods.ToArray() | Sort-Object) -join ", "
+$serviceNames = (Get-TraceServiceSet -Trace $script:foundTrace).ToArray() | Sort-Object
+$coreMethods = ($script:foundCoreGrpcMethods.ToArray() | Sort-Object) -join ", "
 Write-Host "Trace validation passed."
-Write-Host "trace_id: $($foundTrace.traceID)"
+Write-Host "trace_id: $($script:foundTrace.traceID)"
 Write-Host "services: $($serviceNames -join ', ')"
 Write-Host "core grpc methods: $coreMethods"
 Write-Host "request_id: $RequestId"
-Write-Host "trigger_count: $triggerCount"
+Write-Host "trigger_count: $script:triggerCount"
