@@ -266,6 +266,62 @@ function Wait-UntilReady {
   throw "Timed out waiting for $Description"
 }
 
+function Wait-ApiStatus {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$Description,
+    [Parameter(Mandatory = $true)]
+    [string]$Uri,
+    [int[]]$ExpectedStatusCodes = @(200),
+    [int]$Attempts = 60,
+    [int]$DelaySeconds = 2
+  )
+
+  Wait-UntilReady -Description $Description -Attempts $Attempts -DelaySeconds $DelaySeconds -Check {
+    $response = Invoke-ApiRequest -Method "GET" -Uri $Uri -ExpectedStatusCodes $ExpectedStatusCodes
+    return $response.StatusCode -in $ExpectedStatusCodes
+  }
+}
+
+function Wait-JsonReady {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$Description,
+    [Parameter(Mandatory = $true)]
+    [string]$Uri,
+    [scriptblock]$Predicate = { param($json) return $null -ne $json },
+    [int]$Attempts = 60,
+    [int]$DelaySeconds = 2
+  )
+
+  Wait-UntilReady -Description $Description -Attempts $Attempts -DelaySeconds $DelaySeconds -Check {
+    $json = Invoke-JsonRequest -Method "GET" -Uri $Uri
+    return & $Predicate $json
+  }
+}
+
+function Wait-ApiJsonReady {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$Description,
+    [Parameter(Mandatory = $true)]
+    [string]$Uri,
+    [int[]]$ExpectedStatusCodes = @(200),
+    [scriptblock]$Predicate = { param($json) return $null -ne $json },
+    [int]$Attempts = 60,
+    [int]$DelaySeconds = 2
+  )
+
+  Wait-UntilReady -Description $Description -Attempts $Attempts -DelaySeconds $DelaySeconds -Check {
+    $response = Invoke-ApiRequest -Method "GET" -Uri $Uri -ExpectedStatusCodes $ExpectedStatusCodes
+    if ($response.StatusCode -notin $ExpectedStatusCodes) {
+      return $false
+    }
+
+    return & $Predicate $response.Json
+  }
+}
+
 function Test-BackendReadyChecks {
   param(
     [Parameter(Mandatory = $false)]
@@ -287,8 +343,8 @@ function Wait-BackendReadyJson {
     [int]$DelaySeconds = 2
   )
 
-  Wait-UntilReady -Description $Description -Attempts $Attempts -DelaySeconds $DelaySeconds -Check {
-    $ready = Invoke-JsonRequest -Method "GET" -Uri "$BackendBaseUrl/ready"
+  Wait-JsonReady -Description $Description -Uri "$BackendBaseUrl/ready" -Attempts $Attempts -DelaySeconds $DelaySeconds -Predicate {
+    param($ready)
     return Test-BackendReadyChecks -Envelope $ready
   }
 }
@@ -302,10 +358,9 @@ function Wait-BackendReadyApi {
     [int]$DelaySeconds = 2
   )
 
-  Wait-UntilReady -Description $Description -Attempts $Attempts -DelaySeconds $DelaySeconds -Check {
-    $ready = Invoke-ApiRequest -Method "GET" -Uri "$BackendBaseUrl/ready"
-    return $ready.StatusCode -eq 200 -and
-      (Test-BackendReadyChecks -Envelope $ready.Json)
+  Wait-ApiJsonReady -Description $Description -Uri "$BackendBaseUrl/ready" -ExpectedStatusCodes @(200) -Attempts $Attempts -DelaySeconds $DelaySeconds -Predicate {
+    param($readyJson)
+    return Test-BackendReadyChecks -Envelope $readyJson
   }
 }
 
@@ -318,10 +373,7 @@ function Wait-FrontendStartup {
     [int]$DelaySeconds = 2
   )
 
-  Wait-UntilReady -Description $Description -Attempts $Attempts -DelaySeconds $DelaySeconds -Check {
-    $response = Invoke-WebRequestCompat -Method "GET" -Uri $FrontendBaseUrl
-    return $response.StatusCode -eq 200
-  }
+  Wait-ApiStatus -Description $Description -Uri $FrontendBaseUrl -ExpectedStatusCodes @(200) -Attempts $Attempts -DelaySeconds $DelaySeconds
 }
 
 function Wait-FrontendProxyHealth {
@@ -333,9 +385,9 @@ function Wait-FrontendProxyHealth {
     [int]$DelaySeconds = 2
   )
 
-  Wait-UntilReady -Description $Description -Attempts $Attempts -DelaySeconds $DelaySeconds -Check {
-    $proxyHealth = Invoke-JsonRequest -Method "GET" -Uri "$FrontendBaseUrl/health"
-    return $proxyHealth.code -eq 0 -and $proxyHealth.data.checks.database -eq "up" -and $proxyHealth.data.checks.agent -eq "up"
+  Wait-JsonReady -Description $Description -Uri "$FrontendBaseUrl/health" -Attempts $Attempts -DelaySeconds $DelaySeconds -Predicate {
+    param($proxyHealth)
+    return Test-BackendReadyChecks -Envelope $proxyHealth
   }
 }
 

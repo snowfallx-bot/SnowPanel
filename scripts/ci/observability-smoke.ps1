@@ -92,40 +92,6 @@ function Wait-TcpPortReady {
   }
 }
 
-function Wait-HttpStatusReady {
-  param(
-    [Parameter(Mandatory = $true)]
-    [string]$Description,
-    [Parameter(Mandatory = $true)]
-    [string]$Uri,
-    [int[]]$ExpectedStatusCodes = @(200),
-    [int]$Attempts = 60,
-    [int]$DelaySeconds = 2
-  )
-
-  Wait-UntilReady -Description $Description -Attempts $Attempts -DelaySeconds $DelaySeconds -Check {
-    $response = Invoke-ApiRequest -Method "GET" -Uri $Uri -ExpectedStatusCodes $ExpectedStatusCodes
-    return $response.StatusCode -in $ExpectedStatusCodes
-  }
-}
-
-function Wait-JsonEndpointReady {
-  param(
-    [Parameter(Mandatory = $true)]
-    [string]$Description,
-    [Parameter(Mandatory = $true)]
-    [string]$Uri,
-    [scriptblock]$Predicate = { param($json) return $null -ne $json },
-    [int]$Attempts = 60,
-    [int]$DelaySeconds = 2
-  )
-
-  Wait-UntilReady -Description $Description -Attempts $Attempts -DelaySeconds $DelaySeconds -Check {
-    $json = Invoke-JsonRequest -Method "GET" -Uri $Uri
-    return & $Predicate $json
-  }
-}
-
 Assert-DockerAvailable -ScriptPath "scripts/ci/observability-smoke.ps1"
 
 try {
@@ -146,7 +112,7 @@ try {
     }
     $env:AGENT_TARGET = $HostAgentTarget
 
-    Wait-HttpStatusReady -Description "host core-agent metrics endpoint" -Uri $HostAgentMetricsEndpoint -ExpectedStatusCodes @(200) -Attempts 30 -DelaySeconds 1
+    Wait-ApiStatus -Description "host core-agent metrics endpoint" -Uri $HostAgentMetricsEndpoint -ExpectedStatusCodes @(200) -Attempts 30 -DelaySeconds 1
   } else {
     Remove-Item -Path Env:AGENT_TARGET -ErrorAction SilentlyContinue
   }
@@ -164,11 +130,11 @@ try {
 
   Wait-BackendReadyJson -BackendBaseUrl $BackendBaseUrl
 
-  Wait-HttpStatusReady -Description "jaeger ui" -Uri $JaegerBaseUrl -ExpectedStatusCodes @(200)
+  Wait-ApiStatus -Description "jaeger ui" -Uri $JaegerBaseUrl -ExpectedStatusCodes @(200)
 
-  Wait-JsonEndpointReady -Description "alertmanager api" -Uri "$AlertmanagerBaseUrl/api/v2/status"
+  Wait-JsonReady -Description "alertmanager api" -Uri "$AlertmanagerBaseUrl/api/v2/status"
 
-  Wait-JsonEndpointReady -Description "prometheus rules api" -Uri "$PrometheusBaseUrl/api/v1/rules" -Predicate {
+  Wait-JsonReady -Description "prometheus rules api" -Uri "$PrometheusBaseUrl/api/v1/rules" -Predicate {
     param($rules)
     return $null -ne $rules -and $rules.status -eq "success"
   }
