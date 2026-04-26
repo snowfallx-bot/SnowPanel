@@ -29,6 +29,7 @@
      - `container-agent` 模式显式启用 compose profile：`--profile container-agent`
      - `container-agent` 模式下主动清理 `AGENT_TARGET`，避免环境串扰误连 host-agent
      - `host-agent` 模式下新增 `HostAgentTarget` 非空校验
+     - `HostAgentMetricsBaseUrl` 支持 base URL / 完整 metrics URL 两种输入并自动归一化，避免 `.../metrics/metrics` 误拼接
 
 3. host-agent workflow 端口/指标地址与输入对齐
    - `.github/workflows/observability-smoke.yml`
@@ -52,6 +53,7 @@ commit 摘要
 - `fbc9751 refactor(observability): unify dual-severity alert checks via full smoke`
 - `02b1d90 test(ci): harden observability smoke env isolation and profile selection`
 - `639583f ci(observability): align host-agent bootstrap ports with workflow inputs`
+- `be0c259 test(ci): normalize host-agent metrics endpoint input`
 
 希望接下来的 AI 做什么
 
