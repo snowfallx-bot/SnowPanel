@@ -103,15 +103,8 @@ try {
     -JaegerBaseUrl $JaegerBaseUrl `
     -AlertmanagerBaseUrl $AlertmanagerBaseUrl `
     -TraceWaitSeconds 45 `
-    -AlertWaitSeconds 30
-
-  $alertSmokeScript = Join-Path $PSScriptRoot "..\observability\alertmanager-smoke.ps1"
-  & $alertSmokeScript `
-    -AlertmanagerBaseUrl $AlertmanagerBaseUrl `
-    -AlertName "SnowPanelSmokeAlertWarning" `
-    -Severity "warning" `
-    -AlertDurationSeconds 120 `
-    -WaitSeconds 30
+    -AlertWaitSeconds 30 `
+    -ValidateAllAlertSeverities
 
   $Completed = $true
   Write-Host "Observability smoke test passed."

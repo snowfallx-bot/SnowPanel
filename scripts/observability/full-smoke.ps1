@@ -15,7 +15,8 @@ param(
   [ValidateSet("critical", "warning")]
   [string]$Severity = "critical",
   [int]$AlertDurationSeconds = 120,
-  [int]$AlertWaitSeconds = 20
+  [int]$AlertWaitSeconds = 20,
+  [switch]$ValidateAllAlertSeverities
 )
 
 $ErrorActionPreference = "Stop"
@@ -59,18 +60,34 @@ if (-not [string]::IsNullOrWhiteSpace($RequestId)) {
   $traceArgs.RequestId = $RequestId
 }
 
-$alertArgs = @{
-  AlertmanagerBaseUrl = $AlertmanagerBaseUrl
-  AlertName           = $AlertName
-  Severity            = $Severity
-  AlertDurationSeconds = $AlertDurationSeconds
-  WaitSeconds         = $AlertWaitSeconds
-}
-
 Write-Host "Running trace smoke validation ..."
 & $traceScript @traceArgs
 
-Write-Host "Running alertmanager smoke validation ..."
-& $alertScript @alertArgs
+$severitiesToRun = @($Severity)
+if ($ValidateAllAlertSeverities) {
+  foreach ($candidate in @("critical", "warning")) {
+    if ($candidate -notin $severitiesToRun) {
+      $severitiesToRun += $candidate
+    }
+  }
+}
 
-Write-Host "Observability full smoke passed (trace + alertmanager)."
+foreach ($severityToRun in $severitiesToRun) {
+  $alertNameToRun = $AlertName
+  if ($ValidateAllAlertSeverities) {
+    $alertNameToRun = "$AlertName-$severityToRun"
+  }
+
+  $alertArgs = @{
+    AlertmanagerBaseUrl  = $AlertmanagerBaseUrl
+    AlertName            = $alertNameToRun
+    Severity             = $severityToRun
+    AlertDurationSeconds = $AlertDurationSeconds
+    WaitSeconds          = $AlertWaitSeconds
+  }
+
+  Write-Host "Running alertmanager smoke validation (severity=$severityToRun) ..."
+  & $alertScript @alertArgs
+}
+
+Write-Host "Observability full smoke passed (trace + alertmanager severities: $($severitiesToRun -join ', '))."
