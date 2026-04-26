@@ -33,6 +33,15 @@ Validate Prometheus and Alertmanager configs by running `promtool`/`amtool` insi
 pwsh -File ./scripts/observability/validate-config.ps1
 ```
 
+## `prometheus-rules-smoke.ps1`
+
+Validate that required recording and alert rules are loaded in a running Prometheus instance.
+
+```powershell
+pwsh -File ./scripts/observability/prometheus-rules-smoke.ps1 `
+  -PrometheusBaseUrl "http://127.0.0.1:9090"
+```
+
 ## `alertmanager-smoke.ps1`
 
 Inject a synthetic alert into Alertmanager and verify it is observable via Alertmanager API.

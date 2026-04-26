@@ -207,6 +207,7 @@ Prometheus 默认会把告警发送到 Alertmanager（`alertmanager:9093`）。
 3. 保留或扩展抑制规则，让同一 `alertname` 下 `critical` 自动抑制重复 `warning` 噪音。
 4. 发布并校验路由配置：
    - `make up-observability`（或 `make up-host-agent-observability`）
+   - `pwsh -File ./scripts/observability/prometheus-rules-smoke.ps1 -PrometheusBaseUrl "http://127.0.0.1:${PROMETHEUS_PORT:-9090}"`
    - 在 Alertmanager UI（`/#/status`）确认 receiver 与路由状态
 5. 做一次可控投递验证：
    - 可直接注入一条合成告警：

@@ -207,6 +207,7 @@ Use this checklist when moving from baseline no-op routing to real production de
 3. Keep (or extend) inhibition rules so `critical` suppresses duplicate `warning` noise for the same `alertname`.
 4. Roll out and validate routing:
    - `make up-observability` (or `make up-host-agent-observability`)
+   - `pwsh -File ./scripts/observability/prometheus-rules-smoke.ps1 -PrometheusBaseUrl "http://127.0.0.1:${PROMETHEUS_PORT:-9090}"`
    - verify receiver/routing state in Alertmanager UI (`/#/status`)
 5. Run a controlled delivery test:
    - either inject a synthetic alert:

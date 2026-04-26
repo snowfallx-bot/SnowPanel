@@ -7,6 +7,7 @@ $PrometheusPort = "19090"
 $AlertmanagerPort = "19093"
 $JaegerPort = "16687"
 $BackendBaseUrl = "http://127.0.0.1:$BackendPort"
+$PrometheusBaseUrl = "http://127.0.0.1:$PrometheusPort"
 $JaegerBaseUrl = "http://127.0.0.1:$JaegerPort"
 $AlertmanagerBaseUrl = "http://127.0.0.1:$AlertmanagerPort"
 $BootstrapPassword = "ObsSmokeBootstrap1!"
@@ -139,6 +140,14 @@ try {
     $status = Invoke-JsonRequest -Method "GET" -Uri "$AlertmanagerBaseUrl/api/v2/status"
     return $null -ne $status
   }
+
+  Wait-UntilReady -Description "prometheus rules api" -Check {
+    $rules = Invoke-JsonRequest -Method "GET" -Uri "$PrometheusBaseUrl/api/v1/rules"
+    return $null -ne $rules -and $rules.status -eq "success"
+  }
+
+  $rulesSmokeScript = Join-Path $PSScriptRoot "..\observability\prometheus-rules-smoke.ps1"
+  & $rulesSmokeScript -PrometheusBaseUrl $PrometheusBaseUrl
 
   $loginEnvelope = Invoke-JsonRequest -Method "POST" -Uri "$BackendBaseUrl/api/v1/auth/login" -Body @{
     username = "admin"
