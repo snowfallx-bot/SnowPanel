@@ -62,13 +62,37 @@ jobs:
             throw "core-agent binary not found at $agentBinary"
           }
 
+          $hostAgentTarget = "${{ inputs.host_agent_target }}".Trim()
+          if ([string]::IsNullOrWhiteSpace($hostAgentTarget)) {
+            throw "host_agent_target must not be empty in host-agent mode."
+          }
+
+          $targetSegments = $hostAgentTarget.Split(":")
+          if ($targetSegments.Count -lt 2) {
+            throw "host_agent_target '$hostAgentTarget' must be in '<host>:<port>' format."
+          }
+
+          $agentPort = 0
+          if (-not [int]::TryParse($targetSegments[-1], [ref]$agentPort) -or $agentPort -lt 1 -or $agentPort -gt 65535) {
+            throw "host_agent_target '$hostAgentTarget' has invalid port."
+          }
+
+          $metricsBaseUrl = "${{ inputs.host_agent_metrics_base_url }}".Trim()
+          if ([string]::IsNullOrWhiteSpace($metricsBaseUrl)) {
+            throw "host_agent_metrics_base_url must not be empty in host-agent mode."
+          }
+          $metricsUri = $null
+          if (-not [Uri]::TryCreate($metricsBaseUrl, [System.UriKind]::Absolute, [ref]$metricsUri)) {
+            throw "host_agent_metrics_base_url '$metricsBaseUrl' is not a valid absolute URI."
+          }
+
           $agentEnv = @{
             APP_ENV                      = "production"
             CORE_AGENT_HOST              = "0.0.0.0"
-            CORE_AGENT_PORT              = "50051"
+            CORE_AGENT_PORT              = "$agentPort"
             CORE_AGENT_METRICS_ENABLED   = "true"
             CORE_AGENT_METRICS_HOST      = "127.0.0.1"
-            CORE_AGENT_METRICS_PORT      = "9108"
+            CORE_AGENT_METRICS_PORT      = "$($metricsUri.Port)"
             OTEL_TRACING_ENABLED         = "true"
             OTEL_SERVICE_NAME            = "snowpanel-core-agent"
             OTEL_EXPORTER_OTLP_ENDPOINT  = "127.0.0.1:4317"
@@ -93,7 +117,7 @@ jobs:
 
             $client = [System.Net.Sockets.TcpClient]::new()
             try {
-              $task = $client.ConnectAsync("127.0.0.1", 50051)
+              $task = $client.ConnectAsync("127.0.0.1", $agentPort)
               if ($task.Wait(500) -and $client.Connected) {
                 $started = $true
                 break
@@ -107,7 +131,7 @@ jobs:
           }
 
           if (-not $started) {
-            throw "core-agent did not bind to 127.0.0.1:50051 within timeout."
+            throw "core-agent did not bind to 127.0.0.1:$agentPort within timeout."
           }
 
       - name: Validate Observability Configs
