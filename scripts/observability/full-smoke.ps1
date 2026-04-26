@@ -11,6 +11,8 @@ param(
   [string]$AlertmanagerBaseUrl = "http://127.0.0.1:9093",
   [string]$RequestId = "",
   [int]$TraceWaitSeconds = 30,
+  [ValidateRange(1, 120)]
+  [int]$TraceTriggerRetryIntervalSeconds = 6,
   [string]$AlertName = "SnowPanelSmokeAlert",
   [ValidateSet("critical", "warning")]
   [string]$Severity = "critical",
@@ -57,6 +59,7 @@ $traceArgs = @{
   BackendBaseUrl   = $BackendBaseUrl
   JaegerBaseUrl    = $JaegerBaseUrl
   TraceWaitSeconds = $TraceWaitSeconds
+  TriggerRetryIntervalSeconds = $TraceTriggerRetryIntervalSeconds
 }
 
 if (-not [string]::IsNullOrWhiteSpace($RequestId)) {

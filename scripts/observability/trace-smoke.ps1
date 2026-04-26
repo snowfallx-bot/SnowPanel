@@ -4,7 +4,9 @@ param(
   [string]$BackendBaseUrl = "http://127.0.0.1:8080",
   [string]$JaegerBaseUrl = "http://127.0.0.1:16686",
   [string]$RequestId = "",
-  [int]$TraceWaitSeconds = 30
+  [int]$TraceWaitSeconds = 30,
+  [ValidateRange(1, 120)]
+  [int]$TriggerRetryIntervalSeconds = 6
 )
 
 $ErrorActionPreference = "Stop"
@@ -136,6 +138,78 @@ function Get-CoreAgentGrpcMethodsForRequest {
   return $methods
 }
 
+function Invoke-TraceTriggerRequest {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$AccessToken,
+    [Parameter(Mandatory = $true)]
+    [string]$BackendBaseUrl,
+    [Parameter(Mandatory = $true)]
+    [string]$RequestId
+  )
+
+  $headers = @{
+    Authorization = "Bearer $AccessToken"
+    "X-Request-ID" = $RequestId
+  }
+
+  $dashboardResponse = Invoke-ObservabilityApiRequest -Method "GET" -Uri "$BackendBaseUrl/api/v1/dashboard/summary" -Headers $headers -ExpectedStatusCodes @(200)
+  if ($null -eq $dashboardResponse.Json -or [int]$dashboardResponse.Json.code -ne 0) {
+    throw "Dashboard request returned non-zero code: $($dashboardResponse.Content)"
+  }
+
+  $responseRequestId = Get-ResponseHeaderValue -Headers $dashboardResponse.Headers -Name "X-Request-ID"
+  if ([string]::IsNullOrWhiteSpace($responseRequestId)) {
+    throw "Dashboard response did not include X-Request-ID header."
+  }
+  if ($responseRequestId -ne $RequestId) {
+    throw "Dashboard response X-Request-ID mismatch. expected='$RequestId' actual='$responseRequestId'"
+  }
+}
+
+function Get-JaegerTraceCandidates {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$JaegerBaseUrl,
+    [int]$Limit = 150
+  )
+
+  $serviceQuery = "$JaegerBaseUrl/api/traces?service=snowpanel-backend&lookback=1h&limit=$Limit"
+  $serviceEnvelope = Invoke-ObservabilityJsonRequest -Method "GET" -Uri $serviceQuery
+  $serviceTraces = @()
+  if ($null -ne $serviceEnvelope -and $null -ne $serviceEnvelope.data) {
+    $serviceTraces = @($serviceEnvelope.data)
+  }
+
+  if ($serviceTraces.Count -gt 0) {
+    return [PSCustomObject]@{
+      Traces         = $serviceTraces
+      Source         = "service"
+      ServiceCount   = $serviceTraces.Count
+      FallbackError  = ""
+    }
+  }
+
+  $globalTraces = @()
+  $fallbackError = ""
+  try {
+    $globalQuery = "$JaegerBaseUrl/api/traces?lookback=1h&limit=$Limit"
+    $globalEnvelope = Invoke-ObservabilityJsonRequest -Method "GET" -Uri $globalQuery
+    if ($null -ne $globalEnvelope -and $null -ne $globalEnvelope.data) {
+      $globalTraces = @($globalEnvelope.data)
+    }
+  } catch {
+    $fallbackError = $_.Exception.Message
+  }
+
+  return [PSCustomObject]@{
+    Traces         = $globalTraces
+    Source         = "service+global"
+    ServiceCount   = 0
+    FallbackError  = $fallbackError
+  }
+}
+
 if ([string]::IsNullOrWhiteSpace($RequestId)) {
   $RequestId = New-RequestId
 }
@@ -145,48 +219,41 @@ $requiredCoreGrpcMethods = @(
   "/snowpanel.agent.v1.SystemService/GetSystemOverview",
   "/snowpanel.agent.v1.SystemService/GetRealtimeResource"
 )
-
-$headers = @{
-  Authorization = "Bearer $AccessToken"
-  "X-Request-ID" = $RequestId
-}
+$triggerCount = 0
+$nextTriggerAtSeconds = [double][Math]::Max(1, $TriggerRetryIntervalSeconds)
+$triggerStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
 
 Write-Host "Triggering core-agent path via GET $BackendBaseUrl/api/v1/dashboard/summary ..."
-$dashboardResponse = Invoke-ObservabilityApiRequest -Method "GET" -Uri "$BackendBaseUrl/api/v1/dashboard/summary" -Headers $headers -ExpectedStatusCodes @(200)
-if ($null -eq $dashboardResponse.Json -or [int]$dashboardResponse.Json.code -ne 0) {
-  throw "Dashboard request returned non-zero code: $($dashboardResponse.Content)"
-}
-
-$responseRequestId = Get-ResponseHeaderValue -Headers $dashboardResponse.Headers -Name "X-Request-ID"
-if ([string]::IsNullOrWhiteSpace($responseRequestId)) {
-  throw "Dashboard response did not include X-Request-ID header."
-}
-if ($responseRequestId -ne $RequestId) {
-  throw "Dashboard response X-Request-ID mismatch. expected='$RequestId' actual='$responseRequestId'"
-}
-
-Write-Host "Dashboard request succeeded. request_id=$RequestId"
-Write-Host "Polling Jaeger API for correlated trace (timeout=${TraceWaitSeconds}s) ..."
+Invoke-TraceTriggerRequest -AccessToken $AccessToken -BackendBaseUrl $BackendBaseUrl -RequestId $RequestId
+$triggerCount++
+Write-Host "Dashboard request succeeded. request_id=$RequestId trigger_count=$triggerCount"
+Write-Host "Polling Jaeger API for correlated trace (timeout=${TraceWaitSeconds}s, retry_interval=${TriggerRetryIntervalSeconds}s) ..."
 
 $foundTrace = $null
 $foundCoreGrpcMethods = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-$lastObservation = "No traces fetched yet."
+$lastObservation = "No traces fetched yet. trigger_count=0."
 
 try {
   Wait-ObservabilityCondition -Description "Jaeger correlated trace" -TimeoutSeconds $TraceWaitSeconds -TimeoutMessage "No request-correlated cross-service trace found in Jaeger within ${TraceWaitSeconds}s. Check OTEL env vars, collector health, and Jaeger ingestion." -Check {
-    $query = "$JaegerBaseUrl/api/traces?service=snowpanel-backend&lookback=1h&limit=100"
-    $tracesEnvelope = Invoke-ObservabilityJsonRequest -Method "GET" -Uri $query
-    if ($null -eq $tracesEnvelope -or $null -eq $tracesEnvelope.data) {
-      $lastObservation = "Jaeger traces API returned empty body."
+    if ($triggerStopwatch.Elapsed.TotalSeconds -ge $nextTriggerAtSeconds) {
+      Invoke-TraceTriggerRequest -AccessToken $AccessToken -BackendBaseUrl $BackendBaseUrl -RequestId $RequestId
+      $triggerCount++
+      $nextTriggerAtSeconds += [double][Math]::Max(1, $TriggerRetryIntervalSeconds)
+      Write-Host "Re-triggered dashboard request for trace capture. request_id=$RequestId trigger_count=$triggerCount"
+    }
+
+    $traceCandidates = Get-JaegerTraceCandidates -JaegerBaseUrl $JaegerBaseUrl
+    $traces = @($traceCandidates.Traces)
+    if ($traces.Count -eq 0) {
+      $fallbackSuffix = ""
+      if (-not [string]::IsNullOrWhiteSpace($traceCandidates.FallbackError)) {
+        $fallbackSuffix = " global_fallback_error=$($traceCandidates.FallbackError)"
+      }
+      $lastObservation = "Jaeger returned 0 traces via $($traceCandidates.Source). trigger_count=$triggerCount.$fallbackSuffix"
       return $false
     }
 
-    if ($tracesEnvelope.data.Count -eq 0) {
-      $lastObservation = "Jaeger returned 0 traces."
-      return $false
-    }
-
-    foreach ($trace in $tracesEnvelope.data) {
+    foreach ($trace in $traces) {
       $serviceSet = Get-TraceServiceSet -Trace $trace
       $hasBackend = $serviceSet.Contains("snowpanel-backend")
       $hasCoreAgent = $serviceSet.Contains("snowpanel-core-agent")
@@ -231,7 +298,7 @@ try {
       return $true
     }
 
-    $lastObservation = "Jaeger returned $($tracesEnvelope.data.Count) traces, but none matched request_id=$RequestId with required cross-service spans."
+    $lastObservation = "Jaeger returned $($traces.Count) traces, but none matched request_id=$RequestId with required cross-service spans. trigger_count=$triggerCount."
     return $false
   }
 } catch {
@@ -245,3 +312,4 @@ Write-Host "trace_id: $($foundTrace.traceID)"
 Write-Host "services: $($serviceNames -join ', ')"
 Write-Host "core grpc methods: $coreMethods"
 Write-Host "request_id: $RequestId"
+Write-Host "trigger_count: $triggerCount"

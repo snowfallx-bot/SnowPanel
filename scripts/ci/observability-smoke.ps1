@@ -17,6 +17,8 @@ $BackendPort = "18083"
 $PrometheusPort = "19090"
 $AlertmanagerPort = "19093"
 $JaegerPort = "16687"
+$OtelCollectorGrpcPort = 4317
+$OtelCollectorHttpPort = 4318
 $BackendBaseUrl = "http://127.0.0.1:$BackendPort"
 $PrometheusBaseUrl = "http://127.0.0.1:$PrometheusPort"
 $JaegerBaseUrl = "http://127.0.0.1:$JaegerPort"
@@ -51,6 +53,26 @@ $composeFiles | ForEach-Object {
   $ComposeArgs += @("-f", $_)
 }
 $Completed = $false
+
+function Test-TcpPortOpen {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$Host,
+    [Parameter(Mandatory = $true)]
+    [int]$Port,
+    [int]$TimeoutMilliseconds = 1000
+  )
+
+  $client = [System.Net.Sockets.TcpClient]::new()
+  try {
+    $connectTask = $client.ConnectAsync($Host, $Port)
+    return $connectTask.Wait($TimeoutMilliseconds) -and $client.Connected
+  } catch {
+    return $false
+  } finally {
+    $client.Dispose()
+  }
+}
 
 Assert-DockerAvailable -ScriptPath "scripts/ci/observability-smoke.ps1"
 
@@ -87,6 +109,14 @@ try {
 
   Invoke-ComposeCommand -ComposeArgs $ComposeArgs -Arguments (@("up", "-d", "--build") + $services)
 
+  Wait-UntilReady -Description "otel collector grpc endpoint" -Attempts 60 -DelaySeconds 1 -Check {
+    return Test-TcpPortOpen -Host "127.0.0.1" -Port $OtelCollectorGrpcPort -TimeoutMilliseconds 800
+  }
+
+  Wait-UntilReady -Description "otel collector http endpoint" -Attempts 60 -DelaySeconds 1 -Check {
+    return Test-TcpPortOpen -Host "127.0.0.1" -Port $OtelCollectorHttpPort -TimeoutMilliseconds 800
+  }
+
   Wait-BackendReadyJson -BackendBaseUrl $BackendBaseUrl
 
   Wait-UntilReady -Description "jaeger ui" -Check {
@@ -117,7 +147,8 @@ try {
     -BackendBaseUrl $BackendBaseUrl `
     -JaegerBaseUrl $JaegerBaseUrl `
     -AlertmanagerBaseUrl $AlertmanagerBaseUrl `
-    -TraceWaitSeconds 45 `
+    -TraceWaitSeconds 75 `
+    -TraceTriggerRetryIntervalSeconds 6 `
     -AlertWaitSeconds 30 `
     -ValidateAllAlertSeverities `
     -ValidateInhibition
