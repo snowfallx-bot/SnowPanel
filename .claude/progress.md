@@ -118,8 +118,12 @@ P2-2：补齐生产化观测能力
   - audit logs 基础检索
   - `X-Request-ID` 已打通 backend -> gRPC metadata -> core-agent 日志（可按同一 request_id 联查）
   - 已新增/更新 `docs/observability.md` / `docs/observability.zh-CN.md`，明确 metrics + tracing 排障路径
+  - `trace-smoke.ps1` 已升级为 request 级强关联校验：强制校验响应 `X-Request-ID`、Jaeger 中 backend/core-agent 的 `snowpanel.request_id` 一致性，以及 core-agent 关键 `grpc.method` span 覆盖
+  - `alertmanager-smoke.ps1` 已支持 receiver 路由校验（含 `/alerts` 与 `/alerts/groups` 回退），并通过 `alertname + instance + severity` 过滤与唯一默认 instance 降低误判
+  - `full-smoke.ps1` 已支持一次性校验 warning/critical 双严重级别；`scripts/ci/observability-smoke.ps1` 已收敛为单入口调用，并支持 `container-agent` / `host-agent` 双模式
+  - `Observability Smoke` workflow 已支持 host-agent 参数化实跑：可在 `agent_mode=host-agent` 下自动构建并启动宿主机 core-agent、执行 smoke、回收进程并上传失败日志
 - 仍缺：
-  - tracing 落地验证：compose / host-agent 模式下的 collector、Jaeger、跨服务 trace 串联实测
+  - tracing 落地验证执行：在具备 `docker`/`cargo`/`gh`（或可触发 workflow）的环境完成 compose + host-agent 两模式实跑并留存通过记录
   - metrics 与 alert 的生产化落地（真实通知渠道、告警去重/升级策略、SLO/SLI 阈值校准）
 - 当前判断：进行中。
 
