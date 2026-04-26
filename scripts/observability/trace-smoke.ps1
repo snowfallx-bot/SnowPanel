@@ -253,7 +253,13 @@ try {
       return $false
     }
 
+    $validTraceCount = 0
     foreach ($trace in $traces) {
+      if ($null -eq $trace -or $null -eq $trace.spans -or $null -eq $trace.processes) {
+        continue
+      }
+      $validTraceCount++
+
       $serviceSet = Get-TraceServiceSet -Trace $trace
       $hasBackend = $serviceSet.Contains("snowpanel-backend")
       $hasCoreAgent = $serviceSet.Contains("snowpanel-core-agent")
@@ -298,7 +304,12 @@ try {
       return $true
     }
 
-    $lastObservation = "Jaeger returned $($traces.Count) traces, but none matched request_id=$RequestId with required cross-service spans. trigger_count=$triggerCount."
+    if ($validTraceCount -eq 0) {
+      $lastObservation = "Jaeger returned $($traces.Count) trace envelopes, but none had valid spans/processes. trigger_count=$triggerCount."
+      return $false
+    }
+
+    $lastObservation = "Jaeger returned $validTraceCount valid traces, but none matched request_id=$RequestId with required cross-service spans. trigger_count=$triggerCount."
     return $false
   }
 } catch {
