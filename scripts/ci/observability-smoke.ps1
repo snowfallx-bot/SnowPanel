@@ -97,21 +97,8 @@ try {
 } finally {
   if (-not $Completed) {
     Write-Host "Observability smoke test failed, printing compose status and logs..."
-    try {
-      Invoke-ComposeCommand -ComposeArgs $ComposeArgs -Arguments @("ps")
-    } catch {
-      Write-Warning $_.Exception.Message
-    }
-    try {
-      Invoke-ComposeCommand -ComposeArgs $ComposeArgs -Arguments @("logs", "--no-color", "--tail", "200")
-    } catch {
-      Write-Warning $_.Exception.Message
-    }
+    Show-ComposeDiagnostics -ComposeArgs $ComposeArgs
   }
 
-  try {
-    Invoke-ComposeCommand -ComposeArgs $ComposeArgs -Arguments @("down", "-v", "--remove-orphans")
-  } catch {
-    Write-Warning $_.Exception.Message
-  }
+  Stop-ComposeStack -ComposeArgs $ComposeArgs
 }

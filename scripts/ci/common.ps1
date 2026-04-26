@@ -12,6 +12,39 @@ function Invoke-ComposeCommand {
   }
 }
 
+function Show-ComposeDiagnostics {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string[]]$ComposeArgs,
+    [int]$TailLines = 200
+  )
+
+  try {
+    Invoke-ComposeCommand -ComposeArgs $ComposeArgs -Arguments @("ps")
+  } catch {
+    Write-Warning $_.Exception.Message
+  }
+
+  try {
+    Invoke-ComposeCommand -ComposeArgs $ComposeArgs -Arguments @("logs", "--no-color", "--tail", "$TailLines")
+  } catch {
+    Write-Warning $_.Exception.Message
+  }
+}
+
+function Stop-ComposeStack {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string[]]$ComposeArgs
+  )
+
+  try {
+    Invoke-ComposeCommand -ComposeArgs $ComposeArgs -Arguments @("down", "-v", "--remove-orphans")
+  } catch {
+    Write-Warning $_.Exception.Message
+  }
+}
+
 function Assert-DockerAvailable {
   param(
     [Parameter(Mandatory = $true)]
