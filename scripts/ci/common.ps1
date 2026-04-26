@@ -162,7 +162,7 @@ function Invoke-JsonRequest {
   $requestBody = ""
   $contentType = ""
   if ($null -ne $Body) {
-    $requestBody = ($Body | ConvertTo-Json -Depth 10 -Compress)
+    $requestBody = (ConvertTo-Json -InputObject $Body -Depth 10 -Compress)
     $contentType = "application/json"
   }
 
@@ -193,7 +193,7 @@ function Invoke-ApiRequest {
   $requestBody = ""
   $contentType = ""
   if ($null -ne $Body) {
-    $requestBody = ($Body | ConvertTo-Json -Depth 10 -Compress)
+    $requestBody = (ConvertTo-Json -InputObject $Body -Depth 10 -Compress)
     $contentType = "application/json"
   }
 
