@@ -229,6 +229,28 @@ function Submit-AlertmanagerAlerts {
   return Invoke-ObservabilityJsonRequest -Method "POST" -Uri "$AlertmanagerBaseUrl/api/v2/alerts" -Body $Alerts -ExpectedStatusCodes @(200, 202)
 }
 
+function New-ObservabilityInstanceId {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$Prefix
+  )
+
+  return "$Prefix-$([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds())"
+}
+
+function New-AlertTimeWindow {
+  param(
+    [Parameter(Mandatory = $true)]
+    [int]$DurationSeconds
+  )
+
+  $startsAt = [DateTimeOffset]::UtcNow
+  return [PSCustomObject]@{
+    StartsAt = $startsAt
+    EndsAt   = $startsAt.AddSeconds($DurationSeconds)
+  }
+}
+
 function Get-AlertmanagerLabelValue {
   param(
     [Parameter(Mandatory = $true)]

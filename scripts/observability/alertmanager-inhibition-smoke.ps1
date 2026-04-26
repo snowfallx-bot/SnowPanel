@@ -12,11 +12,12 @@ Set-StrictMode -Version Latest
 . (Join-Path $PSScriptRoot "common.ps1")
 
 if ([string]::IsNullOrWhiteSpace($Instance)) {
-  $Instance = "smoke-inhibit-$([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds())"
+  $Instance = New-ObservabilityInstanceId -Prefix "smoke-inhibit"
 }
 
-$startsAt = [DateTimeOffset]::UtcNow
-$endsAt = $startsAt.AddSeconds($AlertDurationSeconds)
+$timeWindow = New-AlertTimeWindow -DurationSeconds $AlertDurationSeconds
+$startsAt = $timeWindow.StartsAt
+$endsAt = $timeWindow.EndsAt
 $warningReceiver = Resolve-AlertmanagerReceiver -Severity "warning"
 $criticalReceiver = Resolve-AlertmanagerReceiver -Severity "critical"
 

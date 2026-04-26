@@ -19,11 +19,12 @@ if ([string]::IsNullOrWhiteSpace($ExpectedReceiver)) {
 }
 
 if ([string]::IsNullOrWhiteSpace($Instance)) {
-  $Instance = "smoke-local-$([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds())"
+  $Instance = New-ObservabilityInstanceId -Prefix "smoke-local"
 }
 
-$startsAt = [DateTimeOffset]::UtcNow
-$endsAt = $startsAt.AddSeconds($AlertDurationSeconds)
+$timeWindow = New-AlertTimeWindow -DurationSeconds $AlertDurationSeconds
+$startsAt = $timeWindow.StartsAt
+$endsAt = $timeWindow.EndsAt
 
 $alertPayload = @(
   (New-AlertmanagerSyntheticAlert `
