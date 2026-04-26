@@ -1,7 +1,8 @@
 param(
   [ValidateSet("container-agent", "host-agent")]
   [string]$AgentMode = "container-agent",
-  [string]$HostAgentTarget = "host.docker.internal:50051"
+  [string]$HostAgentTarget = "host.docker.internal:50051",
+  [string]$HostAgentMetricsBaseUrl = "http://127.0.0.1:9108"
 )
 
 $ErrorActionPreference = "Stop"
@@ -54,6 +55,14 @@ try {
   $env:LOGIN_ATTEMPT_STORE = "redis"
   if ($AgentMode -eq "host-agent") {
     $env:AGENT_TARGET = $HostAgentTarget
+
+    Wait-UntilReady -Description "host core-agent metrics endpoint" -Attempts 30 -DelaySeconds 1 -Check {
+      $response = Invoke-WebRequest -Method "GET" -Uri "$HostAgentMetricsBaseUrl/metrics" -SkipHttpErrorCheck
+      if ([int]$response.StatusCode -ne 200) {
+        return $false
+      }
+      return $response.Content -match "snowpanel_core_agent_grpc_requests_total"
+    }
   }
 
   $services = @("postgres", "redis", "backend", "jaeger", "otel-collector", "alertmanager", "prometheus")
