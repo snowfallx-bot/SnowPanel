@@ -11,72 +11,55 @@
 下面是改动正文：
 
 ============
-本轮按“最快收口 P2-2”推进，做了两条主线：完善 CI 自动验收 + 尝试补齐本机工具链。
+本轮按“优先收口 P2-2，再推进 P2-3 代码清理”执行，已完成并推送多次修复，最终主 CI 全绿。
 
 本轮实际改动
 
-1. 主 CI 接入自动 observability smoke（双模式）
-   - ` .github/workflows/ci.yml`
-   - 新增：
-     - `observability-smoke-container`（needs `compose-smoke`，PR/push 均跑）
-     - `observability-smoke-host-agent`（needs `compose-smoke`，仅 push main 跑）
-   - host-agent job 复用：
-     - `scripts/ci/start-host-agent.ps1`
-     - `scripts/ci/stop-host-agent.ps1`
-   - 目标：把 P2-2 的 compose/host-agent 冒烟验证从“手工触发”推进到“主流水线自动执行”。
+1. 修复 tracing 冒烟脚本在 Jaeger 返回异常结构时崩溃
+   - 文件：`scripts/observability/trace-smoke.ps1`
+   - 关键修复：
+     - 增加 trace spans/trace processes 的统一安全归一化访问（避免把 string 当集合）。
+     - `Get-TraceServiceSet` / `Get-CoreAgentGrpcMethodsForRequest` 改为 no-enumerate 返回，避免 PowerShell 自动枚举导致类型漂移。
+     - 移除不安全 `.ToArray()` 路径，统一改为字符串集合安全排序输出。
+   - 结果：修复了 `Method invocation failed because [System.String] does not contain a method named 'ToArray'`。
 
-2. progress 同步
-   - `.claude/progress.md`
-   - 已补录：`ci.yml` 新增 observability smoke 自动 jobs，当前 P2-2 更接近“仅差运行结果确认”。
+2. 修复 Alertmanager 注入告警体 JSON 结构错误（数组被拍平）
+   - 文件：`scripts/ci/common.ps1`
+   - 关键修复：
+     - `Invoke-JsonRequest` / `Invoke-ApiRequest` 的请求体序列化改为：
+       - `ConvertTo-Json -InputObject $Body ...`
+     - 不再使用管道 `($Body | ConvertTo-Json ...)`，避免单元素数组被枚举为对象。
+   - 结果：修复了 observability smoke 中：
+     - `POST /api/v2/alerts` 返回 400，
+     - `cannot unmarshal object into ... models.PostableAlerts`。
 
-3. 本机工具链安装尝试（用户要求）
-   - 已安装：
-     - `GitHub.cli`（`gh 2.91.0`）
-     - `Rustlang.Rustup`（`rustup 1.29.0`，`cargo 1.95.0`）
-     - `Docker.DockerCLI`（`docker 29.4.1`）
-     - `Docker.DockerCompose`（`docker-compose 5.1.3`）
-   - 已处理：
-     - 将 compose 可执行挂接到 Docker CLI plugin（`docker compose version` 可用）
-   - 仍受限：
-     - `gh` 未登录（`gh auth status` 提示未认证）
-     - `dockerd` 启动失败：缺少 Windows Containers 特性（`failed to load vmcompute.dll`）
-     - `Docker Desktop` 安装失败（需要管理员提权）
+3. 推进 P2-3（代码侧）重复逻辑清理
+   - 文件：`scripts/ci/common.ps1`
+   - 关键清理：
+     - 新增 `Get-JsonHttpBodyOptions`，统一 JSON 请求体与 content-type 构造。
+     - `Invoke-JsonRequest` / `Invoke-ApiRequest` 复用该 helper，减少重复代码与后续偏差风险。
 
-4. 远端推送状态
-   - 已执行并成功：
-     - `git push origin main`
-   - 远端已包含本轮 CI 改动。
+CI 结果（关键）
 
-本轮本地验证
+- run `24958249191`（sha `de801bc`）：observability 双 job 从 trace 脚本错误收敛到 alert body 结构错误（定位成功）。
+- run `24958455278`（sha `f15e6df`）：`observability-smoke-container` 与 `observability-smoke-host-agent` 均通过，全流水线通过。
+- run `24958670944`（sha `4db5c20`）：重构后回归验证通过，全流水线通过（`status=completed, conclusion=success`）。
 
-1. 已执行并通过：
-   - `gh --version`
-   - `cargo --version`
-   - `docker --version`
-   - `docker compose version`
-   - PowerShell 脚本语法（此前 host-agent 脚本）
+远端推送状态
 
-2. 已知阻塞：
-   - 本机无法直接跑 Docker daemon（需系统特性/管理员权限）
-   - 本机无法直接触发 gh workflow（未登录）
+- 全部改动已推送到 `origin/main`。
 
 commit 摘要
 
-- `b3d731d ci: add automated observability smoke jobs for container and host modes`
-- `99e1832 chore(progress): record latest p2-2 observability hardening status`
+- `de801bc fix(observability): normalize jaeger trace collection parsing`
+- `f15e6df fix(ci): preserve json array bodies in request helpers`
+- `4db5c20 refactor(ci): deduplicate json request body construction`
 
 希望接下来的 AI 做什么
 
-1. 在可用环境验证新 CI job 结果（最高优先）：
-   - 检查 `b3d731d` 对应 CI 是否通过：
-     - `observability-smoke-container`
-     - `observability-smoke-host-agent`
-   - 若失败，基于失败 job 日志定点修复并再次 push。
+1. 继续 P2-3（仅代码，不做文档修补）：
+   - 重点扫描脚本/后端中的重复流程与低价值分支，做小步重构 + 回归。
+2. 维持“小步提交 + 立即 push”节奏，持续保证主 CI 全绿。
+3. 若要推进 P2-2 剩余“生产通知渠道落地”，需要真实告警接收目标（如 Webhook/邮件/IM）与阈值策略输入，再做配置收口与验收。
 
-2. 若继续在当前机器推进：
-   - 需要管理员协助开启 Windows Containers / Docker Desktop，或提供已可用 Docker daemon 环境。
-
-3. P2-2 验收通过后，继续 P2-3：
-   - 仅做代码与脚本重复逻辑清理，不做文档美化。
-
-by: gpt-5.5
+by: gpt-5
