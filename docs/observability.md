@@ -84,7 +84,7 @@ Notes:
 - Baseline Alertmanager receivers are intentionally no-op. Configure real warning/critical webhook/email/slack receivers in `deploy/observability/alertmanager/alertmanager.yml`.
 - Compose observability mode enables OTLP tracing export for `backend` and containerized `core-agent` by default.
 - In host-agent mode, also set OTEL variables in `deploy/core-agent/systemd/core-agent.env.example` (or `/etc/snowpanel/core-agent.env`) so host `core-agent` exports traces to the collector.
-- Before smoke/runtime checks, run `pwsh -File ./scripts/observability/validate-config.ps1` to fail fast on Prometheus/Alertmanager config errors and alert rule regressions (`promtool test rules`).
+- Before smoke/runtime checks, run `pwsh -File ./scripts/observability/validate-config.ps1` to fail fast on Prometheus/Alertmanager config errors and alert rule regressions (`promtool test rules`). The script uses Docker by default and falls back to local `promtool`/`amtool` binaries when Docker is unavailable.
 
 ## Request Correlation
 
