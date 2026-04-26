@@ -17,6 +17,8 @@ if ([string]::IsNullOrWhiteSpace($Instance)) {
 
 $startsAt = [DateTimeOffset]::UtcNow
 $endsAt = $startsAt.AddSeconds($AlertDurationSeconds)
+$warningReceiver = Resolve-AlertmanagerReceiver -Severity "warning"
+$criticalReceiver = Resolve-AlertmanagerReceiver -Severity "critical"
 
 $baseLabels = @{
   alertname = $AlertName
@@ -36,7 +38,7 @@ Invoke-ObservabilityJsonRequest -Method "POST" -Uri "$AlertmanagerBaseUrl/api/v2
     -EndsAt $endsAt)
 ) -ExpectedStatusCodes @(200, 202)
 
-Wait-ObservabilityCondition -Description "warning alert routing visibility" -TimeoutSeconds $WaitSeconds -TimeoutMessage "Warning alert '$AlertName' was not routed to snowpanel-warning within ${WaitSeconds}s." -Check {
+Wait-ObservabilityCondition -Description "warning alert routing visibility" -TimeoutSeconds $WaitSeconds -TimeoutMessage "Warning alert '$AlertName' was not routed to $warningReceiver within ${WaitSeconds}s." -Check {
   $warningLabels = @{
     alertname = $AlertName
     instance  = $Instance
@@ -47,7 +49,7 @@ Wait-ObservabilityCondition -Description "warning alert routing visibility" -Tim
     if ($alert.labels.alertname -ne $AlertName -or $alert.labels.instance -ne $Instance -or $alert.labels.severity -ne "warning") {
       continue
     }
-    return (Test-AlertmanagerHasReceiver -Alert $alert -ReceiverName "snowpanel-warning")
+    return (Test-AlertmanagerHasReceiver -Alert $alert -ReceiverName $warningReceiver)
   }
   return $false
 }
@@ -85,7 +87,7 @@ Wait-ObservabilityCondition -Description "warning inhibited by critical" -Timeou
     return $false
   }
 
-  if (-not (Test-AlertmanagerHasReceiver -Alert $criticalAlert -ReceiverName "snowpanel-critical")) {
+  if (-not (Test-AlertmanagerHasReceiver -Alert $criticalAlert -ReceiverName $criticalReceiver)) {
     return $false
   }
 
