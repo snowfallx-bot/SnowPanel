@@ -11,69 +11,72 @@
 下面是改动正文：
 
 ============
-本轮继续按“尽快收口 progress 剩余项”推进，重点处理 P2-2 的执行链路稳定性和交付可执行性。
+本轮按“最快收口 P2-2”推进，做了两条主线：完善 CI 自动验收 + 尝试补齐本机工具链。
 
 本轮实际改动
 
-1. 抽取可复用 host-agent 启停脚本（去 workflow 内联大段逻辑）
+1. 主 CI 接入自动 observability smoke（双模式）
+   - ` .github/workflows/ci.yml`
    - 新增：
+     - `observability-smoke-container`（needs `compose-smoke`，PR/push 均跑）
+     - `observability-smoke-host-agent`（needs `compose-smoke`，仅 push main 跑）
+   - host-agent job 复用：
      - `scripts/ci/start-host-agent.ps1`
      - `scripts/ci/stop-host-agent.ps1`
-   - 能力：
-     - 校验 `host_agent_target`/`host_agent_metrics_base_url` 合法性
-     - 启动宿主机 core-agent 并轮询端口 ready
-     - 自动写入 `HOST_AGENT_PID`（支持 `GITHUB_ENV`）
-     - 独立 stop 脚本安全回收进程
+   - 目标：把 P2-2 的 compose/host-agent 冒烟验证从“手工触发”推进到“主流水线自动执行”。
 
-2. workflow 改为复用脚本，减少重复并提升维护性
-   - ` .github/workflows/observability-smoke.yml`
-   - `Start Core-Agent On Host` 改为调用 `start-host-agent.ps1`
-   - `Stop Core-Agent On Host` 改为调用 `stop-host-agent.ps1`
-   - 保留已有 host-agent 失败日志上传能力
-
-3. progress 状态同步（P2-2）
+2. progress 同步
    - `.claude/progress.md`
-   - 已补录：
-     - trace 强关联校验（request_id + grpc.method）
-     - alert 路由校验与降误判策略
-     - full-smoke 双严重级别能力
-     - host-agent 参数化 workflow 能力
-   - 并明确剩余关键缺口：在具备 `docker/cargo/gh` 的环境完成两模式实跑并留存结果。
+   - 已补录：`ci.yml` 新增 observability smoke 自动 jobs，当前 P2-2 更接近“仅差运行结果确认”。
+
+3. 本机工具链安装尝试（用户要求）
+   - 已安装：
+     - `GitHub.cli`（`gh 2.91.0`）
+     - `Rustlang.Rustup`（`rustup 1.29.0`，`cargo 1.95.0`）
+     - `Docker.DockerCLI`（`docker 29.4.1`）
+     - `Docker.DockerCompose`（`docker-compose 5.1.3`）
+   - 已处理：
+     - 将 compose 可执行挂接到 Docker CLI plugin（`docker compose version` 可用）
+   - 仍受限：
+     - `gh` 未登录（`gh auth status` 提示未认证）
+     - `dockerd` 启动失败：缺少 Windows Containers 特性（`failed to load vmcompute.dll`）
+     - `Docker Desktop` 安装失败（需要管理员提权）
 
 4. 远端推送状态
-   - 已执行 `git push origin main`
-   - 远端已更新到最新提交（含本轮改动）。
+   - 已执行并成功：
+     - `git push origin main`
+   - 远端已包含本轮 CI 改动。
 
 本轮本地验证
 
 1. 已执行并通过：
-   - PowerShell 语法解析：
-     - `scripts/ci/start-host-agent.ps1`
-     - `scripts/ci/stop-host-agent.ps1`
-   - `git push origin main` 成功
+   - `gh --version`
+   - `cargo --version`
+   - `docker --version`
+   - `docker compose version`
+   - PowerShell 脚本语法（此前 host-agent 脚本）
 
-2. 阻塞说明（当前机器）：
-   - 缺少 `docker`、`cargo`、`gh`，无法本机直接完成 P2-2 两模式运行态验收。
+2. 已知阻塞：
+   - 本机无法直接跑 Docker daemon（需系统特性/管理员权限）
+   - 本机无法直接触发 gh workflow（未登录）
 
 commit 摘要
 
-- `7c2f8ad refactor(ci): extract reusable host-agent lifecycle scripts`
+- `b3d731d ci: add automated observability smoke jobs for container and host modes`
 - `99e1832 chore(progress): record latest p2-2 observability hardening status`
 
 希望接下来的 AI 做什么
 
-1. 在可执行环境直接补齐 P2-2 实跑闭环（最高优先）：
-   - 触发 `Observability Smoke` workflow：
-     - `agent_mode=container-agent`
-     - `agent_mode=host-agent`
-   - 记录两次 run URL 与通过结论，回写 `.claude/progress.md`。
+1. 在可用环境验证新 CI job 结果（最高优先）：
+   - 检查 `b3d731d` 对应 CI 是否通过：
+     - `observability-smoke-container`
+     - `observability-smoke-host-agent`
+   - 若失败，基于失败 job 日志定点修复并再次 push。
 
-2. 若 host-agent 模式失败，先看：
-   - `host-agent-logs` artifact
-   - backend readiness 是否 `agent=up`
-   - Jaeger 是否出现同 request_id 的 backend/core-agent spans 与必需 grpc.method
+2. 若继续在当前机器推进：
+   - 需要管理员协助开启 Windows Containers / Docker Desktop，或提供已可用 Docker daemon 环境。
 
-3. P2-2 验收通过后，再继续 P2-3：
-   - 仅做代码/脚本重复逻辑清理，不做文档美化。
+3. P2-2 验收通过后，继续 P2-3：
+   - 仅做代码与脚本重复逻辑清理，不做文档美化。
 
 by: gpt-5.5
