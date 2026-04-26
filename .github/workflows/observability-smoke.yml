@@ -2,6 +2,20 @@ name: Observability Smoke
 
 on:
   workflow_dispatch:
+    inputs:
+      agent_mode:
+        description: "Core-agent runtime mode"
+        type: choice
+        required: true
+        default: container-agent
+        options:
+          - container-agent
+          - host-agent
+      host_agent_target:
+        description: "Backend AGENT_TARGET when agent_mode=host-agent"
+        type: string
+        required: false
+        default: host.docker.internal:50051
 
 permissions:
   contents: read
@@ -20,4 +34,4 @@ jobs:
 
       - name: Run Observability Smoke Test
         shell: pwsh
-        run: ./scripts/ci/observability-smoke.ps1
+        run: ./scripts/ci/observability-smoke.ps1 -AgentMode "${{ inputs.agent_mode }}" -HostAgentTarget "${{ inputs.host_agent_target }}"
