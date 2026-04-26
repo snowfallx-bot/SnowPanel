@@ -23,9 +23,7 @@ $ComposeArgs = @(
 )
 $Completed = $false
 
-if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
-  throw "docker command not found. Install Docker/Compose before running scripts/ci/observability-smoke.ps1."
-}
+Assert-DockerAvailable -ScriptPath "scripts/ci/observability-smoke.ps1"
 
 try {
   $validateScript = Join-Path $PSScriptRoot "..\observability\validate-config.ps1"

@@ -12,6 +12,17 @@ function Invoke-ComposeCommand {
   }
 }
 
+function Assert-DockerAvailable {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$ScriptPath
+  )
+
+  if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
+    throw "docker command not found. Install Docker/Compose before running $ScriptPath."
+  }
+}
+
 function Invoke-JsonRequest {
   param(
     [Parameter(Mandatory = $true)]

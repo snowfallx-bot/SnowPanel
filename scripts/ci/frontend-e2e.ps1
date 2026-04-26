@@ -15,6 +15,8 @@ $TestFilesPath = "/tmp"
 $ComposeArgs = @("compose", "--project-name", $ProjectName)
 $Completed = $false
 
+Assert-DockerAvailable -ScriptPath "scripts/ci/frontend-e2e.ps1"
+
 try {
   $env:APP_ENV = "production"
   $env:BACKEND_PORT = $BackendPort

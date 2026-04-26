@@ -16,6 +16,8 @@ $RenamedSmokeFilePath = "/tmp/snowpanel-compose-smoke-renamed.txt"
 $ComposeArgs = @("compose", "--project-name", $ProjectName)
 $Completed = $false
 
+Assert-DockerAvailable -ScriptPath "scripts/ci/compose-smoke.ps1"
+
 try {
   $env:APP_ENV = "production"
   $env:BACKEND_PORT = $BackendPort

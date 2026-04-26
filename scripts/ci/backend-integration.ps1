@@ -12,6 +12,8 @@ $JwtSecret = "BackendIntegrationSecret_2026_Check_123!"
 $ComposeArgs = @("compose", "--project-name", $ProjectName)
 $Completed = $false
 
+Assert-DockerAvailable -ScriptPath "scripts/ci/backend-integration.ps1"
+
 function Assert-ApiSuccess {
   param(
     [Parameter(Mandatory = $true)]
