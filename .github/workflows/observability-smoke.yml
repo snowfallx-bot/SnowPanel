@@ -49,90 +49,7 @@ jobs:
       - name: Start Core-Agent On Host
         if: ${{ inputs.agent_mode == 'host-agent' }}
         shell: pwsh
-        run: |
-          $ErrorActionPreference = "Stop"
-
-          $logDir = Join-Path $PWD $env:HOST_AGENT_LOG_DIR
-          New-Item -ItemType Directory -Force -Path $logDir | Out-Null
-          $stdoutLog = Join-Path $logDir "host-agent.stdout.log"
-          $stderrLog = Join-Path $logDir "host-agent.stderr.log"
-          $agentBinary = Join-Path $PWD "core-agent/target/release/core-agent"
-
-          if (-not (Test-Path -LiteralPath $agentBinary)) {
-            throw "core-agent binary not found at $agentBinary"
-          }
-
-          $hostAgentTarget = "${{ inputs.host_agent_target }}".Trim()
-          if ([string]::IsNullOrWhiteSpace($hostAgentTarget)) {
-            throw "host_agent_target must not be empty in host-agent mode."
-          }
-
-          $targetSegments = $hostAgentTarget.Split(":")
-          if ($targetSegments.Count -lt 2) {
-            throw "host_agent_target '$hostAgentTarget' must be in '<host>:<port>' format."
-          }
-
-          $agentPort = 0
-          if (-not [int]::TryParse($targetSegments[-1], [ref]$agentPort) -or $agentPort -lt 1 -or $agentPort -gt 65535) {
-            throw "host_agent_target '$hostAgentTarget' has invalid port."
-          }
-
-          $metricsBaseUrl = "${{ inputs.host_agent_metrics_base_url }}".Trim()
-          if ([string]::IsNullOrWhiteSpace($metricsBaseUrl)) {
-            throw "host_agent_metrics_base_url must not be empty in host-agent mode."
-          }
-          $metricsUri = $null
-          if (-not [Uri]::TryCreate($metricsBaseUrl, [System.UriKind]::Absolute, [ref]$metricsUri)) {
-            throw "host_agent_metrics_base_url '$metricsBaseUrl' is not a valid absolute URI."
-          }
-
-          $agentEnv = @{
-            APP_ENV                      = "production"
-            CORE_AGENT_HOST              = "0.0.0.0"
-            CORE_AGENT_PORT              = "$agentPort"
-            CORE_AGENT_METRICS_ENABLED   = "true"
-            CORE_AGENT_METRICS_HOST      = "127.0.0.1"
-            CORE_AGENT_METRICS_PORT      = "$($metricsUri.Port)"
-            OTEL_TRACING_ENABLED         = "true"
-            OTEL_SERVICE_NAME            = "snowpanel-core-agent"
-            OTEL_EXPORTER_OTLP_ENDPOINT  = "127.0.0.1:4317"
-            OTEL_EXPORTER_OTLP_INSECURE  = "true"
-            OTEL_TRACES_SAMPLER_ARG      = "1.0"
-          }
-
-          foreach ($pair in $agentEnv.GetEnumerator()) {
-            [System.Environment]::SetEnvironmentVariable($pair.Key, $pair.Value, "Process")
-          }
-
-          $proc = Start-Process -FilePath $agentBinary -WorkingDirectory $PWD -RedirectStandardOutput $stdoutLog -RedirectStandardError $stderrLog -PassThru
-          "HOST_AGENT_PID=$($proc.Id)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          Write-Host "Started host core-agent process with PID $($proc.Id)."
-
-          $started = $false
-          for ($attempt = 1; $attempt -le 40; $attempt++) {
-            $proc.Refresh()
-            if ($proc.HasExited) {
-              throw "core-agent exited unexpectedly with code $($proc.ExitCode)."
-            }
-
-            $client = [System.Net.Sockets.TcpClient]::new()
-            try {
-              $task = $client.ConnectAsync("127.0.0.1", $agentPort)
-              if ($task.Wait(500) -and $client.Connected) {
-                $started = $true
-                break
-              }
-            } catch {
-            } finally {
-              $client.Dispose()
-            }
-
-            Start-Sleep -Milliseconds 500
-          }
-
-          if (-not $started) {
-            throw "core-agent did not bind to 127.0.0.1:$agentPort within timeout."
-          }
+        run: ./scripts/ci/start-host-agent.ps1 -HostAgentTarget "${{ inputs.host_agent_target }}" -HostAgentMetricsBaseUrl "${{ inputs.host_agent_metrics_base_url }}" -LogDir "${{ env.HOST_AGENT_LOG_DIR }}"
 
       - name: Validate Observability Configs
         shell: pwsh
@@ -145,17 +62,7 @@ jobs:
       - name: Stop Core-Agent On Host
         if: ${{ always() && inputs.agent_mode == 'host-agent' }}
         shell: pwsh
-        run: |
-          $ErrorActionPreference = "Continue"
-          if ([string]::IsNullOrWhiteSpace($env:HOST_AGENT_PID)) {
-            Write-Host "HOST_AGENT_PID is empty; skipping host core-agent shutdown."
-            exit 0
-          }
-          try {
-            Stop-Process -Id [int]$env:HOST_AGENT_PID -Force
-          } catch {
-            Write-Warning "Failed to stop host core-agent process: $($_.Exception.Message)"
-          }
+        run: ./scripts/ci/stop-host-agent.ps1
 
       - name: Upload Host-Agent Logs
         if: ${{ failure() && inputs.agent_mode == 'host-agent' }}
