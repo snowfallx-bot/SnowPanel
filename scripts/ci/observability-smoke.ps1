@@ -110,7 +110,6 @@ try {
     -AlertmanagerBaseUrl $AlertmanagerBaseUrl `
     -AlertName "SnowPanelSmokeAlertWarning" `
     -Severity "warning" `
-    -Instance "smoke-warning-route" `
     -AlertDurationSeconds 120 `
     -WaitSeconds 30
 
