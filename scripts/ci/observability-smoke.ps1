@@ -3,6 +3,7 @@ param(
   [string]$AgentMode = "container-agent",
   [string]$HostAgentTarget = "host.docker.internal:50051",
   [string]$HostAgentMetricsBaseUrl = "http://127.0.0.1:9108",
+  [ValidatePattern('^[^\\/]+\.ya?ml$')]
   [string]$AlertmanagerConfigFile = "alertmanager.yml",
   [string]$FailureLogDir = ".github/workflow-logs/observability-smoke"
 )
@@ -101,6 +102,9 @@ try {
 
   if ([string]::IsNullOrWhiteSpace($AlertmanagerConfigFile)) {
     throw "AlertmanagerConfigFile must not be empty."
+  }
+  if ($AlertmanagerConfigFile -match '[\\/]') {
+    throw "AlertmanagerConfigFile must be a file name under deploy/observability/alertmanager (no path separators)."
   }
   $alertmanagerConfigHostPath = Join-Path $RepoRoot "deploy\observability\alertmanager\$AlertmanagerConfigFile"
   if (-not (Test-Path -LiteralPath $alertmanagerConfigHostPath)) {
