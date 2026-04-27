@@ -27,6 +27,10 @@ on:
         required: false
         default: alertmanager.yml
 
+concurrency:
+  group: observability-smoke-${{ github.workflow }}-${{ github.ref }}-${{ inputs.agent_mode }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
