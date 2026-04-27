@@ -11,62 +11,51 @@
 下面是改动正文：
 
 ============
-本轮按“先修红灯再推进 P2-3 代码侧收敛”执行，保持小步提交并每次 push 后盯 CI 到结论。
+本轮继续按“P2-2 观测链路收口 + P2-3 代码侧收敛”推进，保持小步提交、立即 push，并对关键 run 追到最终状态。
 
 本轮实际改动
 
-1. 修复 P2-2 阻塞（observability smoke 持续失败）
-   - 文件：`scripts/observability/common.ps1`
-   - 关键修复：
-     - 修正 `Get-AlertmanagerApiUriWithFilters` 的字符串插值错误（此前会把 URL 组装成 `...=true&...`，导致 Alertmanager 查询无效）。
-     - `Get-AlertmanagerActiveAlerts` / `Get-AlertmanagerActiveAlertGroups` 统一将空响应归一为 `@()`，避免 `ConvertFrom-Json` 对 `[]` 返回 `$null` 造成后续空值异常。
-     - `Find-AlertmanagerAlertByLabels` 支持 `Alerts = $null` 输入并安全返回 `$null`。
-
-2. 增加 observability helper 防回归闸门
-   - 文件：`scripts/observability/validate-config.ps1`
+1. CI 平台兼容性收口（Node 24 迁移前置）
+   - 文件：
+     - `.github/workflows/ci.yml`
+     - `.github/workflows/observability-smoke.yml`
    - 改动：
-     - 新增 “observability script helpers” 自检，直接校验 Alertmanager URI helper 产物前缀是否正确（`/api/v2/alerts?active=true...` 与 `/api/v2/alerts/groups?active=true...`）。
-     - 让这类插值回归在 `observability-config` 阶段立即失败，而不是拖到后置 smoke 才暴露。
+     - 两个 workflow 顶层新增 `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"`，提前切换 JavaScript actions 到 Node 24 执行，规避 Node 20 弃用风险。
 
-3. P2-3 代码侧去重（CI 脚本）
-   - 文件：`scripts/ci/backend-integration.ps1`
+2. Observability smoke 参数化增强（支持配置文件切换）
+   - 文件：
+     - `scripts/ci/observability-smoke.ps1`
+     - `.github/workflows/observability-smoke.yml`
+     - `.github/workflows/ci.yml`
    - 改动：
-     - 新增 `Assert-AuditLogsAvailable`，收敛重复的 audit module 断言逻辑。
-     - 中途尝试将任务轮询切到 `Wait-UntilReady`，触发作用域回归后已立即回退到稳定实现并补救（见 commit 摘要）。
+     - `scripts/ci/observability-smoke.ps1` 新增参数 `AlertmanagerConfigFile`（默认 `alertmanager.yml`）。
+     - 启动前新增 preflight：校验所选配置文件在 `deploy/observability/alertmanager/` 下存在，否则快速失败。
+     - 手动 workflow 新增 `alertmanager_config_file` 输入并透传到脚本。
+     - `ci.yml` 两个 observability smoke job 显式传入 `-AlertmanagerConfigFile`，并抽到顶层变量 `OBSERVABILITY_ALERTMANAGER_CONFIG_FILE` 统一管理。
 
-4. Alertmanager 分级路由节奏收敛（配置侧）
-   - 文件：`deploy/observability/alertmanager/alertmanager.yml`
-   - 改动：
-     - `group_by` 增加 `instance`，降低多实例告警合并误差。
-     - critical route：`group_wait=10s`、`group_interval=2m`、`repeat_interval=30m`。
-     - warning route：`group_wait=30s`、`group_interval=10m`、`repeat_interval=4h`。
-
-本轮环境动作
-
-- 已确认可执行文件存在：
-  - `C:\Program Files\GitHub CLI\gh.exe`（v2.91.0）
-  - `%USERPROFILE%\.cargo\bin\cargo.exe`（1.95.0）
-- 已写入用户 PATH（需新终端会话生效）。
-- 尝试 `winget install Docker.DockerDesktop`，仍因管理员提升安装阶段失败（exit code `4294967291`）。
+3. 执行节奏优化（减少过期排队 run）
+   - 动作：
+     - 取消了 4 条过期 in-progress run：`24970425235`、`24970447070`、`24970460348`、`24970471918`。
+     - 保留并重点追踪最新 run，缩短反馈周期。
 
 远端与 CI 状态
 
-- 关键结论：`ea182d1`（URI 修复后首轮）与 `8c8d748`（回归补救后）均全绿，`observability-smoke-container` 和 `observability-smoke-host-agent` 已恢复稳定通过。
-- 最新提交 `0faf64d` 也已全绿（包含 observability + backend-integration + frontend-e2e 全链路）。
+- 最新主线 run：`24970485583`（head `2ec87bc`）已全绿。
+- 该 run 覆盖全部关键 job：`backend`、`core-agent`、`frontend`、`proto-contract`、`compose-smoke`、`backend-integration`、`observability-smoke-container`、`observability-smoke-host-agent`、`frontend-e2e` 全部 success。
+- 当前本地工作树干净：`git status` 无未提交改动。
 
 commit 摘要（本轮）
 
-- `ea182d1 fix(observability): repair alertmanager query uri interpolation`
-- `fcda4fb refactor(ci): reuse wait-until-ready in backend integration task polling`
-- `d7d3ac4 test(observability): guard alertmanager uri helper in config validation`
-- `c48a417 refactor(ci): deduplicate backend integration audit log assertions`
-- `8c8d748 fix(ci): restore stable task terminal polling loop`
-- `0faf64d feat(observability): tune alertmanager severity routing cadence`
+- `728dcff chore(ci): force javascript actions to node24`
+- `512dd91 feat(observability): parameterize alertmanager config in smoke workflow`
+- `d8ec9ca chore(ci): pass explicit alertmanager config to observability smoke jobs`
+- `e439e6e fix(ci): preflight selected alertmanager config path in observability smoke`
+- `2ec87bc refactor(ci): centralize alertmanager config selection for observability jobs`
 
 希望接下来的 AI 做什么
 
-1. 继续 P2-3，优先“代码层重复逻辑收敛 + 行为不变”，避免再大规模文档修补。
-2. 若需要本地跑完整 observability/compose 链路，优先指导用户完成 Docker Desktop 的管理员安装与首次初始化。
-3. 维持当前节奏：小步提交、立即 push、每次盯到 CI 结果后再推进下一步。
+1. 继续 P2-3 代码侧收敛，优先脚本/后端里的重复流程抽取，保持行为不变。
+2. 如需继续加速，保持“取消过期 run + 聚焦最新 run”的验证策略。
+3. 若要推进本地实跑闭环，下一步优先协助用户完成 Docker Desktop 管理员安装并验证 `docker` 命令可用。
 
 by: gpt-5
