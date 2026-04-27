@@ -11,6 +11,7 @@ permissions:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  OBSERVABILITY_ALERTMANAGER_CONFIG_FILE: "alertmanager.yml"
 
 jobs:
   observability-config:
@@ -164,7 +165,7 @@ jobs:
 
       - name: Run Observability Smoke (Container-Agent)
         shell: pwsh
-        run: ./scripts/ci/observability-smoke.ps1 -AgentMode container-agent -AlertmanagerConfigFile "alertmanager.yml"
+        run: ./scripts/ci/observability-smoke.ps1 -AgentMode container-agent -AlertmanagerConfigFile "${{ env.OBSERVABILITY_ALERTMANAGER_CONFIG_FILE }}"
 
       - name: Upload Observability Container Logs
         if: failure()
@@ -199,7 +200,7 @@ jobs:
 
       - name: Run Observability Smoke (Host-Agent)
         shell: pwsh
-        run: ./scripts/ci/observability-smoke.ps1 -AgentMode host-agent -HostAgentTarget "host.docker.internal:50051" -HostAgentMetricsBaseUrl "http://127.0.0.1:9108" -AlertmanagerConfigFile "alertmanager.yml"
+        run: ./scripts/ci/observability-smoke.ps1 -AgentMode host-agent -HostAgentTarget "host.docker.internal:50051" -HostAgentMetricsBaseUrl "http://127.0.0.1:9108" -AlertmanagerConfigFile "${{ env.OBSERVABILITY_ALERTMANAGER_CONFIG_FILE }}"
 
       - name: Stop Host Core-Agent
         if: always()
