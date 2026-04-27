@@ -56,6 +56,28 @@ function Assert-DockerAvailable {
   }
 }
 
+function Set-ProcessEnvironmentVariables {
+  param(
+    [Parameter(Mandatory = $true)]
+    [hashtable]$Variables
+  )
+
+  foreach ($entry in $Variables.GetEnumerator()) {
+    $name = [string]$entry.Key
+    if ([string]::IsNullOrWhiteSpace($name)) {
+      continue
+    }
+
+    $value = $entry.Value
+    if ($null -eq $value) {
+      Remove-Item -Path "Env:$name" -ErrorAction SilentlyContinue
+      continue
+    }
+
+    [System.Environment]::SetEnvironmentVariable($name, [string]$value, "Process")
+  }
+}
+
 function Convert-HeaderValueToString {
   param(
     [Parameter(Mandatory = $false)]

@@ -96,11 +96,13 @@ function Wait-ForTaskTerminal {
 }
 
 try {
-  $env:APP_ENV = "production"
-  $env:BACKEND_PORT = $BackendPort
-  $env:JWT_SECRET = $JwtSecret
-  $env:DEFAULT_ADMIN_PASSWORD = $BootstrapPassword
-  $env:LOGIN_ATTEMPT_STORE = "redis"
+  Set-ProcessEnvironmentVariables -Variables @{
+    APP_ENV                = "production"
+    BACKEND_PORT           = $BackendPort
+    JWT_SECRET             = $JwtSecret
+    DEFAULT_ADMIN_PASSWORD = $BootstrapPassword
+    LOGIN_ATTEMPT_STORE    = "redis"
+  }
 
   Invoke-ComposeCommand -ComposeArgs $ComposeArgs -Arguments @("up", "-d", "--build", "postgres", "redis", "core-agent", "backend")
 

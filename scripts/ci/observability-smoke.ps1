@@ -107,24 +107,30 @@ try {
     throw "Alertmanager config file not found: $alertmanagerConfigHostPath"
   }
 
-  $env:APP_ENV = "production"
-  $env:BACKEND_PORT = $BackendPort
-  $env:PROMETHEUS_PORT = $PrometheusPort
-  $env:ALERTMANAGER_PORT = $AlertmanagerPort
-  $env:ALERTMANAGER_CONFIG_FILE = $AlertmanagerConfigFile
-  $env:JAEGER_UI_PORT = $JaegerPort
-  $env:JWT_SECRET = $JwtSecret
-  $env:DEFAULT_ADMIN_PASSWORD = $BootstrapPassword
-  $env:LOGIN_ATTEMPT_STORE = "redis"
+  Set-ProcessEnvironmentVariables -Variables @{
+    APP_ENV                  = "production"
+    BACKEND_PORT             = $BackendPort
+    PROMETHEUS_PORT          = $PrometheusPort
+    ALERTMANAGER_PORT        = $AlertmanagerPort
+    ALERTMANAGER_CONFIG_FILE = $AlertmanagerConfigFile
+    JAEGER_UI_PORT           = $JaegerPort
+    JWT_SECRET               = $JwtSecret
+    DEFAULT_ADMIN_PASSWORD   = $BootstrapPassword
+    LOGIN_ATTEMPT_STORE      = "redis"
+  }
   if ($AgentMode -eq "host-agent") {
     if ([string]::IsNullOrWhiteSpace($HostAgentTarget)) {
       throw "HostAgentTarget must not be empty when AgentMode=host-agent."
     }
-    $env:AGENT_TARGET = $HostAgentTarget
+    Set-ProcessEnvironmentVariables -Variables @{
+      AGENT_TARGET = $HostAgentTarget
+    }
 
     Wait-ApiStatus -Description "host core-agent metrics endpoint" -Uri $HostAgentMetricsEndpoint -ExpectedStatusCodes @(200) -Attempts 30 -DelaySeconds 1
   } else {
-    Remove-Item -Path Env:AGENT_TARGET -ErrorAction SilentlyContinue
+    Set-ProcessEnvironmentVariables -Variables @{
+      AGENT_TARGET = $null
+    }
   }
 
   $services = @("postgres", "redis", "backend", "jaeger", "otel-collector", "alertmanager", "prometheus")
