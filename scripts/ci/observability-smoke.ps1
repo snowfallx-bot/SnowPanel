@@ -102,6 +102,10 @@ try {
   if ([string]::IsNullOrWhiteSpace($AlertmanagerConfigFile)) {
     throw "AlertmanagerConfigFile must not be empty."
   }
+  $alertmanagerConfigHostPath = Join-Path $RepoRoot "deploy\observability\alertmanager\$AlertmanagerConfigFile"
+  if (-not (Test-Path -LiteralPath $alertmanagerConfigHostPath)) {
+    throw "Alertmanager config file not found: $alertmanagerConfigHostPath"
+  }
 
   $env:APP_ENV = "production"
   $env:BACKEND_PORT = $BackendPort
