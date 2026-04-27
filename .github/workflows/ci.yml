@@ -164,7 +164,7 @@ jobs:
 
       - name: Run Observability Smoke (Container-Agent)
         shell: pwsh
-        run: ./scripts/ci/observability-smoke.ps1 -AgentMode container-agent
+        run: ./scripts/ci/observability-smoke.ps1 -AgentMode container-agent -AlertmanagerConfigFile "alertmanager.yml"
 
       - name: Upload Observability Container Logs
         if: failure()
@@ -199,7 +199,7 @@ jobs:
 
       - name: Run Observability Smoke (Host-Agent)
         shell: pwsh
-        run: ./scripts/ci/observability-smoke.ps1 -AgentMode host-agent -HostAgentTarget "host.docker.internal:50051" -HostAgentMetricsBaseUrl "http://127.0.0.1:9108"
+        run: ./scripts/ci/observability-smoke.ps1 -AgentMode host-agent -HostAgentTarget "host.docker.internal:50051" -HostAgentMetricsBaseUrl "http://127.0.0.1:9108" -AlertmanagerConfigFile "alertmanager.yml"
 
       - name: Stop Host Core-Agent
         if: always()
