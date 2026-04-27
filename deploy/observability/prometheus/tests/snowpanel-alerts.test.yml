@@ -47,6 +47,16 @@ tests:
               description: Neither compose-mode nor host-mode core-agent metrics endpoint is reachable.
 
       - eval_time: 16m
+        alertname: SnowPanelBackendAvailabilityBurnRateCritical
+        exp_alerts:
+          - exp_labels:
+              alertname: SnowPanelBackendAvailabilityBurnRateCritical
+              severity: critical
+            exp_annotations:
+              summary: SnowPanel backend availability burn rate is critical
+              description: Backend error budget burn is critical across 5m/30m windows (5m error rate >1%, 30m error rate >0.5%) for 5 minutes.
+
+      - eval_time: 16m
         alertname: SnowPanelBackendAvailabilitySLOCritical
         exp_alerts:
           - exp_labels:
@@ -87,6 +97,20 @@ tests:
         values: '0+3x30'
 
     alert_rule_test:
+      - eval_time: 21m
+        alertname: SnowPanelBackendAvailabilityBurnRateWarning
+        exp_alerts:
+          - exp_labels:
+              alertname: SnowPanelBackendAvailabilityBurnRateWarning
+              severity: warning
+            exp_annotations:
+              summary: SnowPanel backend availability burn rate is elevated
+              description: Backend error budget burn is high across 5m/30m windows (5m error rate >0.3%, 30m error rate >0.2%) for 10 minutes.
+
+      - eval_time: 16m
+        alertname: SnowPanelBackendAvailabilityBurnRateCritical
+        exp_alerts: []
+
       - eval_time: 21m
         alertname: SnowPanelBackendAvailabilitySLOWarning
         exp_alerts:

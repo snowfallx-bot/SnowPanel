@@ -37,6 +37,9 @@ Prometheus recording rules also derive SLO-oriented series:
 - `snowpanel:backend_http_total:rate5m`
 - `snowpanel:backend_http_5xx:rate5m`
 - `snowpanel:backend_http_availability:ratio5m`
+- `snowpanel:backend_http_total:rate30m`
+- `snowpanel:backend_http_5xx:rate30m`
+- `snowpanel:backend_http_availability:ratio30m`
 - `snowpanel:core_agent_grpc_error_ratio:ratio5m`
 
 Agent RPC metrics are labeled by:
@@ -58,6 +61,7 @@ Repository now includes a baseline observability deployment:
 - Prometheus scrape config: `deploy/observability/prometheus/prometheus.yml`
 - Alert rules: `deploy/observability/prometheus/alerts/snowpanel-alerts.yml`
 - Alertmanager routing config: `deploy/observability/alertmanager/alertmanager.yml`
+- Alertmanager production config template: `deploy/observability/alertmanager/alertmanager.production.example.yml`
 - OTel Collector config: `deploy/observability/otel-collector/config.yaml`
 - Jaeger UI: `http://127.0.0.1:${JAEGER_UI_PORT:-16686}`
 
@@ -85,6 +89,7 @@ Notes:
 - Compose observability mode enables OTLP tracing export for `backend` and containerized `core-agent` by default.
 - In host-agent mode, also set OTEL variables in `deploy/core-agent/systemd/core-agent.env.example` (or `/etc/snowpanel/core-agent.env`) so host `core-agent` exports traces to the collector.
 - Before smoke/runtime checks, run `pwsh -File ./scripts/observability/validate-config.ps1` to fail fast on Prometheus/Alertmanager config errors and alert rule regressions (`promtool test rules`). The script uses Docker by default and falls back to local `promtool`/`amtool` binaries when Docker is unavailable.
+- For real alert channel rollout, generate a concrete production config via `pwsh -File ./scripts/observability/generate-alertmanager-config.ps1 ...` and point compose to it with `ALERTMANAGER_CONFIG_FILE=<generated-file>.yml`.
 
 ## Request Correlation
 
@@ -152,6 +157,7 @@ The script triggers `GET /api/v1/dashboard/summary` with a generated `X-Request-
 See also: [`scripts/observability/README.md`](../scripts/observability/README.md) for both tracing and Alertmanager smoke script usage.
 For a one-shot check, you can run `pwsh -File ./scripts/observability/full-smoke.ps1 -AccessToken "<access_token>"`.
 `full-smoke.ps1` also supports automatic login mode via `-LoginUsername` + `-LoginPassword` if you do not want to fetch token manually.
+Latest CI evidence for compose + host-agent trace/alert smoke is recorded in [`docs/observability-validation.md`](observability-validation.md).
 
 ## Fast Triage Flow
 
@@ -181,6 +187,8 @@ Default alerts include:
 - `SnowPanelCoreAgentGrpcErrorRateHigh`
 - `SnowPanelCoreAgentGrpcErrorRateCritical`
 - `SnowPanelCoreAgentInFlightHigh`
+- `SnowPanelBackendAvailabilityBurnRateWarning`
+- `SnowPanelBackendAvailabilityBurnRateCritical`
 - `SnowPanelBackendAvailabilitySLOWarning`
 - `SnowPanelBackendAvailabilitySLOCritical`
 
@@ -199,26 +207,30 @@ Both `snowpanel-warning` and `snowpanel-critical` ship as template no-op receive
 
 Use this checklist when moving from baseline no-op routing to real production delivery.
 
-1. Replace both `snowpanel-warning` and `snowpanel-critical` receivers with real channels in `deploy/observability/alertmanager/alertmanager.yml` (webhook/email/slack/wechat/etc).
-   - You can start from `deploy/observability/alertmanager/alertmanager.production.example.yml` and then apply your real channel endpoints/secrets.
+1. Generate a concrete production receiver config:
+   - `pwsh -File ./scripts/observability/generate-alertmanager-config.ps1 ... -OutputPath "deploy/observability/alertmanager/alertmanager.generated.yml"`
+   - Set `ALERTMANAGER_CONFIG_FILE=alertmanager.generated.yml` before starting observability compose.
 2. Keep explicit route ownership by severity:
    - `critical` -> paging channel
-   - `warning` -> non-paging ops channel (add dedicated route/receiver if needed)
-3. Keep (or extend) inhibition rules so `critical` suppresses duplicate `warning` noise for the same `alertname`.
-4. Roll out and validate routing:
+   - `warning` -> non-paging ops channel
+3. Keep inhibition rules so `critical` suppresses duplicate `warning` noise for the same `alertname` and `instance`.
+4. Use burn-rate + static SLO thresholds together:
+   - `SnowPanelBackendAvailabilityBurnRateWarning/Critical`
+   - `SnowPanelBackendAvailabilitySLOWarning/Critical`
+5. Roll out and validate routing:
    - `make up-observability` (or `make up-host-agent-observability`)
    - `pwsh -File ./scripts/observability/prometheus-rules-smoke.ps1 -PrometheusBaseUrl "http://127.0.0.1:${PROMETHEUS_PORT:-9090}"`
    - verify receiver/routing state in Alertmanager UI (`/#/status`)
-5. Run a controlled delivery test:
+6. Run a controlled delivery test:
    - either inject a synthetic alert:
      - `pwsh -File ./scripts/observability/alertmanager-smoke.ps1`
    - or temporarily lower one alert threshold in `deploy/observability/prometheus/alerts/snowpanel-alerts.yml`
    - then generate matching traffic/load as needed
    - confirm notification arrives once per dedup window and includes labels (`alertname`, `severity`, `instance`)
-6. Restore the original threshold after validation and commit the final config/rule set.
+7. Restore the original threshold after validation and commit the final config/rule set.
 
 ## Current Gaps
 
 - No browser/frontend tracing yet.
 - No trace-backed log shipping pipeline; request correlation still mainly relies on logs + `X-Request-ID`.
-- Alert routing, deduplication, escalation, and SLO/SLA calibration still need production tuning.
+- Alert channels are configurable and validated in CI smoke, but final destination ownership/on-call policy remains team-specific operational governance.

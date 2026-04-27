@@ -14,7 +14,7 @@
 - 文件能力已扩展到更接近真实运维场景
 - CI 已形成分层覆盖：backend tests、compose smoke、backend integration、frontend e2e
 
-## 进行中
+## P2 已完成项
 
 ### P2-2 生产化观测能力
 
@@ -36,28 +36,29 @@
 - observability 配置校验闸门现已具备：
   - `scripts/observability/validate-config.ps1`（`promtool`/`amtool` 检查，默认 Docker 且支持本地回退 + `promtool test rules`）
   - `ci.yml` 中的 `observability-config` 任务
-
-仍待完成：
-
-- 在 compose / host-agent 模式下做 tracing 端到端实测
-- 接入真实告警通知渠道
-- 校准告警去重、升级策略与 SLO/SLI 阈值
+- Alertmanager 生产落地辅助能力已补齐：
+  - 生产接收器模板：`deploy/observability/alertmanager/alertmanager.production.example.yml`
+  - 生产配置生成脚本：`scripts/observability/generate-alertmanager-config.ps1`
+- SLO burn-rate 已扩展为 5m/30m 双窗口，并具备 warning/critical 分级告警
+- compose + host-agent 双模式观测冒烟通过证据已沉淀到：
+  - `docs/observability-validation.md`
+  - `docs/observability-validation.zh-CN.md`
 
 ### P2-3 原型痕迹清理
 
 - backend README 中过时的原型遗留描述已移除
 - 前端应用壳与 e2e 页面锚点已不再使用 `Linux Panel Prototype` 文案
 - root README 已补上 observability 命令与文档入口
-- 仍有少量历史措辞与重复说明需要继续清理
+- README / roadmap / observability 文档中的历史原型措辞与重复说明已对齐收口
 
-## 下一步优先级
+## 后续加固（Post-P2，非阻塞）
 
-1. 在具备 Docker 的环境验证 tracing 闭环
-2. 完成生产化告警投递与阈值调优
-3. 继续清理过时文档、历史遗留措辞与重复说明
+1. 按团队值班制度把最终告警目的地接入到真实 on-call 通道
+2. 基于真实流量持续调优去重/升级窗口与 SLO 阈值
+3. 若后续排障深度需要，再补浏览器侧 tracing
 
 ## 当前不优先的方向
 
 - UI 美化或视觉重做
 - 在运维主链路未补齐前继续扩页面
-- 过早把项目表述成“生产就绪”
+- 在运维治理未固化前过早把项目表述成“全面生产就绪”

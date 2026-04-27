@@ -10,6 +10,15 @@ groups:
       - record: snowpanel:backend_http_availability:ratio5m
         expr: 1 - (snowpanel:backend_http_5xx:rate5m / clamp_min(snowpanel:backend_http_total:rate5m, 0.001))
 
+      - record: snowpanel:backend_http_total:rate30m
+        expr: sum(rate(snowpanel_http_requests_total{route!="/metrics"}[30m]))
+
+      - record: snowpanel:backend_http_5xx:rate30m
+        expr: sum(rate(snowpanel_http_requests_total{route!="/metrics",status=~"5.."}[30m]))
+
+      - record: snowpanel:backend_http_availability:ratio30m
+        expr: 1 - (snowpanel:backend_http_5xx:rate30m / clamp_min(snowpanel:backend_http_total:rate30m, 0.001))
+
       - record: snowpanel:core_agent_grpc_error_ratio:ratio5m
         expr: sum(rate(snowpanel_core_agent_grpc_requests_total{outcome="error"}[5m])) / clamp_min(sum(rate(snowpanel_core_agent_grpc_requests_total[5m])), 0.001)
 
@@ -111,6 +120,24 @@ groups:
 
   - name: snowpanel-slo
     rules:
+      - alert: SnowPanelBackendAvailabilityBurnRateWarning
+        expr: (1 - snowpanel:backend_http_availability:ratio5m) > 0.003 and (1 - snowpanel:backend_http_availability:ratio30m) > 0.002
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "SnowPanel backend availability burn rate is elevated"
+          description: "Backend error budget burn is high across 5m/30m windows (5m error rate >0.3%, 30m error rate >0.2%) for 10 minutes."
+
+      - alert: SnowPanelBackendAvailabilityBurnRateCritical
+        expr: (1 - snowpanel:backend_http_availability:ratio5m) > 0.01 and (1 - snowpanel:backend_http_availability:ratio30m) > 0.005
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "SnowPanel backend availability burn rate is critical"
+          description: "Backend error budget burn is critical across 5m/30m windows (5m error rate >1%, 30m error rate >0.5%) for 5 minutes."
+
       - alert: SnowPanelBackendAvailabilitySLOWarning
         expr: snowpanel:backend_http_availability:ratio5m < 0.995
         for: 15m

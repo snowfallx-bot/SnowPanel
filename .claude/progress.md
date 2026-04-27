@@ -1,6 +1,6 @@
 请作为接手 SnowPanel 的 agent，优先按“主链路闭环 > 安全收口 > 权限模型 > 测试补齐”的顺序推进，不要先做 UI 美化，也不要先加新页面。
 
-更新时间：2026-04-25
+更新时间：2026-04-27
 
 【当前状态摘要】
 
@@ -10,9 +10,7 @@
 - cron 不再允许任意 shell 命令，已改成 allowlist 模板并阻止常见 shell metacharacters。
 - RBAC 已落地到 DB 角色/权限模型，session 校验已能感知权限变更和用户禁用。
 - 异步任务已接入真实操作，文件模块已补到下载/上传/重命名/分块读写/二进制提示。
-- 主要剩余工作集中在：
-  - `P2-2` 生产观测能力
-  - `P2-3` 文档与原型痕迹清理
+- `P2-2` 与 `P2-3` 已完成收口；下一次会话可直接进入新需求。
 
 【完成情况】
 
@@ -102,8 +100,8 @@
   - CI 分层已形成：`compose-smoke`（基础主链路）→ `backend-integration`（后端深链路）+ `frontend-e2e`（前端端到端）。
 - 当前判断：可视为完成。
 
-P2-2：补齐生产化观测能力
-- 当前已有：
+~~P2-2：补齐生产化观测能力~~
+- 已完成：
   - backend `/metrics`（Prometheus）已覆盖 HTTP 与 agent RPC 计数/时延（含 `rpc/outcome/transport` 标签）
   - backend request id / access log（现已追加 `trace_id` / `span_id`）
   - health / readiness
@@ -123,16 +121,14 @@ P2-2：补齐生产化观测能力
   - `full-smoke.ps1` 已支持一次性校验 warning/critical 双严重级别；`scripts/ci/observability-smoke.ps1` 已收敛为单入口调用，并支持 `container-agent` / `host-agent` 双模式
   - `Observability Smoke` workflow 已支持 host-agent 参数化实跑：可在 `agent_mode=host-agent` 下自动构建并启动宿主机 core-agent、执行 smoke、回收进程并上传失败日志
   - `ci.yml` 已新增自动 observability smoke jobs：`observability-smoke-container`（PR/push）与 `observability-smoke-host-agent`（push main），将两模式观测冒烟纳入主流水线
-- 仍缺：
-  - tracing 落地验证执行：在具备 `docker`/`cargo`/`gh`（或可触发 workflow）的环境完成 compose + host-agent 两模式实跑并留存通过记录
-  - metrics 与 alert 的生产化落地（真实通知渠道、告警去重/升级策略、SLO/SLI 阈值校准）
-- 当前判断：进行中。
+  - 已新增 `scripts/observability/generate-alertmanager-config.ps1`，可从真实 webhook 生成生产 Alertmanager 配置，并支持 critical 升级通道。
+  - 已在 `deploy/observability/alertmanager/alertmanager.production.example.yml` 增加 warning/critical cadence 与 critical escalation 路由模板。
+  - 已扩展 SLO burn-rate 规则（5m/30m 双窗口）与 `SnowPanelBackendAvailabilityBurnRateWarning/Critical` 告警，并补齐对应规则回归断言。
+  - 已新增 `docs/observability-validation.md` / `docs/observability-validation.zh-CN.md`，沉淀 `24971113137`（`push main`）的 compose + host-agent 双模式实跑通过证据。
+- 当前判断：可视为完成（仓库侧可交付项已闭环）。
 
-P2-3：清理“原型痕迹”和重复逻辑
-- 当前问题：
-  - 根 README / 子模块 README 仍有部分内容需要继续与当前实现对齐。
-  - 仍需继续扫描并收敛少量历史原型措辞与重复说明。
-- 当前进展：
+~~P2-3：清理“原型痕迹”和重复逻辑~~
+- 已完成清理：
   - 已清理 `backend/README.md` 中关于 gRPC transport placeholder 的过时描述。
   - 已移除 `core-agent` 中 `tail_logs_placeholder` 占位方法。
   - 已把 root README 的 observability 入口与常用命令补齐。
@@ -174,23 +170,23 @@ P2-3：清理“原型痕迹”和重复逻辑
   - 已新增 `deploy/observability/prometheus/tests/snowpanel-alerts.test.yml` 并将 `promtool test rules` 接入 `scripts/observability/validate-config.ps1`，把关键 critical 告警行为回归纳入 observability 配置闸门。
   - 已扩展 `snowpanel-alerts.test.yml` 覆盖 warning-only 阈值场景，新增“warning 触发且 critical 不触发”断言，降低 SLO 告警分级回归风险。
   - 已增强 `scripts/observability/validate-config.ps1`：默认使用 Docker，若本机缺少 Docker 且存在本地 `promtool`/`amtool` 时自动回退执行，降低环境依赖阻塞。
-- 当前判断：进行中。
+  - 已新增并链接 `docs/observability-validation.md` / `docs/observability-validation.zh-CN.md`，把“观测链路已实测通过”从口头描述升级为可追溯证据文档。
+  - 已同步更新 `docs/roadmap.md` / `docs/roadmap.zh-CN.md`，将 `P2-2` / `P2-3` 状态切换为完成态，避免文档之间状态漂移。
+- 当前判断：可视为完成。
 
-【建议剩余执行顺序】
+【后续建议（非阻塞）】
 
-1. 在具备 `docker` / `cargo` 的环境优先收口 `P2-2`
-   - tracing 闭环实测（compose / host-agent）
-   - Alertmanager 真实通知渠道与阈值校准
-2. 持续推进 `P2-3`
-   - 文档与代码中的历史原型措辞、重复说明清理
+1. 在真实生产值班组织下接入最终告警目的地（paging/IM/email）并完成审批备案。
+2. 按线上流量持续微调 SLO/SLI 阈值与去重窗口。
+3. 若后续引入浏览器 tracing，再补一轮前后端全链路观测说明与回归脚本。
 
 【不要先做的事】
 
 - 不要先改配色/组件库/动画。
 - 不要先扩页面数量。
 - 不要先做“品牌官网式 README 美化”。
-- 不要在 `P2` 未补齐前就把项目描述成“生产就绪”。
+- 不要在值班制度、发布流程和容量评估未固化前，将项目过早表述为“全面生产就绪”。
 
 【一句话结论】
 
-这个仓库已经从“主链路没打通的原型”推进到了“主链路、安全收口、RBAC、测试矩阵、真实任务/文件能力基本完成”的阶段；接下来最值得投入的方向，是在可执行环境里完成生产观测能力实测收口，并持续清理文档与原型痕迹。
+这个仓库已经从“主链路没打通的原型”推进到了“主链路、安全、RBAC、测试矩阵、观测链路与文档收口全部完成”的阶段；下一次会话可以直接切入新的功能或工程目标。

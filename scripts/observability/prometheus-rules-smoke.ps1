@@ -11,6 +11,9 @@ $RequiredRecordingRules = @(
   "snowpanel:backend_http_total:rate5m",
   "snowpanel:backend_http_5xx:rate5m",
   "snowpanel:backend_http_availability:ratio5m",
+  "snowpanel:backend_http_total:rate30m",
+  "snowpanel:backend_http_5xx:rate30m",
+  "snowpanel:backend_http_availability:ratio30m",
   "snowpanel:core_agent_grpc_error_ratio:ratio5m"
 )
 
@@ -25,6 +28,8 @@ $RequiredAlertRules = @(
   "SnowPanelCoreAgentGrpcErrorRateHigh",
   "SnowPanelCoreAgentGrpcErrorRateCritical",
   "SnowPanelCoreAgentInFlightHigh",
+  "SnowPanelBackendAvailabilityBurnRateWarning",
+  "SnowPanelBackendAvailabilityBurnRateCritical",
   "SnowPanelBackendAvailabilitySLOWarning",
   "SnowPanelBackendAvailabilitySLOCritical"
 )

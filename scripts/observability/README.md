@@ -33,6 +33,25 @@ Validate Prometheus and Alertmanager configs via `promtool`/`amtool` (Docker ima
 pwsh -File ./scripts/observability/validate-config.ps1
 ```
 
+## `generate-alertmanager-config.ps1`
+
+Generate a concrete Alertmanager production config with real webhook channels.
+
+```powershell
+pwsh -File ./scripts/observability/generate-alertmanager-config.ps1 `
+  -WarningWebhookUrl "https://ops.example.com/alerts/warning" `
+  -CriticalWebhookUrl "https://ops.example.com/alerts/critical" `
+  -CriticalEscalationWebhookUrl "https://oncall.example.com/paging/critical" `
+  -OutputPath "deploy/observability/alertmanager/alertmanager.generated.yml"
+```
+
+Key parameters:
+
+- `WarningWebhookUrl` (required): warning notification webhook
+- `CriticalWebhookUrl` (required): critical notification webhook
+- `CriticalEscalationWebhookUrl` (optional): extra escalation webhook for critical alerts
+- `OutputPath` (optional): generated config path (default `deploy/observability/alertmanager/alertmanager.generated.yml`)
+
 ## `prometheus-rules-smoke.ps1`
 
 Validate that required recording and alert rules are loaded in a running Prometheus instance.
@@ -57,7 +76,7 @@ Key parameters:
 
 - `AlertmanagerBaseUrl` (optional): Alertmanager endpoint (default `http://127.0.0.1:9093`)
 - `AlertDurationSeconds` (optional): synthetic alert lifetime (default `120`)
-- `WaitSeconds` (optional): wait timeout for API visibility (default `20`)
+- `WaitSeconds` (optional): wait timeout for API visibility (default `60`)
 
 ## `full-smoke.ps1`
 

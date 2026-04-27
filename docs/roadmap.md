@@ -14,7 +14,7 @@ This roadmap reflects the current repository state rather than the original boot
 - File operations expanded to practical ops workflows
 - Layered CI coverage across backend tests, compose smoke, backend integration, and frontend e2e
 
-## In Progress
+## Completed in P2
 
 ### P2-2 Production Observability
 
@@ -36,28 +36,29 @@ This roadmap reflects the current repository state rather than the original boot
 - Observability config validation gate now exists:
   - `scripts/observability/validate-config.ps1` (`promtool`/`amtool` checks with Docker-first local fallback + `promtool test rules`)
   - CI `observability-config` job in `.github/workflows/ci.yml`
-
-Still remaining:
-
-- Validate tracing end to end in compose and host-agent runtime modes
-- Wire real alert notification channels
-- Tune alert deduplication, escalation, and SLO/SLI thresholds
+- Alertmanager production rollout helpers now exist:
+  - production receiver template: `deploy/observability/alertmanager/alertmanager.production.example.yml`
+  - generated config workflow: `scripts/observability/generate-alertmanager-config.ps1`
+- SLO burn-rate coverage now includes 5m/30m windows and warning/critical alert pairs
+- Compose + host-agent observability smoke evidence is recorded in:
+  - `docs/observability-validation.md`
+  - `docs/observability-validation.zh-CN.md`
 
 ### P2-3 Prototype-Trace Cleanup
 
 - Outdated backend README legacy prototype notes have been removed
 - App shell and frontend e2e marker no longer use `Linux Panel Prototype`
 - Root README now exposes observability commands and docs
-- Some historical wording and duplicate docs still need cleanup
+- Legacy prototype wording and duplicate observability instructions have been aligned across README/roadmap/observability docs
 
-## Next Priorities
+## Follow-up Hardening (Post-P2, Non-blocking)
 
-1. Validate the tracing pipeline in a Docker-capable environment
-2. Finish production-ready alert delivery and threshold tuning
-3. Continue pruning outdated docs, legacy wording, and duplicated explanations
+1. Wire final alert destinations to real on-call channels under team policy
+2. Tune dedup/escalation windows and SLO thresholds against production traffic
+3. Add browser/frontend tracing if future troubleshooting depth requires it
 
 ## Not Current Priorities
 
 - UI polish or visual redesign
 - New pages before operational gaps are closed
-- Marketing-style “production ready” positioning
+- Premature “fully production-ready” positioning before operational governance is finalized

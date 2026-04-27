@@ -37,6 +37,9 @@ Prometheus 还提供了面向 SLO 的 recording rules：
 - `snowpanel:backend_http_total:rate5m`
 - `snowpanel:backend_http_5xx:rate5m`
 - `snowpanel:backend_http_availability:ratio5m`
+- `snowpanel:backend_http_total:rate30m`
+- `snowpanel:backend_http_5xx:rate30m`
+- `snowpanel:backend_http_availability:ratio30m`
 - `snowpanel:core_agent_grpc_error_ratio:ratio5m`
 
 其中 agent RPC 指标包含以下标签：
@@ -58,6 +61,7 @@ Prometheus 还提供了面向 SLO 的 recording rules：
 - 抓取配置：`deploy/observability/prometheus/prometheus.yml`
 - 告警规则：`deploy/observability/prometheus/alerts/snowpanel-alerts.yml`
 - Alertmanager 路由配置：`deploy/observability/alertmanager/alertmanager.yml`
+- Alertmanager 生产模板：`deploy/observability/alertmanager/alertmanager.production.example.yml`
 - OTel Collector 配置：`deploy/observability/otel-collector/config.yaml`
 - Jaeger UI：`http://127.0.0.1:${JAEGER_UI_PORT:-16686}`
 
@@ -85,6 +89,7 @@ Prometheus 还提供了面向 SLO 的 recording rules：
 - Compose 可观测性模式会默认给 `backend` 与容器版 `core-agent` 打开 OTLP tracing 导出。
 - 若使用宿主机 Agent 模式，还需要在 `deploy/core-agent/systemd/core-agent.env.example`（或 `/etc/snowpanel/core-agent.env`）里设置 OTEL 环境变量，让宿主机上的 `core-agent` 把 trace 发往 collector。
 - 在做冒烟/实跑前，建议先执行 `pwsh -File ./scripts/observability/validate-config.ps1`，快速拦截 Prometheus/Alertmanager 配置错误与告警规则回归（`promtool test rules`）。脚本默认走 Docker，若无 Docker 会回退到本地 `promtool`/`amtool` 二进制。
+- 需要接入真实告警通道时，可执行 `pwsh -File ./scripts/observability/generate-alertmanager-config.ps1 ...` 生成具体配置，并通过 `ALERTMANAGER_CONFIG_FILE=<generated-file>.yml` 选择该配置运行。
 
 ## 请求链路关联
 
@@ -152,6 +157,7 @@ pwsh -File ./scripts/observability/trace-smoke.ps1 `
 另见：[`scripts/observability/README.md`](../scripts/observability/README.md)，集中说明 tracing 与 Alertmanager 冒烟脚本用法。
 若希望一次跑完两项校验，可使用：`pwsh -File ./scripts/observability/full-smoke.ps1 -AccessToken "<access_token>"`。
 `full-smoke.ps1` 也支持 `-LoginUsername` + `-LoginPassword` 自动登录模式，无需手工提取 token。
+compose + host-agent 双模式的最近一次 CI 实测记录见：[`docs/observability-validation.zh-CN.md`](observability-validation.zh-CN.md)。
 
 ## 快速排障路径
 
@@ -181,6 +187,8 @@ pwsh -File ./scripts/observability/trace-smoke.ps1 `
 - `SnowPanelCoreAgentGrpcErrorRateHigh`
 - `SnowPanelCoreAgentGrpcErrorRateCritical`
 - `SnowPanelCoreAgentInFlightHigh`
+- `SnowPanelBackendAvailabilityBurnRateWarning`
+- `SnowPanelBackendAvailabilityBurnRateCritical`
 - `SnowPanelBackendAvailabilitySLOWarning`
 - `SnowPanelBackendAvailabilitySLOCritical`
 
@@ -199,26 +207,30 @@ Prometheus 默认会把告警发送到 Alertmanager（`alertmanager:9093`）。
 
 从基线 no-op 路由切到真实生产告警投递时，可按以下清单执行：
 
-1. 在 `deploy/observability/alertmanager/alertmanager.yml` 中将 `snowpanel-warning` 与 `snowpanel-critical` 两个接收器都替换为真实通道（webhook/邮件/slack/wechat 等）。
-   - 可先从 `deploy/observability/alertmanager/alertmanager.production.example.yml` 拷贝，再替换成真实通道地址与密钥。
+1. 先生成具体的生产告警接收器配置：
+   - `pwsh -File ./scripts/observability/generate-alertmanager-config.ps1 ... -OutputPath "deploy/observability/alertmanager/alertmanager.generated.yml"`
+   - 启动前设置 `ALERTMANAGER_CONFIG_FILE=alertmanager.generated.yml`
 2. 按严重级别明确路由归属：
    - `critical` -> 值班/分页通道
-   - `warning` -> 非分页运维通道（必要时新增独立 receiver/route）
-3. 保留或扩展抑制规则，让同一 `alertname` 下 `critical` 自动抑制重复 `warning` 噪音。
-4. 发布并校验路由配置：
+   - `warning` -> 非分页运维通道
+3. 保留抑制规则，让同一 `alertname` + `instance` 下 `critical` 自动抑制重复 `warning` 噪音。
+4. 将 burn-rate 与静态阈值联合使用：
+   - `SnowPanelBackendAvailabilityBurnRateWarning/Critical`
+   - `SnowPanelBackendAvailabilitySLOWarning/Critical`
+5. 发布并校验路由配置：
    - `make up-observability`（或 `make up-host-agent-observability`）
    - `pwsh -File ./scripts/observability/prometheus-rules-smoke.ps1 -PrometheusBaseUrl "http://127.0.0.1:${PROMETHEUS_PORT:-9090}"`
    - 在 Alertmanager UI（`/#/status`）确认 receiver 与路由状态
-5. 做一次可控投递验证：
+6. 做一次可控投递验证：
    - 可直接注入一条合成告警：
      - `pwsh -File ./scripts/observability/alertmanager-smoke.ps1`
    - 或临时下调 `deploy/observability/prometheus/alerts/snowpanel-alerts.yml` 中某条告警阈值
    - 再按需生成匹配负载/流量
    - 确认通知在去重窗口内只发送一次，且包含 `alertname`、`severity`、`instance` 等关键标签
-6. 验证后恢复原阈值，并提交最终配置/规则。
+7. 验证后恢复原阈值，并提交最终配置/规则。
 
 ## 当前缺口
 
 - 前端/浏览器侧 tracing 尚未接入。
 - 尚未形成基于 trace 的日志统一采集链路；当前仍主要依赖日志检索 + `X-Request-ID` 关联。
-- 告警通知、去重、升级策略与 SLO/SLA 阈值仍需按真实生产负载校准。
+- 告警通道配置与阈值策略已具备落地路径，剩余工作主要是各团队按值班组织策略配置最终目的地与审批流程。

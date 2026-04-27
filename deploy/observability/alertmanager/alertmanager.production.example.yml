@@ -5,15 +5,28 @@ route:
   receiver: snowpanel-warning
   group_by: ["alertname", "severity", "instance"]
   group_wait: 30s
-  group_interval: 5m
-  repeat_interval: 2h
+  group_interval: 10m
+  repeat_interval: 4h
   routes:
     - receiver: snowpanel-critical
       matchers:
         - severity="critical"
+      group_wait: 10s
+      group_interval: 2m
+      repeat_interval: 30m
+      continue: true
+    - receiver: snowpanel-critical-escalation
+      matchers:
+        - severity="critical"
+      group_wait: 2m
+      group_interval: 10m
+      repeat_interval: 15m
     - receiver: snowpanel-warning
       matchers:
         - severity="warning"
+      group_wait: 30s
+      group_interval: 10m
+      repeat_interval: 4h
 
 receivers:
   - name: snowpanel-warning
@@ -24,6 +37,11 @@ receivers:
   - name: snowpanel-critical
     webhook_configs:
       - url: "https://example.com/alert-webhook-critical"
+        send_resolved: true
+
+  - name: snowpanel-critical-escalation
+    webhook_configs:
+      - url: "https://example.com/alert-webhook-critical-escalation"
         send_resolved: true
 
 inhibit_rules:
