@@ -3,6 +3,7 @@ param(
   [string]$AgentMode = "container-agent",
   [string]$HostAgentTarget = "host.docker.internal:50051",
   [string]$HostAgentMetricsBaseUrl = "http://127.0.0.1:9108",
+  [string]$AlertmanagerConfigFile = "alertmanager.yml",
   [string]$FailureLogDir = ".github/workflow-logs/observability-smoke"
 )
 
@@ -98,10 +99,15 @@ try {
   $validateScript = Join-Path $PSScriptRoot "..\observability\validate-config.ps1"
   & $validateScript
 
+  if ([string]::IsNullOrWhiteSpace($AlertmanagerConfigFile)) {
+    throw "AlertmanagerConfigFile must not be empty."
+  }
+
   $env:APP_ENV = "production"
   $env:BACKEND_PORT = $BackendPort
   $env:PROMETHEUS_PORT = $PrometheusPort
   $env:ALERTMANAGER_PORT = $AlertmanagerPort
+  $env:ALERTMANAGER_CONFIG_FILE = $AlertmanagerConfigFile
   $env:JAEGER_UI_PORT = $JaegerPort
   $env:JWT_SECRET = $JwtSecret
   $env:DEFAULT_ADMIN_PASSWORD = $BootstrapPassword

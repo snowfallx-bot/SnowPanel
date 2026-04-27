@@ -21,6 +21,11 @@ on:
         type: string
         required: false
         default: http://127.0.0.1:9108
+      alertmanager_config_file:
+        description: "Alertmanager config file under deploy/observability/alertmanager"
+        type: string
+        required: false
+        default: alertmanager.yml
 
 permissions:
   contents: read
@@ -60,7 +65,7 @@ jobs:
 
       - name: Run Observability Smoke Test
         shell: pwsh
-        run: ./scripts/ci/observability-smoke.ps1 -AgentMode "${{ inputs.agent_mode }}" -HostAgentTarget "${{ inputs.host_agent_target }}" -HostAgentMetricsBaseUrl "${{ inputs.host_agent_metrics_base_url }}"
+        run: ./scripts/ci/observability-smoke.ps1 -AgentMode "${{ inputs.agent_mode }}" -HostAgentTarget "${{ inputs.host_agent_target }}" -HostAgentMetricsBaseUrl "${{ inputs.host_agent_metrics_base_url }}" -AlertmanagerConfigFile "${{ inputs.alertmanager_config_file }}"
 
       - name: Stop Core-Agent On Host
         if: ${{ always() && inputs.agent_mode == 'host-agent' }}
