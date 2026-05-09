@@ -206,6 +206,7 @@ Prometheus 默认会把告警发送到 Alertmanager（`alertmanager:9093`）。
 ## Alertmanager 落地清单
 
 从基线 no-op 路由切到真实生产告警投递时，可按以下清单执行：
+告警归属、升级、silence、回滚与合成告警测试流程见 [`docs/alerting-runbook.zh-CN.md`](alerting-runbook.zh-CN.md)。
 
 1. 先生成具体的生产告警接收器配置：
    - `pwsh -File ./scripts/observability/generate-alertmanager-config.ps1 ... -OutputPath "deploy/observability/alertmanager/alertmanager.generated.yml"`

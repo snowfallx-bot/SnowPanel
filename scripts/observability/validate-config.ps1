@@ -1,6 +1,7 @@
 param(
   [string]$PrometheusImage = "prom/prometheus:v2.54.1",
-  [string]$AlertmanagerImage = "prom/alertmanager:v0.28.1"
+  [string]$AlertmanagerImage = "prom/alertmanager:v0.28.1",
+  [string[]]$ExtraAlertmanagerConfigFiles = @()
 )
 
 $ErrorActionPreference = "Stop"
@@ -20,6 +21,40 @@ $prometheusConfigFileContainerPath = "/etc/prometheus/prometheus.yml"
 $prometheusRuleTestFileContainerPath = "/etc/prometheus/tests/snowpanel-alerts.test.yml"
 $alertmanagerBaselineConfigContainerPath = "/etc/alertmanager/alertmanager.yml"
 $alertmanagerProductionConfigContainerPath = "/etc/alertmanager/alertmanager.production.example.yml"
+
+function Resolve-AlertmanagerConfigPath {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$Path
+  )
+
+  $candidate = $Path
+  if (-not [System.IO.Path]::IsPathRooted($candidate)) {
+    $candidate = Join-Path $repoRoot $candidate
+  }
+
+  if (-not (Test-Path -LiteralPath $candidate)) {
+    throw "Alertmanager config file not found: $candidate"
+  }
+
+  $resolved = (Resolve-Path -LiteralPath $candidate).Path
+  if (-not $resolved.StartsWith($alertmanagerDir, [System.StringComparison]::OrdinalIgnoreCase)) {
+    throw "Extra Alertmanager config must be under $alertmanagerDir so it can be mounted read-only for Docker validation: $resolved"
+  }
+
+  return $resolved
+}
+
+function ConvertTo-AlertmanagerContainerPath {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$HostPath
+  )
+
+  $relative = [System.IO.Path]::GetRelativePath($alertmanagerDir, $HostPath)
+  $relative = $relative.Replace("\", "/")
+  return "/etc/alertmanager/$relative"
+}
 
 if (-not (Test-Path -LiteralPath $prometheusRuleTestFileHostPath)) {
   throw "Prometheus alert rule test file not found: $prometheusRuleTestFileHostPath"
@@ -154,5 +189,17 @@ Invoke-Amtool -LocalArguments @(
 ) -ContainerArguments @(
   "check-config", $alertmanagerProductionConfigContainerPath
 )
+
+foreach ($extraAlertmanagerConfigFile in $ExtraAlertmanagerConfigFiles) {
+  $extraAlertmanagerConfigHostPath = Resolve-AlertmanagerConfigPath -Path $extraAlertmanagerConfigFile
+  $extraAlertmanagerConfigContainerPath = ConvertTo-AlertmanagerContainerPath -HostPath $extraAlertmanagerConfigHostPath
+
+  Write-Host "Validating extra Alertmanager config: $extraAlertmanagerConfigHostPath ..."
+  Invoke-Amtool -LocalArguments @(
+    "check-config", $extraAlertmanagerConfigHostPath
+  ) -ContainerArguments @(
+    "check-config", $extraAlertmanagerConfigContainerPath
+  )
+}
 
 Write-Host "Observability config validation passed."

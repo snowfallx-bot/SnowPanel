@@ -51,6 +51,14 @@ P3-0 Stabilization Gate
 - docs/p3-stabilization-report.md 已新增验证证据
 - docs/roadmap.md 与 docs/roadmap.zh-CN.md 已同步 P3-0 状态
 - 远端 CI 仍需在 push 后作为最终确认
+
+P3-1 Alert Delivery & Operational Governance
+- alerting runbook 已新增：docs/alerting-runbook.md / docs/alerting-runbook.zh-CN.md
+- runbook 已覆盖 warning/critical owner、paging policy、escalation、dedup、inhibition、rollback、synthetic alert procedure
+- docs/observability.md / docs/observability.zh-CN.md 已链接 alerting runbook
+- validate-config.ps1 已支持额外校验生成的 Alertmanager 配置
+- production config 生成脚本已用示例 webhook 成功生成临时配置
+- Docker daemon 当前不可用，validate-config 与 synthetic alert smoke 待 Docker 可用后继续
 ```
 
 ### 明确暂不优先

@@ -68,6 +68,16 @@
 
 该 milestone 推送后仍需等待远端 CI 作为最终确认。
 
+### P3-1 告警投递与运维治理
+
+进行中：
+
+- 已新增告警运行手册 `docs/alerting-runbook.zh-CN.md`
+- 已文档化 warning/critical 归属、paging 策略、升级路径、去重节奏、inhibition、silence、回滚与合成告警测试流程
+- observability 文档已链接告警运行手册
+- `scripts/observability/validate-config.ps1` 已支持额外校验生成的 Alertmanager 配置文件
+- synthetic alert smoke 与最终配置校验仍需等待当前环境提供 Docker 或本地 `promtool`/`amtool`
+
 ## 后续加固（Post-P3-0）
 
 1. 按团队值班制度把最终告警目的地接入到真实 on-call 通道

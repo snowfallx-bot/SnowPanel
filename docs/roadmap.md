@@ -68,6 +68,16 @@ Local P3-0 stabilization is complete on branch `p3-production-hardening`:
 
 CI remains the final remote confirmation for this milestone after the branch is pushed.
 
+### P3-1 Alert Delivery & Operational Governance
+
+In progress:
+
+- Alerting runbook added in `docs/alerting-runbook.md`
+- Warning and critical ownership, paging policy, escalation path, dedup cadence, inhibition, silence, rollback, and synthetic alert procedure are documented
+- Observability docs now link to the alerting runbook
+- `scripts/observability/validate-config.ps1` can validate an extra generated Alertmanager config file
+- Synthetic alert smoke and final config validation remain pending until Docker or local `promtool`/`amtool` is available in the execution environment
+
 ## Follow-up Hardening (Post-P3-0)
 
 1. Wire final alert destinations to real on-call channels under team policy

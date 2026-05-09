@@ -33,6 +33,13 @@ Validate Prometheus and Alertmanager configs via `promtool`/`amtool` (Docker ima
 pwsh -File ./scripts/observability/validate-config.ps1
 ```
 
+To validate a generated production Alertmanager file in the same pass:
+
+```powershell
+pwsh -File ./scripts/observability/validate-config.ps1 `
+  -ExtraAlertmanagerConfigFiles "deploy/observability/alertmanager/alertmanager.generated.yml"
+```
+
 ## `generate-alertmanager-config.ps1`
 
 Generate a concrete Alertmanager production config with real webhook channels.

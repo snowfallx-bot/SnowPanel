@@ -206,6 +206,7 @@ Both `snowpanel-warning` and `snowpanel-critical` ship as template no-op receive
 ## Alertmanager Rollout Checklist
 
 Use this checklist when moving from baseline no-op routing to real production delivery.
+The operational owner, escalation, silence, rollback, and synthetic alert procedures are defined in [`docs/alerting-runbook.md`](alerting-runbook.md).
 
 1. Generate a concrete production receiver config:
    - `pwsh -File ./scripts/observability/generate-alertmanager-config.ps1 ... -OutputPath "deploy/observability/alertmanager/alertmanager.generated.yml"`
