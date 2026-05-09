@@ -240,3 +240,44 @@ fn normalize_container_id(raw: &str) -> Result<String, DockerError> {
 
     Ok(trimmed.to_string())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::normalize_container_id;
+
+    #[test]
+    fn normalize_container_id_trims_and_accepts_supported_identifiers() {
+        let result = normalize_container_id("  snowpanel_backend-1.2/test  ")
+            .expect("container id should be accepted");
+
+        assert_eq!(result, "snowpanel_backend-1.2/test");
+    }
+
+    #[test]
+    fn normalize_container_id_rejects_empty_value() {
+        let err = normalize_container_id("   ").expect_err("empty id should be rejected");
+
+        assert_eq!(err.code, 6001);
+        assert_eq!(err.message, "bad request");
+        assert!(err.detail.contains("empty"));
+    }
+
+    #[test]
+    fn normalize_container_id_rejects_shell_metacharacters() {
+        let err = normalize_container_id("container;rm").expect_err("metacharacter should fail");
+
+        assert_eq!(err.code, 6001);
+        assert_eq!(err.message, "bad request");
+        assert!(err.detail.contains("invalid characters"));
+    }
+
+    #[test]
+    fn normalize_container_id_rejects_overlong_value() {
+        let value = "a".repeat(129);
+        let err = normalize_container_id(&value).expect_err("overlong id should fail");
+
+        assert_eq!(err.code, 6001);
+        assert_eq!(err.message, "bad request");
+        assert!(err.detail.contains("exceeds 128"));
+    }
+}

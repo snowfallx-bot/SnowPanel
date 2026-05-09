@@ -241,3 +241,78 @@ fn normalize_service_name(raw_name: &str) -> Result<String, ServiceError> {
     }
     Ok(format!("{trimmed}.service"))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{normalize_service_name, SystemdServiceManager};
+
+    #[test]
+    fn normalize_service_name_trims_and_appends_service_suffix() {
+        let result = normalize_service_name("  sshd  ").expect("service name should be accepted");
+
+        assert_eq!(result, "sshd.service");
+    }
+
+    #[test]
+    fn normalize_service_name_preserves_existing_service_suffix() {
+        let result =
+            normalize_service_name("docker.service").expect("service name should be accepted");
+
+        assert_eq!(result, "docker.service");
+    }
+
+    #[test]
+    fn normalize_service_name_accepts_template_instance_names() {
+        let result = normalize_service_name("worker@alpha")
+            .expect("template service instance should be accepted");
+
+        assert_eq!(result, "worker@alpha.service");
+    }
+
+    #[test]
+    fn normalize_service_name_rejects_empty_value() {
+        let err = normalize_service_name("   ").expect_err("empty name should fail");
+
+        assert_eq!(err.code, 5000);
+        assert_eq!(err.message, "bad request");
+        assert!(err.detail.contains("empty"));
+    }
+
+    #[test]
+    fn normalize_service_name_rejects_shell_metacharacters() {
+        let err = normalize_service_name("ssh;reboot").expect_err("metacharacter should fail");
+
+        assert_eq!(err.code, 5000);
+        assert_eq!(err.message, "bad request");
+        assert!(err.detail.contains("invalid characters"));
+    }
+
+    #[test]
+    fn normalize_service_name_rejects_overlong_value() {
+        let value = "a".repeat(129);
+        let err = normalize_service_name(&value).expect_err("overlong name should fail");
+
+        assert_eq!(err.code, 5000);
+        assert_eq!(err.message, "bad request");
+        assert!(err.detail.contains("exceeds 128"));
+    }
+
+    #[test]
+    fn service_manager_allows_empty_whitelist() {
+        let manager = SystemdServiceManager::new(Vec::new());
+
+        assert!(manager.ensure_allowed("sshd.service").is_ok());
+    }
+
+    #[test]
+    fn service_manager_enforces_non_empty_whitelist() {
+        let manager = SystemdServiceManager::new(vec!["docker.service".to_string()]);
+        let err = manager
+            .ensure_allowed("sshd.service")
+            .expect_err("service outside whitelist should fail");
+
+        assert_eq!(err.code, 5002);
+        assert_eq!(err.message, "service not allowed");
+        assert!(err.detail.contains("outside whitelist"));
+    }
+}
