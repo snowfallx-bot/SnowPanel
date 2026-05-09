@@ -1,192 +1,1159 @@
-请作为接手 SnowPanel 的 agent，优先按“主链路闭环 > 安全收口 > 权限模型 > 测试补齐”的顺序推进，不要先做 UI 美化，也不要先加新页面。
+# SnowPanel Progress 与长期执行计划
 
-更新时间：2026-05-09
+## 当前结论
 
-【当前状态摘要】
+当前项目不应优先进入 UI 美化或大规模新页面开发。下一阶段应进入：
 
-- backend ↔ core-agent 的真实 gRPC 主链路已经打通，Dashboard / Files / Services / Docker / Cron 不再依赖占位实现。
-- 推荐生产运行形态已经切到 host-agent：`core-agent` 作为宿主机 systemd service，backend/frontend/postgres/redis 仍走 compose。
-- 默认高危入口已收口：生产环境强制强 `JWT_SECRET`、bootstrap admin 强密码、首次登录强制改密、内部端口默认不对宿主机暴露。
-- cron 不再允许任意 shell 命令，已改成 allowlist 模板并阻止常见 shell metacharacters。
-- RBAC 已落地到 DB 角色/权限模型，session 校验已能感知权限变更和用户禁用。
-- 异步任务已接入真实操作，文件模块已补到下载/上传/重命名/分块读写/二进制提示。
-- `P2-2` 与 `P2-3` 已完成收口；下一次会话可直接进入新需求。
+```text
+P3-0 Stabilization Gate
+P3-1 Production Hardening & Operational Governance
+```
 
-【完成情况】
+核心目标：在继续扩展 Host、Website、Database、Backup、Plugin 等模块前，先把现有真实运维能力做成可测试、可部署、可审计、可告警、可恢复、可安全控制的生产级基础。
 
-~~P0-1：把 backend 的 gRPC 客户端从占位实现改成真实实现~~
-- 已完成：
-  - backend 使用 proto 生成的 gRPC client 调 core-agent。
-  - core-agent 已提供真实 gRPC server 实现。
-  - backend 侧已有统一 agent error -> HTTP/app error 映射。
-  - 已有 backend + fake agent 的 happy path 集成测试，覆盖 Dashboard / Files / Services / Docker / Cron。
-- 当前判断：可视为完成。
+---
 
-~~P0-2：重新定义 core-agent 的运行方式，不要继续“普通容器里控制宿主机”~~
-- 已完成：
-  - 已提供 `docker-compose.host-agent.yml`。
-  - 已提供 host systemd 部署模板与文档。
-  - Ubuntu 25.10 一键安装脚本默认按 host-agent 模式部署。
-  - `50051` 在默认 compose 下仅 internal expose，不默认暴露到宿主机公网。
-  - dev / prod 两套运行方式文档已明确区分。
-- 当前判断：可视为完成。
+## Progress 状态
 
-~~P0-3：先把开发态默认凭据和端口暴露收口~~
-- 已完成：
-  - 登录页不再预填危险默认密码。
-  - `.env.example` 不再提供生产可直接运行的弱 `JWT_SECRET`。
-  - 生产环境下弱/空 `JWT_SECRET` 会 fail fast。
-  - 生产环境下 `BOOTSTRAP_ADMIN=true` 时必须提供强密码。
-  - development 下可自动生成一次性 bootstrap 密码。
-  - bootstrap admin 首次登录会被要求强制改密。
-  - Postgres / Redis / core-agent 默认只 `expose`，不映射宿主机端口。
-- 当前判断：可视为完成。
+### 已完成：P2
 
-~~P0-4：重做 cron 权限模型，禁止“任意命令调度”~~
-- 已完成：
-  - core-agent 侧 `validate_command()` 已切到 allowlist 校验。
-  - 已阻止常见 shell metacharacters、管道、重定向、子命令注入。
-  - 文档与 API 说明已改成 command template key，而不是任意 shell 文本。
-  - cron handler 已记录审计摘要。
-  - 安全回归测试已覆盖危险命令输入。
-- 当前判断：可视为完成。
+```text
+P2 Completed
+- backend <-> core-agent gRPC 主链路已贯通
+- dashboard/files/services/docker/cron 已走真实 agent 操作链路
+- JWT + RBAC + session validation 已建立
+- permission-aware frontend gating 已建立
+- Docker/service restart 已有 async task baseline
+- file operations 已扩展到实际运维工作流
+- observability baseline 已建立：metrics、alerts、tracing、Jaeger、Prometheus、Alertmanager
+- CI baseline 已覆盖 backend、core-agent、frontend、proto、compose smoke、integration、e2e
+- prototype wording cleanup 已完成
+```
 
-~~P1-1：把权限模型从“按用户名硬编码”升级成真实 RBAC~~
-- 已完成：
-  - migrations 中已有 `roles` / `permissions` / `role_permissions` / `user_roles`。
-  - token claims 已从 DB RBAC 生成。
-  - permission middleware 走权限名校验，不再依赖 `username == "admin"`。
-  - `ValidateSession()` 已校验用户状态、session issued time、RBAC checksum。
-  - 用户禁用、角色权限变化后，旧 session 会失效。
-- 当前判断：可视为完成。
+### 下一阶段：P3
 
-~~P1-2：让前端权限感知和 session 管理真正成立~~
-- 已完成：
-  - `ProtectedRoute` 启动时会调用 `getMe()` 做 session 校验。
-  - `ProtectedRoute` 会在 `getMe()` 成功前阻止受保护内容渲染，并对非鉴权失败展示可重试的 session 错误态。
-  - `AppLayout` 已按权限动态展示菜单入口。
-  - `AppLayout` 已对首次登录强制改密场景提供前端门禁，并在改密成功后刷新本地 session。
-  - `401` 时前端会统一清理凭据、写入提示并跳转登录页。
-  - refresh token 已接入，后端也支持 refresh rotation / session 校验。
-  - 非 admin 用户不会看到无权限模块入口。
-  - 已补前端回归测试，覆盖 `ProtectedRoute` 的 session 校验/失效/重试分支，以及 `AppLayout` 的权限导航/强制改密/退出登录分支。
-  - token 存储策略已形成明确决议并写入 `docs/security.md` / `docs/security.zh-CN.md`：当前阶段继续使用前端持久化 bearer token，不把 httpOnly cookie 迁移作为发布前阻塞项。
-- 当前判断：可视为完成；若未来推进 cookie 方案，归入后续认证加固迭代，而不是继续挂在本项名下。
+```text
+P3 Production Hardening
+- 先跑通并固化稳定性闸门
+- 再处理生产告警治理
+- 再强化 backend <-> core-agent 信任边界
+- 再处理 secrets、task durability、least privilege、audit、backup/restore
+```
 
-~~P1-3：把“异步任务”从 demo 变成真正的后台作业框架~~
-- 已完成：
-  - 已移除 demo task 方向，当前任务系统已接入真实操作。
-  - backend task service 支持真实的 docker restart / service restart。
-  - 已支持取消、失败重试、进度、日志记录与详情查看。
-  - 前端 `TasksPage` 已对接真实任务列表与详情。
-- 当前判断：按原验收标准可视为完成。
+### 明确暂不优先
 
-~~P1-4：把文件模块补到“能用于真实运维”的程度~~
-- 已完成：
-  - 已支持下载、上传、重命名。
-  - 已有明确二进制文件提示。
-  - backend/core-agent 已支持大文件分块下载与上传。
-  - 前端支持 preview limit 调整、下载/上传进度和更细错误提示。
-  - 安全校验包含 safe roots / dangerous path / encoding / size 等错误分型。
-- 当前判断：按原验收标准可视为完成。
+```text
+Not Current Priority
+- UI polish / visual redesign
+- 新页面优先开发
+- Website/Database/Plugin/Backup 全量功能优先开发
+- 过早宣称 fully production-ready
+```
 
-~~P2-1：补齐测试矩阵，不要只停留在零散 unit test~~
-- 已完成：
-  - backend unit tests、backend + fake agent integration-style tests、cron/auth/path traversal 安全测试已稳定运行。
-  - proto contract tests 已纳入 CI（`proto-contract` job）。
-  - compose smoke integration 已覆盖 login / 强制改密 / refresh rotation / dashboard / files / logout 主链路。
-  - frontend e2e（登录 / 文件浏览 / 权限隐藏）已纳入 CI 并通过。
-  - 新增 `backend-integration` CI job，补齐 backend + core-agent + postgres 真实链路覆盖，包含 services/docker/cron/tasks/audit 多模块契约与异步任务落库校验。
-  - CI 分层已形成：`compose-smoke`（基础主链路）→ `backend-integration`（后端深链路）+ `frontend-e2e`（前端端到端）。
-- 当前判断：可视为完成。
+---
 
-~~P2-2：补齐生产化观测能力~~
-- 已完成：
-  - backend `/metrics`（Prometheus）已覆盖 HTTP 与 agent RPC 计数/时延（含 `rpc/outcome/transport` 标签）
-  - backend request id / access log（现已追加 `trace_id` / `span_id`）
-  - health / readiness
-  - core-agent tracing 日志 + 独立 `/metrics` 端点（可输出 gRPC 请求总量/时延/in-flight）
-  - Prometheus 基线部署与抓取配置（`docker-compose.observability.yml` + `deploy/observability/prometheus/prometheus.yml`）
-  - Prometheus 基线告警规则（backend down、agent down、p95 高延迟、agent 错误率与并发 in-flight）
-  - Alertmanager 基线路由与接入点（Prometheus `alerting` + `deploy/observability/alertmanager/alertmanager.yml`）
-  - OTel tracing 基线已接入：
-    - backend HTTP spans + gRPC client spans
-    - core-agent gRPC server spans + remote trace context 提取
-    - `otel-collector -> Jaeger` 基线部署（`deploy/observability/otel-collector/config.yaml`）
-  - audit logs 基础检索
-  - `X-Request-ID` 已打通 backend -> gRPC metadata -> core-agent 日志（可按同一 request_id 联查）
-  - 已新增/更新 `docs/observability.md` / `docs/observability.zh-CN.md`，明确 metrics + tracing 排障路径
-  - `trace-smoke.ps1` 已升级为 request 级强关联校验：强制校验响应 `X-Request-ID`、Jaeger 中 backend/core-agent 的 `snowpanel.request_id` 一致性，以及 core-agent 关键 `grpc.method` span 覆盖
-  - `alertmanager-smoke.ps1` 已支持 receiver 路由校验（含 `/alerts` 与 `/alerts/groups` 回退），并通过 `alertname + instance + severity` 过滤与唯一默认 instance 降低误判
-  - `full-smoke.ps1` 已支持一次性校验 warning/critical 双严重级别；`scripts/ci/observability-smoke.ps1` 已收敛为单入口调用，并支持 `container-agent` / `host-agent` 双模式
-  - `Observability Smoke` workflow 已支持 host-agent 参数化实跑：可在 `agent_mode=host-agent` 下自动构建并启动宿主机 core-agent、执行 smoke、回收进程并上传失败日志
-  - `ci.yml` 已新增自动 observability smoke jobs：`observability-smoke-container`（PR/push）与 `observability-smoke-host-agent`（push main），将两模式观测冒烟纳入主流水线
-  - 已新增 `scripts/observability/generate-alertmanager-config.ps1`，可从真实 webhook 生成生产 Alertmanager 配置，并支持 critical 升级通道。
-  - 已在 `deploy/observability/alertmanager/alertmanager.production.example.yml` 增加 warning/critical cadence 与 critical escalation 路由模板。
-  - 已扩展 SLO burn-rate 规则（5m/30m 双窗口）与 `SnowPanelBackendAvailabilityBurnRateWarning/Critical` 告警，并补齐对应规则回归断言。
-  - 已新增 `docs/observability-validation.md` / `docs/observability-validation.zh-CN.md`，沉淀 `24971113137`（`push main`）的 compose + host-agent 双模式实跑通过证据。
-- 当前判断：可视为完成（仓库侧可交付项已闭环）。
+# Agent 执行规则
 
-~~P2-3：清理“原型痕迹”和重复逻辑~~
-- 已完成清理：
-  - 已清理 `backend/README.md` 中关于 gRPC transport placeholder 的过时描述。
-  - 已移除 `core-agent` 中 `tail_logs_placeholder` 占位方法。
-  - 已把 root README 的 observability 入口与常用命令补齐。
-  - 已将 `docs/roadmap.md` / `docs/roadmap.zh-CN.md` 从初始化草案改为当前状态路线图。
-  - 已修正文档中 “Redis 仅预留后续使用” 的过时描述，改为反映当前登录限流共享状态用途。
-  - 已更新 `docs/development.md` / `docs/development.zh-CN.md` 的 observability 命令与测试矩阵说明。
-  - 已同步 root README 中 roadmap 导航标签，不再继续标注为“草案”。
-  - 已补齐 README / development 文档中的 observability `down/logs` 命令，统一到 `Makefile` 实际命令集。
-  - 已统一 deployment / observability 文档术语，避免仍以 “Prometheus UI/基线” 指代整套可观测性组件。
-  - 已将 deployment 文档中的 “Compose Prototype / 原型模式” 命名统一为 “Compose Mode / Compose 模式”。
-  - 已补齐 `docs/api-design.md` / `docs/api-design.zh-CN.md` 的系统与运维端点说明（`/api/v1/ping`、`/health`、`/ready`、`/metrics`）。
-  - 已移除前端应用壳中的 `Linux Panel Prototype` 文案，并同步 e2e 登录后页面锚点为 `SnowPanel Operations Console`。
-  - 已将 `proto/README.md` 中的 `Stubs` 表述统一为 `Bindings`，避免延续原型期命名。
-  - 已同步 `docs/roadmap.md` / `docs/roadmap.zh-CN.md` 措辞，替换 `placeholder` 等遗留描述并纳入最新清理进展。
-  - 已为 `docs/observability.md` / `docs/observability.zh-CN.md` 增加 tracing 实测清单，明确 compose / host-agent 两种模式下的最小验证路径。
-  - 已在 `docs/development.md` / `docs/development.zh-CN.md` 与 `frontend/README.md` 明确 Node 最低版本（`>=20.19.0`），并在 `frontend/package.json` 增加 `engines.node` 提前暴露环境不匹配问题。
-  - 已为 frontend 测试脚本增加 Node 版本 preflight（`check:node`），当版本低于 `20.19.0` 时以清晰错误信息提前失败，避免 vitest 启动期依赖报错噪音。
-  - 已同步 root `README.md` / `README.zh-CN.md` 的 Node 版本口径，与 development/frontend 文档保持一致。
-  - 已为 `docs/observability.md` / `docs/observability.zh-CN.md` 增加 Alertmanager 落地清单，补齐从 no-op 接收器切换到真实通知渠道的执行步骤与验证路径。
-  - 已新增 `scripts/observability/trace-smoke.ps1`，支持用 access token 触发 `dashboard/summary` 并自动轮询 Jaeger 校验 backend/core-agent 跨服务 trace；中英文 observability 文档已补充脚本用法。
-  - 已在 `docs/development.md` / `docs/development.zh-CN.md` 的常用命令中补充 tracing 脚本入口，便于开发阶段直接执行链路验证。
-  - 已新增 `scripts/observability/alertmanager-smoke.ps1`，支持注入合成告警并校验 Alertmanager 接收；相关用法已写入 observability/development 中英文文档。
-  - 已新增 `scripts/observability/README.md` 汇总 observability 脚本入口，并在 observability 中英文文档加入跳转链接。
-  - 已新增 `scripts/observability/full-smoke.ps1` 一键串行执行 tracing + alertmanager 校验，并在 scripts/development/observability 文档补充入口及执行策略说明。
-  - 已在 root `README.md` / `README.zh-CN.md` 常用命令中补充 `full-smoke` 脚本入口，提升主入口可发现性。
-  - 已同步 `docs/roadmap.md` / `docs/roadmap.zh-CN.md` 的 `P2-2` 进展，纳入 observability 冒烟脚本能力说明。
-  - 已升级 `full-smoke.ps1` 支持 `LoginUsername/LoginPassword` 自动登录取 token，并同步 scripts/docs/README 中英文用法。
-  - 已新增 `scripts/ci/observability-smoke.ps1`，用于在 Docker 环境中自动拉起 observability 栈并执行 full-smoke 端到端校验；development 中英文文档已补命令入口。
-  - 已新增独立手动 workflow `.github/workflows/observability-smoke.yml`（`workflow_dispatch`）执行 observability 端到端冒烟验证；默认 `ci.yml` 保持 push/PR 主流水线职责。
-  - 已将 `ci.yml` 中残留的 `Proto Stubs` 步骤命名统一为 `Proto Bindings`，与仓库文档术语保持一致。
-  - 已在 root `README.md` / `README.zh-CN.md` 常用命令区域补充 `Observability Smoke` 手动 workflow 入口说明。
-  - 已新增 `scripts/ci/README.md` 汇总 CI 脚本职责，并在 development 中英文文档增加跳转入口。
-  - 已扩展 `deploy/observability/prometheus/alerts/snowpanel-alerts.yml`：新增 backend 可用性与 core-agent 错误率 recording rules，并补齐 warning/critical 分级 SLO 告警（含 latency/error/availability）。
-  - 已更新 `deploy/observability/alertmanager/alertmanager.yml` 基线路由为 warning/critical 双接收器结构（no-op 模板），并同步 observability 中英文文档与 roadmap 的 SLO 进展描述。
-  - 已新增 `deploy/observability/alertmanager/alertmanager.production.example.yml` 作为生产接收器模板，加速真实通知渠道落地。
-  - 已新增 `scripts/observability/validate-config.ps1`（容器内 `promtool`/`amtool` 校验），并接入 `scripts/ci/observability-smoke.ps1` 与 GitHub workflows（`ci.yml` 新增 `observability-config` job，`observability-smoke.yml` 增加前置校验）。
-  - 已同步 `docs/roadmap.md` / `docs/roadmap.zh-CN.md`：纳入 observability 配置校验闸门（脚本 + CI job）进展。
-  - 已新增 `scripts/observability/prometheus-rules-smoke.ps1` 校验运行中 Prometheus 是否加载关键 recording/alert 规则，并接入 `scripts/ci/observability-smoke.ps1`。
-  - 已新增 `deploy/observability/prometheus/tests/snowpanel-alerts.test.yml` 并将 `promtool test rules` 接入 `scripts/observability/validate-config.ps1`，把关键 critical 告警行为回归纳入 observability 配置闸门。
-  - 已扩展 `snowpanel-alerts.test.yml` 覆盖 warning-only 阈值场景，新增“warning 触发且 critical 不触发”断言，降低 SLO 告警分级回归风险。
-  - 已增强 `scripts/observability/validate-config.ps1`：默认使用 Docker，若本机缺少 Docker 且存在本地 `promtool`/`amtool` 时自动回退执行，降低环境依赖阻塞。
-  - 已新增并链接 `docs/observability-validation.md` / `docs/observability-validation.zh-CN.md`，把“观测链路已实测通过”从口头描述升级为可追溯证据文档。
-  - 已同步更新 `docs/roadmap.md` / `docs/roadmap.zh-CN.md`，将 `P2-2` / `P2-3` 状态切换为完成态，避免文档之间状态漂移。
-- 当前判断：可视为完成。
+## Branch
 
-【后续建议（非阻塞）】
+```bash
+git checkout -b p3-production-hardening
+```
 
-1. 在真实生产值班组织下接入最终告警目的地（paging/IM/email）并完成审批备案。
-2. 按线上流量持续微调 SLO/SLI 阈值与去重窗口。
-3. 若后续引入浏览器 tracing，再补一轮前后端全链路观测说明与回归脚本。
+## Global Rules
 
-【不要先做的事】
+1. 不要在 P3 hardening gates 通过前添加大规模新产品面。
+2. 一个 milestone 尽量对应一个 PR。
+3. 每个 PR 必须补充或更新相关文档。
+4. 改动涉及 env、deployment、security、observability、API 行为时，必须同步更新 docs。
+5. 涉及安全边界的改动必须覆盖 allowed 与 denied 两类测试。
+6. host-agent production 行为默认应 deny-by-default。
+7. 不允许引入任意 shell passthrough。
+8. Docker、systemd、cron、file 操作必须继续使用结构化 API 与 allowlist/safe-root 约束。
+9. 每个 milestone 完成后更新 `docs/roadmap.md`。
+10. 每个 PR 结束前运行完整质量门禁。
 
-- 不要先改配色/组件库/动画。
-- 不要先扩页面数量。
-- 不要先做“品牌官网式 README 美化”。
-- 不要在值班制度、发布流程和容量评估未固化前，将项目过早表述为“全面生产就绪”。
+## Required Quality Gates
 
-【一句话结论】
+```bash
+make lint
+make test
+```
 
-这个仓库已经从“主链路没打通的原型”推进到了“主链路、安全、RBAC、测试矩阵、观测链路与文档收口全部完成”的阶段；下一次会话可以直接切入新的功能或工程目标。
+Backend:
+
+```bash
+cd backend
+go test ./...
+```
+
+Core-agent:
+
+```bash
+cd core-agent
+cargo fmt --all -- --check
+cargo test
+```
+
+Frontend:
+
+```bash
+cd frontend
+npm ci
+npm run test
+npm run build
+```
+
+Proto contract:
+
+```bash
+make proto-go
+git diff --exit-code -- backend/internal/grpcclient/pb/proto/agent/v1/
+```
+
+---
+
+# Milestone P3-0: Stabilization Gate
+
+## Goal
+
+证明当前 main 分支可构建、可测试、可启动、可冒烟，并把这个状态固化为后续所有 PR 的最低质量门禁。
+
+## Tasks
+
+### 1. 运行完整本地质量检查
+
+```bash
+make lint
+make test
+```
+
+### 2. 运行分模块测试
+
+```bash
+cd backend && go test ./...
+cd ../core-agent && cargo fmt --all -- --check && cargo test
+cd ../frontend && npm ci && npm run test && npm run build
+```
+
+### 3. 验证 proto 生成文件没有漂移
+
+```bash
+make proto-go
+git diff --exit-code -- backend/internal/grpcclient/pb/proto/agent/v1/agent.pb.go backend/internal/grpcclient/pb/proto/agent/v1/agent_grpc.pb.go
+```
+
+### 4. 验证 compose mode
+
+```bash
+make up
+curl -f http://127.0.0.1:8080/health
+curl -f http://127.0.0.1:8080/ready
+make down
+```
+
+### 5. 验证 host-agent mode
+
+```bash
+make up-host-agent
+curl -f http://127.0.0.1:8080/health
+curl -f http://127.0.0.1:8080/ready
+make down-host-agent
+```
+
+如果当前环境无法跑 host-agent mode，必须在报告中明确写出原因、缺失依赖、复现命令和后续验证环境要求。
+
+### 6. 新增稳定性报告
+
+创建：
+
+```text
+docs/p3-stabilization-report.md
+```
+
+内容必须包含：
+
+```text
+- 测试日期
+- commit sha
+- OS/runtime versions
+- commands run
+- pass/fail result
+- fixed failures
+- unresolved risks
+- compose smoke evidence
+- host-agent smoke evidence 或无法执行原因
+```
+
+### 7. 更新 roadmap
+
+更新：
+
+```text
+docs/roadmap.md
+docs/roadmap.zh-CN.md
+```
+
+加入 P3-0 状态。
+
+## Acceptance Criteria
+
+```text
+- CI green
+- make lint passes
+- make test passes
+- proto generated files are current
+- compose smoke documented
+- host-agent smoke documented or explicitly marked unavailable with reason
+- docs/p3-stabilization-report.md exists
+- docs/roadmap.md and docs/roadmap.zh-CN.md updated
+- no new product feature added in this milestone
+```
+
+---
+
+# Milestone P3-1: Alert Delivery & Operational Governance
+
+## Goal
+
+把当前 no-op observability baseline 变成可落地的生产告警治理体系。
+
+## Tasks
+
+### 1. 定义告警归属
+
+新增或更新：
+
+```text
+docs/alerting-runbook.md
+docs/alerting-runbook.zh-CN.md
+```
+
+内容必须包含：
+
+```text
+- warning alert owner
+- critical alert owner
+- paging vs non-paging policy
+- escalation path
+- dedup window
+- inhibition rules
+- rollback procedure
+- synthetic alert test procedure
+```
+
+### 2. 配置 production receiver template
+
+保留 local/dev no-op receiver，同时提供 production config 示例。
+
+检查并完善：
+
+```text
+deploy/observability/alertmanager/alertmanager.production.example.yml
+scripts/observability/generate-alertmanager-config.ps1
+```
+
+### 3. 生成生产配置并验证
+
+```powershell
+pwsh -File ./scripts/observability/generate-alertmanager-config.ps1 ...
+pwsh -File ./scripts/observability/validate-config.ps1
+```
+
+### 4. 验证 synthetic alert delivery
+
+```powershell
+pwsh -File ./scripts/observability/alertmanager-smoke.ps1
+```
+
+### 5. 调整告警阈值
+
+重点检查：
+
+```text
+- backend availability SLO
+- backend p95 latency warning/critical
+- core-agent gRPC error ratio
+- backend agent transport error
+- in-flight request pressure
+```
+
+### 6. 文档化运行手册
+
+Runbook 必须回答：
+
+```text
+- 收到 SnowPanelBackendDown 怎么处理
+- 收到 SnowPanelCoreAgentMetricsDown 怎么处理
+- 收到 backend p95 latency high 怎么处理
+- 收到 core-agent gRPC error ratio high 怎么处理
+- 如何从 X-Request-ID 查 backend log 与 core-agent log
+- 如何通过 Jaeger 查 trace
+- 如何临时 silence
+- 如何回滚错误的 alert config
+```
+
+## Acceptance Criteria
+
+```text
+- production Alertmanager receiver template exists
+- warning/critical routing documented
+- synthetic alert smoke passes
+- validate-config.ps1 passes
+- runbook covers triage, silence, escalation, rollback
+- local dev no-op receiver still works
+```
+
+---
+
+# Milestone P3-2: Backend ↔ Core-Agent Trust Boundary
+
+## Goal
+
+不能只依赖网络隔离保护 core-agent。host-agent 是真实机器操作入口，backend 与 core-agent 之间必须有可配置的认证边界。
+
+## Preferred Design
+
+```text
+Preferred: mTLS
+Fallback: shared token in gRPC metadata
+```
+
+可以先实现 token mode，保留 mtls mode 设计文档和接口位置。
+
+## Tasks
+
+### 1. 新增配置项
+
+Backend env:
+
+```text
+BACKEND_AGENT_AUTH_MODE=none|token|mtls
+BACKEND_AGENT_SHARED_TOKEN=
+BACKEND_AGENT_TLS_CA_FILE=
+BACKEND_AGENT_TLS_CERT_FILE=
+BACKEND_AGENT_TLS_KEY_FILE=
+```
+
+Core-agent env:
+
+```text
+CORE_AGENT_AUTH_MODE=none|token|mtls
+CORE_AGENT_SHARED_TOKEN=
+CORE_AGENT_TLS_CA_FILE=
+CORE_AGENT_TLS_CERT_FILE=
+CORE_AGENT_TLS_KEY_FILE=
+```
+
+### 2. core-agent gRPC interceptor
+
+实现：
+
+```text
+- auth mode = none: 保持当前 dev 行为
+- auth mode = token: 检查 metadata 中的 token
+- missing token: reject
+- wrong token: reject
+- correct token: allow
+- logs must include request_id
+- logs must never include token value
+```
+
+建议 metadata key：
+
+```text
+x-snowpanel-agent-token
+```
+
+### 3. backend gRPC client 注入 metadata
+
+实现：
+
+```text
+- backend config load auth mode
+- token mode 自动附加 x-snowpanel-agent-token
+- auth failure 映射成稳定 backend error
+- frontend error hint 显示 agent authentication failed / agent unavailable 区别
+```
+
+### 4. 测试
+
+Core-agent tests:
+
+```text
+- none mode allows request
+- token mode rejects missing token
+- token mode rejects wrong token
+- token mode allows correct token
+- token is redacted from logs/errors
+```
+
+Backend tests:
+
+```text
+- token metadata attached
+- missing backend token config in production fails fast
+- agent auth error mapped correctly
+```
+
+### 5. 文档
+
+更新：
+
+```text
+docs/deployment.md
+docs/deployment.zh-CN.md
+docs/security.md
+docs/security.zh-CN.md
+deploy/core-agent/systemd/core-agent.env.example
+.env.example
+```
+
+必须说明：
+
+```text
+- local dev 可用 none
+- production 推荐 token 或 mtls
+- token rotation procedure
+- 50051 仍必须限制在可信网络
+- 不允许把 core-agent gRPC 暴露到公网
+```
+
+## Acceptance Criteria
+
+```text
+- core-agent can reject unauthenticated gRPC calls
+- backend can authenticate to core-agent
+- local dev remains simple
+- production docs recommend auth enabled
+- tests cover allow and deny paths
+```
+
+---
+
+# Milestone P3-3: Secrets & Settings Hardening
+
+## Goal
+
+解决 sensitive settings/secrets at rest，并降低 secret 泄露风险。
+
+## Tasks
+
+### 1. SystemSetting 加密
+
+设计加密 payload：
+
+```json
+{
+  "version": 1,
+  "algorithm": "AES-256-GCM",
+  "nonce": "base64",
+  "ciphertext": "base64"
+}
+```
+
+新增 env：
+
+```text
+SNOWPANEL_ENCRYPTION_KEY=
+SNOWPANEL_ENCRYPTION_KEY_ID=
+```
+
+### 2. 加密服务
+
+Backend 新增：
+
+```text
+backend/internal/security/encryption.go
+backend/internal/security/encryption_test.go
+```
+
+要求：
+
+```text
+- encrypt/decrypt roundtrip
+- wrong key fails safely
+- empty key in production fails if encrypted settings are used
+- encrypted values never stored plaintext
+```
+
+### 3. Secret redaction
+
+覆盖：
+
+```text
+- audit request summaries
+- task metadata
+- backend logs
+- frontend error display
+- config validation errors
+```
+
+Redaction keys：
+
+```text
+password
+passwd
+token
+secret
+key
+credential
+authorization
+cookie
+set-cookie
+```
+
+### 4. Production startup validation
+
+生产环境必须 fail fast：
+
+```text
+- APP_ENV=production 且 JWT_SECRET 弱/空
+- BOOTSTRAP_ADMIN=true 且 DEFAULT_ADMIN_PASSWORD 弱/空
+- encrypted settings 存在但 SNOWPANEL_ENCRYPTION_KEY 缺失
+- agent auth mode 开启但 token/cert 缺失
+```
+
+### 5. Token storage decision
+
+新增：
+
+```text
+docs/security-token-storage-decision.md
+```
+
+内容：
+
+```text
+- 当前 persisted frontend bearer/refresh token 的风险
+- 暂不迁移 httpOnly cookie 的原因
+- 迁移 httpOnly cookie + CSRF 需要的前置条件
+- 未来迁移计划
+```
+
+## Acceptance Criteria
+
+```text
+- sensitive SystemSetting values encrypted at rest
+- encryption tests pass
+- redaction tests pass
+- production validation fails unsafe config
+- token storage decision documented
+```
+
+---
+
+# Milestone P3-4: Durable Task Worker
+
+## Goal
+
+将当前 goroutine async task baseline 升级为 DB-backed durable worker，避免 backend 重启导致任务孤儿、重复执行或状态不一致。
+
+## Tasks
+
+### 1. DB schema migration
+
+新增字段：
+
+```sql
+ALTER TABLE tasks ADD COLUMN locked_by TEXT;
+ALTER TABLE tasks ADD COLUMN locked_until TIMESTAMPTZ;
+ALTER TABLE tasks ADD COLUMN attempt INT NOT NULL DEFAULT 0;
+ALTER TABLE tasks ADD COLUMN max_attempts INT NOT NULL DEFAULT 1;
+ALTER TABLE tasks ADD COLUMN idempotency_key TEXT;
+ALTER TABLE tasks ADD COLUMN next_run_at TIMESTAMPTZ;
+```
+
+新增索引：
+
+```sql
+CREATE INDEX idx_tasks_claim ON tasks(status, next_run_at, locked_until);
+CREATE UNIQUE INDEX idx_tasks_idempotency_key ON tasks(idempotency_key) WHERE idempotency_key IS NOT NULL;
+```
+
+### 2. Task repository claim API
+
+实现：
+
+```text
+ClaimNextTask(workerID, leaseDuration)
+HeartbeatTask(taskID, workerID, leaseDuration)
+CompleteTask(taskID, workerID, result)
+FailTask(taskID, workerID, error, retryPolicy)
+ReleaseStaleTasks(now)
+```
+
+要求：
+
+```text
+- 使用 transaction
+- 使用 row lock 或 atomic update
+- 保证同一 task 同时只有一个 worker 执行
+```
+
+### 3. Worker loop
+
+新增配置：
+
+```text
+TASK_WORKER_ENABLED=true
+TASK_WORKER_ID=<hostname-or-random>
+TASK_WORKER_CONCURRENCY=2
+TASK_WORKER_LEASE_DURATION=30s
+TASK_WORKER_POLL_INTERVAL=2s
+TASK_WORKER_MAX_ATTEMPTS=3
+```
+
+实现：
+
+```text
+- claim pending task
+- heartbeat lease
+- execute operation
+- finish success/failed/canceled
+- recover stale running task
+- graceful shutdown
+```
+
+### 4. Retry policy
+
+实现：
+
+```text
+- retryable agent transport errors
+- non-retryable validation errors
+- exponential backoff
+- max attempts
+```
+
+### 5. Cancellation propagation
+
+要求：
+
+```text
+- cancel pending task: terminal canceled
+- cancel running task: mark cancel requested
+- worker checks cancel before/after agent operation
+- where possible, agent call receives context cancellation
+```
+
+### 6. Metrics
+
+新增 metrics：
+
+```text
+snowpanel_tasks_queue_depth
+snowpanel_tasks_running
+snowpanel_tasks_completed_total{type,status}
+snowpanel_tasks_duration_seconds{type,status}
+snowpanel_task_worker_claims_total{outcome}
+```
+
+### 7. Tests
+
+必须覆盖：
+
+```text
+- claim only once
+- stale lease recovery
+- backend restart simulation
+- failed task retry
+- max attempts reached
+- cancellation before start
+- cancellation while running
+- idempotency key duplicate
+```
+
+## Acceptance Criteria
+
+```text
+- backend restart does not orphan tasks
+- at most one worker executes one task
+- retry/cancel behavior deterministic
+- task logs remain auditable
+- task metrics visible under /metrics
+```
+
+---
+
+# Milestone P3-5: Host-Agent Least Privilege
+
+## Goal
+
+让 host-agent production 默认更保守，避免真实机器操作能力扩大 blast radius。
+
+## Tasks
+
+### 1. Production deny-by-default validation
+
+Core-agent production mode 下增加校验：
+
+```text
+- CORE_AGENT_AUTH_MODE must not be none
+- CORE_AGENT_SERVICE_WHITELIST must be non-empty if service manage is enabled
+- CORE_AGENT_CRON_ALLOWED_COMMANDS must be explicitly configured
+- CORE_AGENT_ALLOWED_ROOTS must not include / unless override flag enabled
+- CORE_AGENT_HOST=0.0.0.0 requires auth mode enabled
+```
+
+新增 override：
+
+```text
+CORE_AGENT_ALLOW_UNSAFE_PRODUCTION_CONFIG=false
+```
+
+### 2. Feature gates
+
+新增：
+
+```text
+CORE_AGENT_ENABLE_FILE_OPS=true
+CORE_AGENT_ENABLE_SERVICE_OPS=true
+CORE_AGENT_ENABLE_DOCKER_OPS=true
+CORE_AGENT_ENABLE_CRON_OPS=true
+```
+
+Production 中允许关闭某类操作。
+
+### 3. Systemd unit hardening
+
+检查并强化：
+
+```text
+deploy/core-agent/systemd/*.service
+```
+
+建议项：
+
+```text
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict or full
+ProtectHome=read-only where possible
+ReadWritePaths=<allowed roots>
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=<minimal set>
+```
+
+如果某些 hardening 与 Docker/systemd 操作冲突，必须写清楚 tradeoff。
+
+### 4. Startup warnings/errors
+
+对以下配置输出明确错误或警告：
+
+```text
+- allowed roots too broad
+- service whitelist empty
+- cron allowlist uses defaults in production
+- metrics exposed on non-loopback without warning
+- gRPC exposed on non-loopback without auth
+```
+
+### 5. Docs
+
+更新：
+
+```text
+docs/deployment.md
+docs/deployment.zh-CN.md
+docs/security.md
+docs/security.zh-CN.md
+deploy/core-agent/systemd/README.md
+```
+
+必须包含 production checklist：
+
+```text
+- gRPC bind address
+- firewall
+- agent auth
+- allowed roots
+- service whitelist
+- cron command allowlist
+- Docker socket risk
+- metrics endpoint exposure
+- backup before destructive operations
+```
+
+## Acceptance Criteria
+
+```text
+- unsafe production config fails fast unless explicitly overridden
+- feature gates work
+- systemd hardening documented
+- tests cover config validation
+```
+
+---
+
+# Milestone P3-6: Audit Retention, Export, and Forensics
+
+## Goal
+
+让敏感操作审计支持真实排障、追责、导出和保留策略。
+
+## Tasks
+
+### 1. Audit filters
+
+Backend audit API 支持：
+
+```text
+- time range
+- user_id
+- username
+- module
+- action
+- target_type
+- target_id
+- success
+- result_code
+- request_id
+- trace_id
+```
+
+### 2. Audit export
+
+新增 endpoint：
+
+```text
+GET /api/v1/audit/logs/export?format=csv
+GET /api/v1/audit/logs/export?format=jsonl
+```
+
+要求：
+
+```text
+- permission: audit.export
+- streaming response
+- pagination-safe
+- redacts sensitive fields
+```
+
+### 3. Audit retention
+
+新增配置：
+
+```text
+AUDIT_RETENTION_DAYS=180
+AUDIT_EXPORT_MAX_ROWS=100000
+```
+
+新增 cleanup job：
+
+```text
+- dry run mode
+- archive before delete option
+- audit cleanup itself must be audited
+```
+
+### 4. UI improvements only for audit usability
+
+允许小范围 UI 改动：
+
+```text
+- filters
+- detail drawer
+- copy request_id
+- export button
+- link to task detail if task_id exists
+```
+
+### 5. Tests
+
+覆盖：
+
+```text
+- filter query correctness
+- export CSV format
+- export JSONL format
+- permission denied without audit.export
+- redaction in export
+- retention dry run
+```
+
+## Acceptance Criteria
+
+```text
+- operators can answer who did what, when, from where, and whether it succeeded
+- audit export works for large datasets
+- secrets are never exported
+- retention policy documented
+```
+
+---
+
+# Milestone P3-7: Backup and Restore Foundation
+
+## Goal
+
+在继续扩展 server panel 功能前，先建立 Postgres 和关键配置的备份/恢复基础。
+
+## Tasks
+
+### 1. Define backup scope
+
+支持：
+
+```text
+- Postgres database dump
+- SnowPanel app metadata
+- observability config snapshot
+- agent config template snapshot
+```
+
+暂不支持或需明确标记：
+
+```text
+- raw secrets export
+- arbitrary filesystem backup
+- Docker volume backup
+- remote object storage
+```
+
+### 2. Backup model/service
+
+基于已有 `Backup` model，实现：
+
+```text
+- create backup task
+- backup status
+- checksum
+- size
+- storage type local
+- retention
+- audit log
+```
+
+### 3. Backup task integration
+
+接入 durable task worker：
+
+```text
+TaskTypeBackupCreate
+TaskTypeBackupVerify
+```
+
+### 4. Restore drill docs
+
+新增：
+
+```text
+docs/restore-drill.md
+docs/restore-drill.zh-CN.md
+```
+
+必须包含：
+
+```text
+- fresh machine restore
+- restore Postgres
+- rotate secrets
+- start backend/frontend
+- start host-agent
+- verify /health
+- verify /ready
+- login verification
+- audit verification
+```
+
+### 5. Tests
+
+覆盖：
+
+```text
+- backup metadata creation
+- checksum validation
+- failed backup marks task failed
+- retention cleanup
+- restore doc command sanity
+```
+
+## Acceptance Criteria
+
+```text
+- backup can be created and verified
+- restore drill is documented
+- backup operation is audited
+- destructive future modules can depend on backup foundation
+```
+
+---
+
+# Milestone P4: Feature Expansion From Existing Models
+
+P4 只有在 P3 主要安全、治理、备份、任务可靠性完成后再启动。
+
+## P4-1 Host Inventory
+
+### Goal
+
+把单一 agent target 升级成可治理的 host inventory。
+
+### Tasks
+
+```text
+- Host CRUD
+- Agent registration
+- Agent heartbeat
+- Agent version/capabilities
+- Per-host allowed roots
+- Per-host service whitelist
+- Per-host cron allowlist
+- Host health summary
+- Host-level audit filters
+```
+
+## P4-2 Website Management
+
+### Goal
+
+基于已有 Website/WebsiteDomain model 增加网站管理。
+
+### Tasks
+
+```text
+- Website CRUD
+- domain binding
+- root path validation
+- runtime metadata
+- Nginx/Caddy integration design
+- backup before destructive ops
+- audit all changes
+```
+
+## P4-3 Database Management
+
+### Goal
+
+基于已有 DatabaseInstance/Database model 增加数据库管理。
+
+### Tasks
+
+```text
+- DB instance CRUD
+- encrypted credentials
+- connectivity test
+- database list/create/delete
+- least-privilege DB user docs
+- backup before delete
+- audit all changes
+```
+
+## P4-4 Backup UI
+
+### Goal
+
+在 P3 backup foundation 基础上提供可操作 UI。
+
+### Tasks
+
+```text
+- backup list/detail
+- create backup
+- verify backup
+- download metadata
+- retention policy UI
+- restore drill link
+```
+
+## P4-5 Plugin Framework
+
+### Goal
+
+谨慎引入 plugin system，避免扩大攻击面。
+
+### Tasks
+
+```text
+- plugin manifest schema
+- permission model
+- signature/checksum
+- sandbox policy
+- install/enable/disable audit
+- rollback/uninstall
+```
+
+---
+
+# 首个可执行 Issue
+
+## Title
+
+```text
+P3-0 Stabilization Gate for SnowPanel
+```
+
+## Body
+
+```text
+Context:
+SnowPanel has completed P2 observability and prototype cleanup. Before adding new pages or operational modules, establish a production-hardening baseline.
+
+Scope:
+1. Run all local quality gates:
+   - make lint
+   - make test
+   - backend go test ./...
+   - core-agent cargo fmt --all -- --check && cargo test
+   - frontend npm ci && npm run test && npm run build
+2. Run compose smoke:
+   - make up
+   - curl /health and /ready
+   - make down
+3. Run host-agent smoke if environment supports it:
+   - make up-host-agent
+   - curl /health and /ready
+   - make down-host-agent
+4. Verify proto contract:
+   - make proto-go
+   - git diff --exit-code for generated Go proto files
+5. Fix any failures without changing product behavior.
+6. Add docs/p3-stabilization-report.md with command evidence and unresolved risks.
+7. Update docs/roadmap.md and docs/roadmap.zh-CN.md to add P3-0 status.
+
+Acceptance criteria:
+- CI green.
+- make lint and make test pass.
+- Proto generated files are current.
+- Compose smoke documented.
+- Host-agent smoke documented or explicitly marked unavailable with reason.
+- No new product features in this PR.
+```
+
+---
+
+# Recommended Execution Order
+
+```text
+1. P3-0 Stabilization Gate
+2. P3-1 Alert Delivery & Operational Governance
+3. P3-2 Backend ↔ Core-Agent Trust Boundary
+4. P3-3 Secrets & Settings Hardening
+5. P3-4 Durable Task Worker
+6. P3-5 Host-Agent Least Privilege
+7. P3-6 Audit Retention, Export, and Forensics
+8. P3-7 Backup and Restore Foundation
+9. P4-1 Host Inventory
+10. P4-2 Website Management
+11. P4-3 Database Management
+12. P4-4 Backup UI
+13. P4-5 Plugin Framework
+```
+
+---
+
+# Definition of Done for P3
+
+```text
+P3 is done only when:
+- full test suite and CI are stable
+- production alert routing is documented and validated
+- backend-core-agent authentication exists
+- production config fails unsafe defaults
+- sensitive settings can be encrypted at rest
+- task execution is durable across backend restarts
+- host-agent has least-privilege production guidance
+- audit export and retention exist
+- backup creation and restore drill are documented
+```
