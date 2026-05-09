@@ -159,15 +159,6 @@ impl SystemdServiceManager {
         Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
     }
 
-    #[allow(dead_code)]
-    pub fn tail_logs_placeholder(&self, _name: &str) -> Result<String, ServiceError> {
-        Err(ServiceError {
-            code: 5005,
-            message: "not implemented".to_string(),
-            detail: "service log query interface is reserved for a later stage".to_string(),
-        })
-    }
-
     fn ensure_allowed(&self, name: &str) -> Result<(), ServiceError> {
         if self.whitelist.is_empty() {
             return Ok(());

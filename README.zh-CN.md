@@ -95,6 +95,7 @@ SnowPanel 是一个 Linux 服务器运维面板，采用 Vibe Coding 而成。
 - [开发指南](docs/development.zh-CN.md) | [Development Guide](docs/development.md)
 - [API 设计](docs/api-design.zh-CN.md) | [API Design](docs/api-design.md)
 - [安全说明](docs/security.zh-CN.md) | [Security Notes](docs/security.md)
+- [可观测性](docs/observability.zh-CN.md) | [Observability](docs/observability.md)
 - [部署指南](docs/deployment.zh-CN.md) | [Deployment Guide](docs/deployment.md)
 - [路线图草案](docs/roadmap.zh-CN.md) | [Roadmap](docs/roadmap.md)
 

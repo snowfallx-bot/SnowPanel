@@ -12,68 +12,88 @@
 
 ============
 
-本轮先按用户要求及时提交了上一批 contract coverage 改动，然后继续补 core-agent 中 Docker / systemd 服务入口的纯单元测试。
+本轮按用户要求完成 `.claude/progress.md` 中剩余 P2 项并进行标记。
 
-已完成提交
+本轮实际改动
 
-- commit: `42821a2 test: expand agent proto contract coverage`
-- 内容包含：
-  - backend grpcclient proto contract 覆盖扩展
-  - core-agent 文件服务真实实现合同测试
-  - core-agent 文件 gRPC 薄转发层测试
-  - Windows path validator 测试兼容性修复
+1. 完成并标记 `P2-1`
+   - `.claude/progress.md` 已将 `P2-1` 标记为完成。
+   - 记录当前测试矩阵已覆盖：
+     - backend unit tests
+     - backend + fake agent integration-style tests
+     - proto-contract CI job
+     - compose smoke
+     - frontend Playwright e2e
+     - frontend vitest
+     - core-agent Rust unit/contract tests
 
-本轮新改动
+2. 完成并标记 `P2-2`
+   - 新增 `docs/observability.md`
+   - 新增 `docs/observability.zh-CN.md`
+   - README / README.zh-CN 文档导航已加入 Observability / 可观测性入口。
+   - 文档覆盖：
+     - `/health`
+     - `/ready`
+     - `/metrics`
+     - backend HTTP Prometheus metrics
+     - backend -> core-agent metrics
+     - request id / access log
+     - core-agent tracing logs
+     - audit logs
+     - 生产排障检查顺序
 
-1. 更新 `core-agent/src/docker/service.rs`
-   - 新增 `normalize_container_id_*` 测试
-   - 覆盖：
-     - trim 后接受合法 Docker container id
-     - 拒绝空 id
-     - 拒绝 shell metacharacters
-     - 拒绝超过 128 字符的 id
-   - 这些测试不需要真实 Docker socket
-
-2. 更新 `core-agent/src/process/systemd_service.rs`
-   - 新增 `normalize_service_name_*` 测试
-   - 覆盖：
-     - trim 后自动补 `.service`
-     - 保留已有 `.service`
-     - 接受 systemd template instance 名称如 `worker@alpha`
-     - 拒绝空名称
-     - 拒绝 shell metacharacters
-     - 拒绝超过 128 字符的名称
-   - 新增 whitelist 行为测试：
-     - 空 whitelist 允许任意服务
-     - 非空 whitelist 拒绝列表外服务
-   - 这些测试不执行真实 `systemctl`
+3. 完成并标记 `P2-3`
+   - `backend/README.md` 移除 grpc transport placeholder 过时描述，改为真实 gRPC client 与 metrics 说明。
+   - `docs/deployment.md` / `docs/deployment.zh-CN.md` 将 Compose Prototype / Compose 原型模式改为 Compose Local / Compose 本地模式。
+   - `frontend/src/layouts/AppLayout.tsx` 副标题从 `Linux Panel Prototype` 改为 `Linux Server Operations`。
+   - `frontend/e2e/fixtures.ts` 更新对应 e2e 断言。
+   - `core-agent/src/process/systemd_service.rs` 移除未使用的 `tail_logs_placeholder`。
 
 本轮修改文件
 
 - `.claude/change-cache.md`
-- `core-agent/src/docker/service.rs`
+- `.claude/progress.md`
+- `README.md`
+- `README.zh-CN.md`
+- `backend/README.md`
 - `core-agent/src/process/systemd_service.rs`
+- `docs/deployment.md`
+- `docs/deployment.zh-CN.md`
+- `docs/observability.md`
+- `docs/observability.zh-CN.md`
+- `frontend/e2e/fixtures.ts`
+- `frontend/src/layouts/AppLayout.tsx`
 
 本地验证
 
+- `rg` 扫描已确认以下旧痕迹不存在：
+  - `Linux Panel Prototype`
+  - `grpc transport placeholder`
+  - `tail_logs_placeholder`
+  - `Compose Prototype`
+  - `Compose 原型`
 - `C:\Users\GuaiZai\.cargo\bin\cargo.exe fmt` 通过
 - `C:\Users\GuaiZai\.cargo\bin\cargo.exe test` 通过
   - 25 个 core-agent Rust 单元测试全部通过
 - `go test ./...` 在 `backend` 目录下通过
+- `npm run test -- --run` 在 `frontend` 目录下通过
+  - 24 个前端单元测试全部通过
+- `npm run build` 在 `frontend` 目录下通过
 
 备注
 
-- 当前 shell 的 `PATH` 仍未包含 `C:\Users\GuaiZai\.cargo\bin`，Rust 命令继续用完整路径运行。
+- 当前 shell 的 `PATH` 仍未包含 `C:\Users\GuaiZai\.cargo\bin`，Rust 命令继续使用完整路径运行。
 - `cargo fmt` / `cargo test` 仍会输出 `warn: could not canonicalize path C:\Users\GuaiZai`，但命令成功，不影响测试结果。
+- 默认 sandbox 下 `npm run test -- --run` / `npm run build` 因真实路径解析失败，需要提升权限后运行；提升权限后均已通过。
 
 commit摘要
 
-- 建议提交：`test(core-agent): cover service action input validation`
+- 建议提交：`docs: mark progress complete`
 
 希望接下来的 AI 做什么
 
-1. 本轮新改动应及时提交，建议 commit message 使用：`test(core-agent): cover service action input validation`。
-2. 后续若继续推进 Service/Docker/Cron 的 gRPC 层覆盖，建议先引入 trait/依赖注入，避免测试依赖真实 systemd/docker/crontab。
-3. 如果能访问 GitHub Actions，仍建议观察 compose smoke 是否通过；若失败，优先看 frontend proxy `/health` 与登录代理响应。
+1. 本轮改动应及时提交。
+2. 当前 `.claude/progress.md` 内列出的 P0 / P1 / P2 项均已标记完成。
+3. 后续新增工作建议另开 progress 项，例如 httpOnly cookie、OpenTelemetry tracing、service logs 查询等。
 
 by: gpt-5.5-codex

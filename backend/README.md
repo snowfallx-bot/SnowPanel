@@ -5,6 +5,7 @@ Go backend baseline with:
 - `viper` config loading
 - `zap` structured logging
 - `gorm` PostgreSQL connection bootstrap
+- Prometheus metrics at `/metrics`
 
 ## Run
 
@@ -15,6 +16,8 @@ Go backend baseline with:
 ## Endpoints
 
 - `GET /health`
+- `GET /ready`
+- `GET /metrics`
 - `GET /api/v1/ping`
 - `POST /api/v1/auth/login`
 - `GET /api/v1/auth/me` (JWT protected)
@@ -62,9 +65,8 @@ Recommended execution flow:
 1. apply `.up.sql`
 2. start backend
 
-## gRPC Client Skeleton
+## gRPC Client
 
-`internal/grpcclient` currently exposes a transport placeholder interface.
-After proto code generation is ready, replace placeholder methods with:
-- grpc connection setup
-- generated `SystemServiceClient` calls
+`internal/grpcclient` uses the checked-in protobuf stubs to call `core-agent`
+over gRPC. The client records Prometheus metrics for agent request count,
+latency, and transport failures.

@@ -93,6 +93,7 @@ Common commands:
 - [Development Guide](docs/development.md) | [开发指南](docs/development.zh-CN.md)
 - [API Design](docs/api-design.md) | [API 设计](docs/api-design.zh-CN.md)
 - [Security Notes](docs/security.md) | [安全说明](docs/security.zh-CN.md)
+- [Observability](docs/observability.md) | [可观测性](docs/observability.zh-CN.md)
 - [Deployment Guide](docs/deployment.md) | [部署指南](docs/deployment.zh-CN.md)
 - [Roadmap](docs/roadmap.md) | [路线图草案](docs/roadmap.zh-CN.md)
 

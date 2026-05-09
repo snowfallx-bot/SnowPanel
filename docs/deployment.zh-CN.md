@@ -6,7 +6,7 @@
 
 | 模式 | 描述 | 推荐场景 |
 | --- | --- | --- |
-| Compose 原型模式 | `core-agent` 与其他服务一起跑在 compose 内。 | 本地开发与演示环境。 |
+| Compose 本地模式 | `core-agent` 与其他服务一起跑在 compose 内。 | 本地开发与演示环境。 |
 | 宿主机 Agent 模式（推荐） | `core-agent` 以宿主机 systemd 服务运行，backend 通过内网 gRPC 连接。 | 生产环境与真实宿主机运维场景（docker/systemd/cron）。 |
 
 ## Ubuntu 25.10 一键安装
@@ -15,7 +15,7 @@
 
 - [一键安装脚本说明](../deploy/one-click/ubuntu-25.10/README.zh-CN.md)
 
-## 模式 A：Compose 原型模式
+## 模式 A：Compose 本地模式
 
 项目提供了面向开发阶段的 compose 服务栈，包括：
 - `postgres`
@@ -57,7 +57,7 @@
 
 不要再退回普通 `docker compose up` / `make up`，否则 backend 会丢失 host-agent 覆盖，重新连回已禁用的容器版 `core-agent`。
 
-## 默认端口（Compose 原型）
+## 默认端口（Compose 本地模式）
 
 - Frontend：`5173`
 - Backend：`8080`

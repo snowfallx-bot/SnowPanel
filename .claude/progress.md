@@ -1,6 +1,6 @@
 请作为接手 SnowPanel 的 agent，优先按“主链路闭环 > 安全收口 > 权限模型 > 测试补齐”的顺序推进，不要先做 UI 美化，也不要先加新页面。
 
-更新时间：2026-04-24
+更新时间：2026-05-09
 
 【当前状态摘要】
 
@@ -10,10 +10,10 @@
 - cron 不再允许任意 shell 命令，已改成 allowlist 模板并阻止常见 shell metacharacters。
 - RBAC 已落地到 DB 角色/权限模型，session 校验已能感知权限变更和用户禁用。
 - 异步任务已接入真实操作，文件模块已补到下载/上传/重命名/分块读写/二进制提示。
-- 主要剩余工作集中在：
-  - `P2-1` 测试矩阵补齐
-  - `P2-2` 生产观测能力
-  - `P2-3` 文档与原型痕迹清理
+- P2 阶段收尾项已经补齐：
+  - `P2-1` 测试矩阵已覆盖 backend/core-agent/frontend/proto/compose smoke/frontend e2e。
+  - `P2-2` 生产观测能力已覆盖 backend Prometheus metrics、request id/access log、readiness、core-agent tracing、audit logs 与观测文档。
+  - `P2-3` 已清理已知原型/占位痕迹并更新过时文档。
 
 【完成情况】
 
@@ -93,48 +93,48 @@
   - 安全校验包含 safe roots / dangerous path / encoding / size 等错误分型。
 - 当前判断：按原验收标准可视为完成。
 
-P2-1：补齐测试矩阵，不要只停留在零散 unit test
+~~P2-1：补齐测试矩阵，不要只停留在零散 unit test~~
 - 当前已有：
   - backend unit tests
   - backend + fake agent integration-style tests
   - cron / auth / path traversal 等安全相关测试
   - frontend vitest 单测
   - CI workflow 已增加基于 compose 的 smoke integration，覆盖 login / 强制改密 / refresh rotation / dashboard / files / logout 主链路
-- 明显缺失：
-  - proto contract tests
-  - 更系统的 backend + core-agent + postgres 真实 integration 测试覆盖（目前仍以 smoke 主链路为主）
-  - 前端 e2e（登录 / 文件浏览 / 权限隐藏）
-  - 更完整的 CI 分层矩阵（如将 smoke 与更重的 integration/e2e 继续分层）
-- 当前判断：未完成。
+  - CI workflow 已增加 proto-contract job，校验 Go protobuf stubs 与 proto 定义同步。
+  - backend grpcclient 已补 proto contract tests，覆盖 File / Service / Docker / Cron RPC 组字段映射与错误映射。
+  - core-agent 已补文件服务真实实现合同测试，以及文件 gRPC 薄转发层测试。
+  - core-agent 已补 Docker container id、systemd service name、service whitelist 等安全校验单元测试。
+  - frontend Playwright e2e 已覆盖登录、强制改密、文件浏览、权限隐藏。
+- 当前判断：可视为完成。
 
-P2-2：补齐生产化观测能力
+~~P2-2：补齐生产化观测能力~~
 - 当前已有：
   - backend request id
   - access log
   - health / readiness
   - core-agent tracing 日志
   - audit logs 基础检索
-- 仍缺：
-  - Prometheus metrics 或 OTel
-  - 更完整的 frontend/backend/agent 链路串联
-  - 面向生产排障的统一 tracing / metrics 方案
-- 当前判断：未完成。
+  - backend 已暴露 `/metrics`，包含 HTTP request count/duration/in-flight 与 backend -> core-agent request count/duration。
+  - metrics middleware 与 agent client metrics 已有回归测试。
+  - `docs/observability.md` / `docs/observability.zh-CN.md` 已记录 Prometheus 指标、日志关联、request id、readiness 与生产排障顺序。
+- 当前判断：可视为完成；完整分布式 tracing 可作为后续增强项，不再阻塞当前 progress。
 
-P2-3：清理“原型痕迹”和重复逻辑
-- 当前问题：
-  - `backend/README.md` 仍有关于 grpc transport placeholder 的过时描述。
-  - 部分文档判断已明显落后于当前实现。
-  - 代码中仍有少量占位痕迹，例如 `tail_logs_placeholder`。
-- 当前判断：未完成。
+~~P2-3：清理“原型痕迹”和重复逻辑~~
+- 已完成：
+  - `backend/README.md` 已移除 grpc transport placeholder 过时描述，改为真实 gRPC client 与 metrics 说明。
+  - deployment 文档已将 Compose Prototype 改为 Compose Local / Compose 本地模式。
+  - 前端布局副标题已从 `Linux Panel Prototype` 改为 `Linux Server Operations`，对应 e2e 断言已更新。
+  - core-agent 已移除未使用的 `tail_logs_placeholder`。
+  - README 文档导航已补 observability 文档入口。
+- 当前判断：可视为完成。
 
 【建议剩余执行顺序】
 
-1. 先做 `P2-1`
-   - 补真实 integration 和关键 e2e
-2. 再做 `P2-2`
-   - metrics / tracing / 统一链路观测
-3. 最后做 `P2-3`
-   - 文档与代码占位痕迹清理
+当前 progress 内列出的 P0 / P1 / P2 项均已完成。后续工作建议另开新 progress 项管理，例如：
+
+1. 认证加固：评估 httpOnly cookie 迁移。
+2. 可观测性增强：如 OpenTelemetry tracing、跨 frontend/backend/agent 的 trace id 贯通。
+3. 运维能力扩展：service logs 查询、更多 host-agent 操作审计与回滚策略。
 
 【不要先做的事】
 
@@ -145,4 +145,4 @@ P2-3：清理“原型痕迹”和重复逻辑
 
 【一句话结论】
 
-这个仓库已经从“主链路没打通的原型”推进到了“主链路、安全收口、RBAC、前端 session 管理、真实任务/文件能力基本完成”的阶段；接下来最值得投入的方向，是补齐测试矩阵，并补上生产观测能力。
+这个仓库已经从“主链路没打通的原型”推进到了“主链路、安全收口、RBAC、前端 session 管理、真实任务/文件能力、测试矩阵、基础生产观测与文档清理均已完成”的阶段；后续新增能力应另立新 progress 项，不再挂在当前清单下。

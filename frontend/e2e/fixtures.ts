@@ -41,7 +41,7 @@ export async function loginAndMaybeRotate(page: Page, session: AuthSession) {
     }
   }
 
-  await expect(page.getByText(/linux panel prototype/i)).toBeVisible();
+  await expect(page.getByText(/linux server operations/i)).toBeVisible();
 }
 
 export async function loginViaApi(
