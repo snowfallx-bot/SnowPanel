@@ -594,3 +594,228 @@ fn to_proto_cron_task(task: crate::cron::service::CronTaskEntity) -> CronTask {
         enabled: task.enabled,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{FileOperatorService, FileServiceImpl};
+    use crate::api::proto::file_service_server::FileService as FileGrpcService;
+    use crate::api::proto::{
+        CreateDirectoryRequest, DeleteFileRequest, ListFilesRequest, PathSafetyContext,
+        ReadFileChunkRequest, ReadTextFileRequest, RenameFileRequest, WriteFileChunkRequest,
+        WriteTextFileRequest,
+    };
+    use crate::security::path_validator::PathValidator;
+    use std::fs;
+    use std::path::{Path, PathBuf};
+    use std::sync::Arc;
+    use std::time::{SystemTime, UNIX_EPOCH};
+    use tonic::Request;
+
+    struct TempDir {
+        path: PathBuf,
+    }
+
+    impl TempDir {
+        fn new(prefix: &str) -> Self {
+            let mut path = std::env::temp_dir();
+            let nonce = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("system time must be after unix epoch")
+                .as_nanos();
+            path.push(format!("snowpanel_grpc_file_{prefix}_{nonce}"));
+            fs::create_dir_all(&path).expect("failed to create temp dir");
+            Self { path }
+        }
+
+        fn path(&self) -> &Path {
+            &self.path
+        }
+    }
+
+    impl Drop for TempDir {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.path);
+        }
+    }
+
+    fn file_service() -> FileServiceImpl {
+        FileServiceImpl {
+            file_service: Arc::new(FileOperatorService::new(
+                PathValidator::new(Vec::new()),
+                16,
+                32,
+            )),
+        }
+    }
+
+    fn safety(root: &Path) -> Option<PathSafetyContext> {
+        Some(PathSafetyContext {
+            requested_path: String::new(),
+            allowed_roots: vec![path_string(root)],
+            enforce_safe_root: true,
+            follow_symlink: false,
+            normalized_path: String::new(),
+        })
+    }
+
+    fn path_string(path: &Path) -> String {
+        path.to_str()
+            .expect("test paths should be valid utf-8")
+            .to_string()
+    }
+
+    fn canonical_string(path: &Path) -> String {
+        if path.exists() {
+            return fs::canonicalize(path)
+                .expect("path should canonicalize")
+                .to_string_lossy()
+                .into_owned();
+        }
+
+        let parent = path.parent().expect("path should have parent");
+        let file_name = path.file_name().expect("path should have file name");
+        fs::canonicalize(parent)
+            .expect("path parent should canonicalize")
+            .join(file_name)
+            .to_string_lossy()
+            .into_owned()
+    }
+
+    fn assert_ok(error: Option<crate::api::proto::Error>) {
+        let error = error.expect("response should include error envelope");
+        assert_eq!(error.code, 0, "response error should be ok: {:?}", error);
+    }
+
+    #[tokio::test]
+    async fn file_grpc_service_forwards_proto_request_fields() {
+        let temp = TempDir::new("forwarding");
+        let service = file_service();
+
+        let text_file = temp.path().join("note.txt");
+        let write_text = service
+            .write_text_file(Request::new(WriteTextFileRequest {
+                path: path_string(&text_file),
+                content: "hello grpc".to_string(),
+                create_if_not_exists: true,
+                truncate: true,
+                encoding: "utf-8".to_string(),
+                safety: safety(temp.path()),
+            }))
+            .await
+            .expect("write_text_file should not return transport error")
+            .into_inner();
+        assert_ok(write_text.error);
+        assert_eq!(write_text.path, canonical_string(&text_file));
+        assert_eq!(write_text.written_bytes, "hello grpc".len() as u64);
+
+        let read_text = service
+            .read_text_file(Request::new(ReadTextFileRequest {
+                path: path_string(&text_file),
+                max_bytes: 5,
+                encoding: "utf-8".to_string(),
+                safety: safety(temp.path()),
+            }))
+            .await
+            .expect("read_text_file should not return transport error")
+            .into_inner();
+        assert_ok(read_text.error);
+        assert_eq!(read_text.path, canonical_string(&text_file));
+        assert_eq!(read_text.content, "hello");
+        assert!(read_text.truncated);
+
+        let read_chunk = service
+            .read_file_chunk(Request::new(ReadFileChunkRequest {
+                path: path_string(&text_file),
+                offset: 6,
+                limit: 4,
+                safety: safety(temp.path()),
+            }))
+            .await
+            .expect("read_file_chunk should not return transport error")
+            .into_inner();
+        assert_ok(read_chunk.error);
+        assert_eq!(read_chunk.offset, 6);
+        assert_eq!(read_chunk.chunk, b"grpc".to_vec());
+        assert!(read_chunk.eof);
+
+        let chunk_file = temp.path().join("chunk.bin");
+        let write_chunk = service
+            .write_file_chunk(Request::new(WriteFileChunkRequest {
+                path: path_string(&chunk_file),
+                offset: 0,
+                chunk: b"abc".to_vec(),
+                create_if_not_exists: true,
+                truncate: true,
+                safety: safety(temp.path()),
+            }))
+            .await
+            .expect("write_file_chunk should not return transport error")
+            .into_inner();
+        assert_ok(write_chunk.error);
+        assert_eq!(write_chunk.path, canonical_string(&chunk_file));
+        assert_eq!(write_chunk.offset, 0);
+        assert_eq!(write_chunk.written_bytes, 3);
+        assert_eq!(write_chunk.total_size, 3);
+
+        let nested_parent = temp.path().join("nested");
+        fs::create_dir_all(&nested_parent).expect("failed to create nested parent");
+        let nested_dir = nested_parent.join("cache");
+        let created = service
+            .create_directory(Request::new(CreateDirectoryRequest {
+                path: path_string(&nested_dir),
+                create_parents: true,
+                safety: safety(temp.path()),
+            }))
+            .await
+            .expect("create_directory should not return transport error")
+            .into_inner();
+        assert_ok(created.error);
+        assert_eq!(created.path, canonical_string(&nested_dir));
+
+        let listed = service
+            .list_files(Request::new(ListFilesRequest {
+                path: path_string(temp.path()),
+                safety: safety(temp.path()),
+            }))
+            .await
+            .expect("list_files should not return transport error")
+            .into_inner();
+        assert_ok(listed.error);
+        assert_eq!(listed.current_path, canonical_string(temp.path()));
+        assert!(listed.entries.iter().any(|entry| entry.name == "note.txt"));
+        assert!(listed.entries.iter().any(|entry| entry.name == "nested"));
+
+        let renamed_file = temp.path().join("renamed.txt");
+        let expected_text_path = canonical_string(&text_file);
+        let expected_renamed_path = canonical_string(&renamed_file);
+        let renamed = service
+            .rename_file(Request::new(RenameFileRequest {
+                source_path: path_string(&text_file),
+                target_path: path_string(&renamed_file),
+                safety: safety(temp.path()),
+            }))
+            .await
+            .expect("rename_file should not return transport error")
+            .into_inner();
+        assert_ok(renamed.error);
+        assert_eq!(renamed.source_path, expected_text_path);
+        assert_eq!(renamed.target_path, expected_renamed_path);
+        assert_eq!(renamed.moved_bytes, "hello grpc".len() as u64);
+
+        let delete_dir = temp.path().join("delete-me");
+        fs::create_dir_all(delete_dir.join("child")).expect("failed to create nested delete dir");
+        let expected_delete_dir_path = canonical_string(&delete_dir);
+        let deleted = service
+            .delete_file(Request::new(DeleteFileRequest {
+                path: path_string(&delete_dir),
+                recursive: true,
+                safety: safety(temp.path()),
+            }))
+            .await
+            .expect("delete_file should not return transport error")
+            .into_inner();
+        assert_ok(deleted.error);
+        assert_eq!(deleted.path, expected_delete_dir_path);
+        assert!(!delete_dir.exists());
+    }
+}

@@ -195,8 +195,9 @@ mod tests {
             )
             .expect("path should be accepted");
 
+        let normalized_root = fs::canonicalize(&root).expect("root should canonicalize");
         assert!(
-            output.starts_with(&root),
+            output.starts_with(&normalized_root),
             "normalized path should stay within allowed root"
         );
 

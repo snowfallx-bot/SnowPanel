@@ -120,6 +120,240 @@ func TestClientListFilesMapsStructuredAgentError(t *testing.T) {
 	}
 }
 
+func TestClientFileOperationsPreserveProtoFields(t *testing.T) {
+	target := startProtoContractServer(t, protoContractOptions{})
+	client := New(target, 2*time.Second)
+	ctx := context.Background()
+
+	readText, err := client.ReadTextFile(ctx, ReadTextFileRequest{
+		Path:     "/srv/app/config.yaml",
+		MaxBytes: 64,
+		Encoding: "utf-8",
+	})
+	if err != nil {
+		t.Fatalf("ReadTextFile() error = %v", err)
+	}
+	if readText.Path != "/srv/app/config.yaml" || readText.Content != "contract text content" ||
+		readText.Size != 2048 || !readText.Truncated || readText.Encoding != "utf-8" {
+		t.Fatalf("unexpected read text result: %+v", readText)
+	}
+
+	readChunk, err := client.ReadFileChunk(ctx, ReadFileChunkRequest{
+		Path:   "/srv/app/archive.bin",
+		Offset: 32,
+		Limit:  4,
+	})
+	if err != nil {
+		t.Fatalf("ReadFileChunk() error = %v", err)
+	}
+	if readChunk.Path != "/srv/app/archive.bin" || readChunk.Offset != 32 ||
+		string(readChunk.Chunk) != "chunk:/srv/app/archive.bin" ||
+		readChunk.TotalSize != 4096 || !readChunk.EOF {
+		t.Fatalf("unexpected read chunk result: %+v", readChunk)
+	}
+
+	writeChunk, err := client.WriteFileChunk(ctx, WriteFileChunkRequest{
+		Path:              "/srv/app/archive.bin",
+		Offset:            32,
+		Chunk:             []byte("contract chunk"),
+		CreateIfNotExists: true,
+		Truncate:          true,
+	})
+	if err != nil {
+		t.Fatalf("WriteFileChunk() error = %v", err)
+	}
+	if writeChunk.Path != "/srv/app/archive.bin" || writeChunk.Offset != 32 ||
+		writeChunk.WrittenBytes != uint64(len("contract chunk")) || writeChunk.TotalSize != 46 {
+		t.Fatalf("unexpected write chunk result: %+v", writeChunk)
+	}
+
+	writeText, err := client.WriteTextFile(ctx, WriteTextFileRequest{
+		Path:              "/srv/app/config.yaml",
+		Content:           "contract text content",
+		CreateIfNotExists: true,
+		Truncate:          true,
+		Encoding:          "utf-8",
+	})
+	if err != nil {
+		t.Fatalf("WriteTextFile() error = %v", err)
+	}
+	if writeText.Path != "/srv/app/config.yaml" || writeText.WrittenBytes != uint64(len("contract text content")) {
+		t.Fatalf("unexpected write text result: %+v", writeText)
+	}
+
+	created, err := client.CreateDirectory(ctx, CreateDirectoryRequest{
+		Path:          "/srv/app/cache",
+		CreateParents: true,
+	})
+	if err != nil {
+		t.Fatalf("CreateDirectory() error = %v", err)
+	}
+	if created.Path != "/srv/app/cache:parents" {
+		t.Fatalf("unexpected create directory result: %+v", created)
+	}
+
+	deleted, err := client.DeleteFile(ctx, DeleteFileRequest{
+		Path:      "/srv/app/cache",
+		Recursive: true,
+	})
+	if err != nil {
+		t.Fatalf("DeleteFile() error = %v", err)
+	}
+	if deleted.Path != "/srv/app/cache:recursive" {
+		t.Fatalf("unexpected delete file result: %+v", deleted)
+	}
+
+	renamed, err := client.RenameFile(ctx, RenameFileRequest{
+		SourcePath: "/srv/app/config.yaml",
+		TargetPath: "/srv/app/config.old.yaml",
+	})
+	if err != nil {
+		t.Fatalf("RenameFile() error = %v", err)
+	}
+	if renamed.SourcePath != "/srv/app/config.yaml" ||
+		renamed.TargetPath != "/srv/app/config.old.yaml" ||
+		renamed.MovedBytes != 42 {
+		t.Fatalf("unexpected rename file result: %+v", renamed)
+	}
+}
+
+func TestClientServiceDockerAndCronContracts(t *testing.T) {
+	target := startProtoContractServer(t, protoContractOptions{})
+	client := New(target, 2*time.Second)
+	ctx := context.Background()
+
+	services, err := client.ListServices(ctx, ListServicesRequest{Keyword: "ssh"})
+	if err != nil {
+		t.Fatalf("ListServices() error = %v", err)
+	}
+	if len(services.Services) != 2 || services.Services[0].Name != "sshd" ||
+		services.Services[0].DisplayName != "SSH daemon for ssh" ||
+		services.Services[0].Status != "running" {
+		t.Fatalf("unexpected services result: %+v", services)
+	}
+
+	for _, tc := range []struct {
+		name string
+		call func(context.Context, ServiceActionRequest) (ServiceActionResult, error)
+		want string
+	}{
+		{name: "start", call: client.StartService, want: "started"},
+		{name: "stop", call: client.StopService, want: "stopped"},
+		{name: "restart", call: client.RestartService, want: "restarted"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := tc.call(ctx, ServiceActionRequest{Name: "sshd"})
+			if err != nil {
+				t.Fatalf("%s service error = %v", tc.name, err)
+			}
+			if result.Name != "sshd" || result.Status != tc.want {
+				t.Fatalf("unexpected service action result: %+v", result)
+			}
+		})
+	}
+
+	containers, err := client.ListDockerContainers(ctx)
+	if err != nil {
+		t.Fatalf("ListDockerContainers() error = %v", err)
+	}
+	if len(containers.Containers) != 2 || containers.Containers[0].ID != "container-1" ||
+		containers.Containers[0].Name != "snowpanel-backend" ||
+		containers.Containers[0].Image != "snowpanel/backend:test" ||
+		containers.Containers[0].State != "running" ||
+		containers.Containers[0].Status != "Up 1 minute" {
+		t.Fatalf("unexpected containers result: %+v", containers)
+	}
+
+	for _, tc := range []struct {
+		name string
+		call func(context.Context, DockerContainerActionRequest) (DockerContainerActionResult, error)
+		want string
+	}{
+		{name: "start", call: client.StartDockerContainer, want: "running"},
+		{name: "stop", call: client.StopDockerContainer, want: "exited"},
+		{name: "restart", call: client.RestartDockerContainer, want: "restarted"},
+	} {
+		t.Run("docker "+tc.name, func(t *testing.T) {
+			result, err := tc.call(ctx, DockerContainerActionRequest{ID: "container-1"})
+			if err != nil {
+				t.Fatalf("%s docker container error = %v", tc.name, err)
+			}
+			if result.ID != "container-1" || result.State != tc.want {
+				t.Fatalf("unexpected docker action result: %+v", result)
+			}
+		})
+	}
+
+	images, err := client.ListDockerImages(ctx)
+	if err != nil {
+		t.Fatalf("ListDockerImages() error = %v", err)
+	}
+	if len(images.Images) != 1 || images.Images[0].ID != "image-1" ||
+		len(images.Images[0].RepoTags) != 2 ||
+		images.Images[0].RepoTags[0] != "snowpanel/backend:test" ||
+		images.Images[0].RepoTags[1] != "snowpanel/backend:latest" ||
+		images.Images[0].Size != 123456 {
+		t.Fatalf("unexpected images result: %+v", images)
+	}
+
+	tasks, err := client.ListCronTasks(ctx)
+	if err != nil {
+		t.Fatalf("ListCronTasks() error = %v", err)
+	}
+	if len(tasks.Tasks) != 1 || tasks.Tasks[0].ID != "cron-1" ||
+		tasks.Tasks[0].Expression != "*/5 * * * *" ||
+		tasks.Tasks[0].Command != "snowpanel check" ||
+		!tasks.Tasks[0].Enabled {
+		t.Fatalf("unexpected cron list result: %+v", tasks)
+	}
+
+	createdTask, err := client.CreateCronTask(ctx, CreateCronTaskRequest{
+		Expression: "0 * * * *",
+		Command:    "snowpanel rotate",
+		Enabled:    true,
+	})
+	if err != nil {
+		t.Fatalf("CreateCronTask() error = %v", err)
+	}
+	if createdTask.Task.ID != "created-cron" || createdTask.Task.Expression != "0 * * * *" ||
+		createdTask.Task.Command != "snowpanel rotate" || !createdTask.Task.Enabled {
+		t.Fatalf("unexpected create cron result: %+v", createdTask)
+	}
+
+	updatedTask, err := client.UpdateCronTask(ctx, UpdateCronTaskRequest{
+		ID:         "cron-1",
+		Expression: "30 * * * *",
+		Command:    "snowpanel sync",
+		Enabled:    false,
+	})
+	if err != nil {
+		t.Fatalf("UpdateCronTask() error = %v", err)
+	}
+	if updatedTask.Task.ID != "cron-1" || updatedTask.Task.Expression != "30 * * * *" ||
+		updatedTask.Task.Command != "snowpanel sync" || updatedTask.Task.Enabled {
+		t.Fatalf("unexpected update cron result: %+v", updatedTask)
+	}
+
+	deletedTask, err := client.DeleteCronTask(ctx, DeleteCronTaskRequest{ID: "cron-1"})
+	if err != nil {
+		t.Fatalf("DeleteCronTask() error = %v", err)
+	}
+	if deletedTask.ID != "cron-1" {
+		t.Fatalf("unexpected delete cron result: %+v", deletedTask)
+	}
+
+	enabledTask, err := client.SetCronTaskEnabled(ctx, SetCronTaskEnabledRequest{
+		ID:      "cron-1",
+		Enabled: true,
+	})
+	if err != nil {
+		t.Fatalf("SetCronTaskEnabled() error = %v", err)
+	}
+	if enabledTask.Task.ID != "cron-1" || !enabledTask.Task.Enabled {
+		t.Fatalf("unexpected set cron enabled result: %+v", enabledTask)
+	}
+}
+
 func TestClientCheckHealthMapsTransportError(t *testing.T) {
 	target := startProtoContractServer(t, protoContractOptions{healthTransportCode: codes.Unimplemented})
 	client := New(target, 2*time.Second)
@@ -160,7 +394,14 @@ func TestGeneratedGoProtoDescriptorsExposeCriticalServices(t *testing.T) {
 		t.Fatal("expected allowed_roots field to exist")
 	}
 
-	for _, serviceName := range []string{"HealthService", "SystemService", "FileService"} {
+	for _, serviceName := range []string{
+		"HealthService",
+		"SystemService",
+		"FileService",
+		"ServiceManagerService",
+		"DockerService",
+		"CronService",
+	} {
 		if files.Services().ByName(protoreflect.Name(serviceName)) == nil {
 			t.Fatalf("expected service descriptor %s to exist", serviceName)
 		}
@@ -184,6 +425,9 @@ func startProtoContractServer(t *testing.T, opts protoContractOptions) string {
 	agentv1.RegisterHealthServiceServer(server, &protoContractHealthService{opts: opts})
 	agentv1.RegisterSystemServiceServer(server, &protoContractSystemService{})
 	agentv1.RegisterFileServiceServer(server, &protoContractFileService{opts: opts})
+	agentv1.RegisterServiceManagerServiceServer(server, &protoContractServiceManagerService{})
+	agentv1.RegisterDockerServiceServer(server, &protoContractDockerService{})
+	agentv1.RegisterCronServiceServer(server, &protoContractCronService{})
 
 	go func() {
 		_ = server.Serve(listener)
@@ -287,6 +531,209 @@ func (s *protoContractFileService) ListFiles(context.Context, *agentv1.ListFiles
 				Size:           0,
 				ModifiedAtUnix: 1710000002,
 			},
+		},
+	}, nil
+}
+
+func (s *protoContractFileService) ReadTextFile(_ context.Context, req *agentv1.ReadTextFileRequest) (*agentv1.ReadTextFileResponse, error) {
+	return &agentv1.ReadTextFileResponse{
+		Error:     okProtoError(),
+		Path:      req.GetPath(),
+		Content:   "contract text content",
+		Size:      2048,
+		Truncated: req.GetMaxBytes() == 64,
+		Encoding:  req.GetEncoding(),
+	}, nil
+}
+
+func (s *protoContractFileService) ReadFileChunk(_ context.Context, req *agentv1.ReadFileChunkRequest) (*agentv1.ReadFileChunkResponse, error) {
+	return &agentv1.ReadFileChunkResponse{
+		Error:     okProtoError(),
+		Path:      req.GetPath(),
+		Offset:    req.GetOffset(),
+		Chunk:     []byte("chunk:" + req.GetPath()),
+		TotalSize: 4096,
+		Eof:       req.GetLimit() == 4,
+	}, nil
+}
+
+func (s *protoContractFileService) WriteFileChunk(_ context.Context, req *agentv1.WriteFileChunkRequest) (*agentv1.WriteFileChunkResponse, error) {
+	return &agentv1.WriteFileChunkResponse{
+		Error:        okProtoError(),
+		Path:         req.GetPath(),
+		Offset:       req.GetOffset(),
+		WrittenBytes: uint64(len(req.GetChunk())),
+		TotalSize:    req.GetOffset() + uint64(len(req.GetChunk())),
+	}, nil
+}
+
+func (s *protoContractFileService) WriteTextFile(_ context.Context, req *agentv1.WriteTextFileRequest) (*agentv1.WriteTextFileResponse, error) {
+	return &agentv1.WriteTextFileResponse{
+		Error:        okProtoError(),
+		Path:         req.GetPath(),
+		WrittenBytes: uint64(len(req.GetContent())),
+	}, nil
+}
+
+func (s *protoContractFileService) CreateDirectory(_ context.Context, req *agentv1.CreateDirectoryRequest) (*agentv1.CreateDirectoryResponse, error) {
+	path := req.GetPath()
+	if req.GetCreateParents() {
+		path += ":parents"
+	}
+	return &agentv1.CreateDirectoryResponse{Error: okProtoError(), Path: path}, nil
+}
+
+func (s *protoContractFileService) DeleteFile(_ context.Context, req *agentv1.DeleteFileRequest) (*agentv1.DeleteFileResponse, error) {
+	path := req.GetPath()
+	if req.GetRecursive() {
+		path += ":recursive"
+	}
+	return &agentv1.DeleteFileResponse{Error: okProtoError(), Path: path}, nil
+}
+
+func (s *protoContractFileService) RenameFile(_ context.Context, req *agentv1.RenameFileRequest) (*agentv1.RenameFileResponse, error) {
+	return &agentv1.RenameFileResponse{
+		Error:      okProtoError(),
+		SourcePath: req.GetSourcePath(),
+		TargetPath: req.GetTargetPath(),
+		MovedBytes: 42,
+	}, nil
+}
+
+type protoContractServiceManagerService struct {
+	agentv1.UnimplementedServiceManagerServiceServer
+}
+
+func (s *protoContractServiceManagerService) ListServices(_ context.Context, req *agentv1.ListServicesRequest) (*agentv1.ListServicesResponse, error) {
+	return &agentv1.ListServicesResponse{
+		Error: okProtoError(),
+		Services: []*agentv1.ServiceInfo{
+			{Name: "sshd", DisplayName: "SSH daemon for " + req.GetKeyword(), Status: "running"},
+			{Name: "postgresql", DisplayName: "PostgreSQL", Status: "inactive"},
+		},
+	}, nil
+}
+
+func (s *protoContractServiceManagerService) StartService(ctx context.Context, req *agentv1.ServiceActionRequest) (*agentv1.ServiceActionResponse, error) {
+	return serviceActionResponse(req.GetName(), "started"), nil
+}
+
+func (s *protoContractServiceManagerService) StopService(ctx context.Context, req *agentv1.ServiceActionRequest) (*agentv1.ServiceActionResponse, error) {
+	return serviceActionResponse(req.GetName(), "stopped"), nil
+}
+
+func (s *protoContractServiceManagerService) RestartService(ctx context.Context, req *agentv1.ServiceActionRequest) (*agentv1.ServiceActionResponse, error) {
+	return serviceActionResponse(req.GetName(), "restarted"), nil
+}
+
+func serviceActionResponse(name string, status string) *agentv1.ServiceActionResponse {
+	return &agentv1.ServiceActionResponse{Error: okProtoError(), Name: name, Status: status}
+}
+
+type protoContractDockerService struct {
+	agentv1.UnimplementedDockerServiceServer
+}
+
+func (s *protoContractDockerService) ListContainers(context.Context, *agentv1.ListDockerContainersRequest) (*agentv1.ListDockerContainersResponse, error) {
+	return &agentv1.ListDockerContainersResponse{
+		Error: okProtoError(),
+		Containers: []*agentv1.DockerContainerInfo{
+			{
+				Id:     "container-1",
+				Name:   "snowpanel-backend",
+				Image:  "snowpanel/backend:test",
+				State:  "running",
+				Status: "Up 1 minute",
+			},
+			{
+				Id:     "container-2",
+				Name:   "snowpanel-frontend",
+				Image:  "snowpanel/frontend:test",
+				State:  "exited",
+				Status: "Exited",
+			},
+		},
+	}, nil
+}
+
+func (s *protoContractDockerService) StartContainer(ctx context.Context, req *agentv1.DockerContainerActionRequest) (*agentv1.DockerContainerActionResponse, error) {
+	return dockerActionResponse(req.GetId(), "running"), nil
+}
+
+func (s *protoContractDockerService) StopContainer(ctx context.Context, req *agentv1.DockerContainerActionRequest) (*agentv1.DockerContainerActionResponse, error) {
+	return dockerActionResponse(req.GetId(), "exited"), nil
+}
+
+func (s *protoContractDockerService) RestartContainer(ctx context.Context, req *agentv1.DockerContainerActionRequest) (*agentv1.DockerContainerActionResponse, error) {
+	return dockerActionResponse(req.GetId(), "restarted"), nil
+}
+
+func (s *protoContractDockerService) ListImages(context.Context, *agentv1.ListDockerImagesRequest) (*agentv1.ListDockerImagesResponse, error) {
+	return &agentv1.ListDockerImagesResponse{
+		Error: okProtoError(),
+		Images: []*agentv1.DockerImageInfo{
+			{
+				Id:       "image-1",
+				RepoTags: []string{"snowpanel/backend:test", "snowpanel/backend:latest"},
+				Size:     123456,
+			},
+		},
+	}, nil
+}
+
+func dockerActionResponse(id string, state string) *agentv1.DockerContainerActionResponse {
+	return &agentv1.DockerContainerActionResponse{Error: okProtoError(), Id: id, State: state}
+}
+
+type protoContractCronService struct {
+	agentv1.UnimplementedCronServiceServer
+}
+
+func (s *protoContractCronService) ListCronTasks(context.Context, *agentv1.ListCronTasksRequest) (*agentv1.ListCronTasksResponse, error) {
+	return &agentv1.ListCronTasksResponse{
+		Error: okProtoError(),
+		Tasks: []*agentv1.CronTask{
+			{Id: "cron-1", Expression: "*/5 * * * *", Command: "snowpanel check", Enabled: true},
+		},
+	}, nil
+}
+
+func (s *protoContractCronService) CreateCronTask(_ context.Context, req *agentv1.CreateCronTaskRequest) (*agentv1.CreateCronTaskResponse, error) {
+	return &agentv1.CreateCronTaskResponse{
+		Error: okProtoError(),
+		Task: &agentv1.CronTask{
+			Id:         "created-cron",
+			Expression: req.GetExpression(),
+			Command:    req.GetCommand(),
+			Enabled:    req.GetEnabled(),
+		},
+	}, nil
+}
+
+func (s *protoContractCronService) UpdateCronTask(_ context.Context, req *agentv1.UpdateCronTaskRequest) (*agentv1.UpdateCronTaskResponse, error) {
+	return &agentv1.UpdateCronTaskResponse{
+		Error: okProtoError(),
+		Task: &agentv1.CronTask{
+			Id:         req.GetId(),
+			Expression: req.GetExpression(),
+			Command:    req.GetCommand(),
+			Enabled:    req.GetEnabled(),
+		},
+	}, nil
+}
+
+func (s *protoContractCronService) DeleteCronTask(_ context.Context, req *agentv1.DeleteCronTaskRequest) (*agentv1.DeleteCronTaskResponse, error) {
+	return &agentv1.DeleteCronTaskResponse{Error: okProtoError(), Id: req.GetId()}, nil
+}
+
+func (s *protoContractCronService) SetCronTaskEnabled(_ context.Context, req *agentv1.SetCronTaskEnabledRequest) (*agentv1.SetCronTaskEnabledResponse, error) {
+	return &agentv1.SetCronTaskEnabledResponse{
+		Error: okProtoError(),
+		Task: &agentv1.CronTask{
+			Id:         req.GetId(),
+			Expression: "*/5 * * * *",
+			Command:    "snowpanel check",
+			Enabled:    req.GetEnabled(),
 		},
 	}, nil
 }

@@ -939,3 +939,213 @@ impl RenameFileResponseExt for RenameFileResponse {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::FileService;
+    use crate::security::path_validator::PathValidator;
+    use std::fs;
+    use std::path::{Path, PathBuf};
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    struct TempDir {
+        path: PathBuf,
+    }
+
+    impl TempDir {
+        fn new(prefix: &str) -> Self {
+            let mut path = std::env::temp_dir();
+            let nonce = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("system time must be after unix epoch")
+                .as_nanos();
+            path.push(format!("snowpanel_file_service_{prefix}_{nonce}"));
+            fs::create_dir_all(&path).expect("failed to create temp dir");
+            Self { path }
+        }
+
+        fn path(&self) -> &Path {
+            &self.path
+        }
+    }
+
+    impl Drop for TempDir {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.path);
+        }
+    }
+
+    fn test_service(root: &Path) -> FileService {
+        FileService::new(PathValidator::new(vec![root.to_path_buf()]), 16, 32)
+    }
+
+    fn path_string(path: &Path) -> String {
+        path.to_str()
+            .expect("test paths should be valid utf-8")
+            .to_string()
+    }
+
+    fn canonical_string(path: &Path) -> String {
+        if path.exists() {
+            return fs::canonicalize(path)
+                .expect("path should canonicalize")
+                .to_string_lossy()
+                .into_owned();
+        }
+
+        let parent = path.parent().expect("path should have parent");
+        let file_name = path.file_name().expect("path should have file name");
+        fs::canonicalize(parent)
+            .expect("path parent should canonicalize")
+            .join(file_name)
+            .to_string_lossy()
+            .into_owned()
+    }
+
+    fn assert_ok(error: Option<crate::api::proto::Error>) {
+        let error = error.expect("response should include error envelope");
+        assert_eq!(error.code, 0, "response error should be ok: {:?}", error);
+        assert_eq!(error.message, "ok");
+    }
+
+    #[test]
+    fn file_operations_preserve_proto_response_fields() {
+        let temp = TempDir::new("contract_fields");
+        let service = test_service(temp.path());
+
+        let source_file = temp.path().join("alpha.txt");
+        fs::write(&source_file, "hello snowpanel").expect("failed to write source file");
+
+        let read_text = service.read_text_file(&path_string(&source_file), 5, "utf-8", None);
+        assert_ok(read_text.error);
+        assert_eq!(read_text.path, canonical_string(&source_file));
+        assert_eq!(read_text.content, "hello");
+        assert_eq!(read_text.size, "hello snowpanel".len() as u64);
+        assert!(read_text.truncated);
+        assert_eq!(read_text.encoding, "utf-8");
+
+        let read_chunk = service.read_file_chunk(&path_string(&source_file), 6, 9, None);
+        assert_ok(read_chunk.error);
+        assert_eq!(read_chunk.path, canonical_string(&source_file));
+        assert_eq!(read_chunk.offset, 6);
+        assert_eq!(read_chunk.chunk, b"snowpanel".to_vec());
+        assert_eq!(read_chunk.total_size, "hello snowpanel".len() as u64);
+        assert!(read_chunk.eof);
+
+        let chunk_file = temp.path().join("chunks.bin");
+        let first_write =
+            service.write_file_chunk(&path_string(&chunk_file), 0, b"abc", true, true, None);
+        assert_ok(first_write.error);
+        assert_eq!(first_write.path, canonical_string(&chunk_file));
+        assert_eq!(first_write.offset, 0);
+        assert_eq!(first_write.written_bytes, 3);
+        assert_eq!(first_write.total_size, 3);
+
+        let append_write =
+            service.write_file_chunk(&path_string(&chunk_file), 3, b"def", false, false, None);
+        assert_ok(append_write.error);
+        assert_eq!(append_write.path, canonical_string(&chunk_file));
+        assert_eq!(append_write.offset, 3);
+        assert_eq!(append_write.written_bytes, 3);
+        assert_eq!(append_write.total_size, 6);
+        assert_eq!(
+            fs::read(&chunk_file).expect("failed to read chunk file"),
+            b"abcdef".to_vec()
+        );
+
+        let note_file = temp.path().join("note.txt");
+        let write_text = service.write_text_file(
+            &path_string(&note_file),
+            "contract text",
+            true,
+            true,
+            "utf-8",
+            None,
+        );
+        assert_ok(write_text.error);
+        assert_eq!(write_text.path, canonical_string(&note_file));
+        assert_eq!(write_text.written_bytes, "contract text".len() as u64);
+
+        let cache_dir = temp.path().join("cache");
+        let created = service.create_directory(&path_string(&cache_dir), true, None);
+        assert_ok(created.error);
+        assert_eq!(created.path, canonical_string(&cache_dir));
+
+        let listed = service.list_files(&path_string(temp.path()), None);
+        assert_ok(listed.error);
+        assert_eq!(listed.current_path, canonical_string(temp.path()));
+        let entry_names = listed
+            .entries
+            .iter()
+            .map(|entry| entry.name.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            entry_names,
+            vec!["alpha.txt", "cache", "chunks.bin", "note.txt"]
+        );
+        let cache_entry = listed
+            .entries
+            .iter()
+            .find(|entry| entry.name == "cache")
+            .expect("cache entry should be present");
+        assert!(cache_entry.is_dir);
+
+        let renamed_file = temp.path().join("renamed.txt");
+        let expected_note_path = canonical_string(&note_file);
+        let expected_renamed_path = canonical_string(&renamed_file);
+        let renamed =
+            service.rename_file(&path_string(&note_file), &path_string(&renamed_file), None);
+        assert_ok(renamed.error);
+        assert_eq!(renamed.source_path, expected_note_path);
+        assert_eq!(renamed.target_path, expected_renamed_path);
+        assert_eq!(renamed.moved_bytes, "contract text".len() as u64);
+
+        let expected_deleted_file_path = canonical_string(&renamed_file);
+        let deleted_file = service.delete_path(&path_string(&renamed_file), false, None);
+        assert_ok(deleted_file.error);
+        assert_eq!(deleted_file.path, expected_deleted_file_path);
+        assert!(!renamed_file.exists());
+
+        let expected_deleted_dir_path = canonical_string(&cache_dir);
+        let deleted_dir = service.delete_path(&path_string(&cache_dir), false, None);
+        assert_ok(deleted_dir.error);
+        assert_eq!(deleted_dir.path, expected_deleted_dir_path);
+        assert!(!cache_dir.exists());
+    }
+
+    #[test]
+    fn file_operations_return_structured_error_envelopes() {
+        let temp = TempDir::new("contract_errors");
+        let outside = TempDir::new("contract_outside");
+        let service = test_service(temp.path());
+
+        let outside_file = outside.path().join("secret.txt");
+        fs::write(&outside_file, "secret").expect("failed to write outside file");
+
+        let response = service.read_text_file(&path_string(&outside_file), 0, "utf-8", None);
+        let error = response
+            .error
+            .expect("response should include error envelope");
+        assert_eq!(error.code, 4001);
+        assert_eq!(error.message, "unsafe path");
+        assert!(error.detail.contains("out of allowed roots"));
+        assert!(response.path.is_empty());
+        assert!(response.content.is_empty());
+
+        let bad_encoding = service.write_text_file(
+            &path_string(&temp.path().join("bad.txt")),
+            "hello",
+            true,
+            true,
+            "latin1",
+            None,
+        );
+        let error = bad_encoding
+            .error
+            .expect("response should include error envelope");
+        assert_eq!(error.code, 4006);
+        assert_eq!(error.message, "unsupported encoding");
+        assert!(bad_encoding.path.is_empty());
+        assert_eq!(bad_encoding.written_bytes, 0);
+    }
+}

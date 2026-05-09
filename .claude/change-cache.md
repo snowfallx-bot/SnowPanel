@@ -12,59 +12,59 @@
 
 ============
 
-本轮接手的是 `P2-1` 新增的 compose smoke CI 失败问题。GitHub Actions 首次运行 `scripts/ci/compose-smoke.ps1` 时，在通过 frontend 代理执行 `POST /api/v1/auth/login` 这一步返回了 `500`，失败点位于脚本第一个代理登录请求之前。
-
-本次核心判断
-
-1. 失败更像“前端首页已起来，但前端代理到 backend 还未完全可用”的时序问题，而不是 backend `/ready` 本身失败：
-   - 现有脚本在登录前只等待了：
-     - backend `/ready`
-     - frontend `/`
-   - 但 frontend 首页返回 `200` 并不代表其 Vite proxy 到 backend 的 `/api` / `/health` 已经可用
-   - 因此首次代理登录有机会撞上 proxy 尚未稳定的窗口，表现为 frontend 返回 `500`
-
-2. 本轮修复策略
-   - 不改业务接口
-   - 先收紧 smoke 脚本启动门槛
-   - 在真正发起代理登录前，新增一段“frontend proxy `/health` 可用”的显式等待
+本轮继续推进 `P2-1` 的 contract coverage 主线。前两轮已经覆盖 backend grpcclient contract、core-agent 文件服务真实实现；本轮继续补 core-agent `api/grpc_server.rs` 的 gRPC 薄转发层。
 
 本轮实际改动
 
-1. 更新 `scripts/ci/compose-smoke.ps1`
-   - 保留原有：
-     - backend `/ready` 等待
-     - frontend `/` 等待
-   - 新增：
-     - `Wait-UntilReady -Description "frontend proxy health"`
-     - 通过 `GET http://127.0.0.1:<frontend-port>/health`
-     - 断言：
-       - `code == 0`
-       - `database == up`
-       - `agent == up`
-   - 只有当 frontend 代理层也确认能成功打通 backend 后，才继续执行 `POST /api/v1/auth/login`
+1. 延续并保留 backend contract 覆盖：
+   - `backend/internal/grpcclient/agent_client_contract_test.go`
+   - backend client contract fake server 覆盖 File/Service/Docker/Cron RPC 组
+   - 覆盖文件操作、Service/Docker/Cron 字段映射测试
+
+2. 延续并保留 core-agent 文件服务真实实现合同测试：
+   - `core-agent/src/file/service.rs`
+   - 覆盖真实 `FileService` 的 read/write/chunk/mkdir/list/rename/delete response 字段
+   - 覆盖 unsafe path 与 unsupported encoding 的结构化错误响应
+
+3. 新增 core-agent gRPC 文件服务薄转发层测试：
+   - `core-agent/src/api/grpc_server.rs`
+   - 新增 `file_grpc_service_forwards_proto_request_fields`
+   - 测试直接实例化 `FileServiceImpl`，不启动真实 gRPC server，不依赖 Docker/systemd/crontab
+   - 底层 `PathValidator` 默认不给 allowed roots，只通过每个 proto request 的 `PathSafetyContext.allowed_roots` 放行
+   - 因此可以验证 gRPC 层确实把 request 中的 `path`、`safety`、`max_bytes`、`encoding`、`offset`、`limit`、`chunk`、`create_if_not_exists`、`truncate`、`create_parents`、`source_path`、`target_path`、`recursive` 等字段传给真实文件服务
+
+4. 保留 Windows 测试兼容性修复：
+   - `core-agent/src/security/path_validator.rs`
+   - `validate_returns_normalized_path_inside_allowed_root` 现在先 canonicalize root，再与 canonicalized output 做 `starts_with` 比较
 
 本轮修改文件
 
 - `.claude/change-cache.md`
-- `scripts/ci/compose-smoke.ps1`
+- `backend/internal/grpcclient/agent_client_contract_test.go`
+- `core-agent/src/api/grpc_server.rs`
+- `core-agent/src/file/service.rs`
+- `core-agent/src/security/path_validator.rs`
 
 本地验证
 
-- 已再次用 PowerShell parser 对 `scripts/ci/compose-smoke.ps1` 做语法解析，未发现语法错误
-- 当前本机仍无 `docker`，无法本地重放 compose smoke
-- 因此这次修复是否生效，必须看 GitHub Actions 下一次 `compose-smoke` 真实跑数结果
+- `C:\Users\GuaiZai\.cargo\bin\cargo.exe fmt` 通过
+- `C:\Users\GuaiZai\.cargo\bin\cargo.exe test` 通过
+  - 13 个 core-agent Rust 单元测试全部通过
+- `go test ./...` 在 `backend` 目录下通过
+
+备注
+
+- 当前 shell 的 `PATH` 仍未包含 `C:\Users\GuaiZai\.cargo\bin`，所以 Rust 命令继续用完整路径运行。
+- `cargo fmt` / `cargo test` 仍会输出 `warn: could not canonicalize path C:\Users\GuaiZai`，但命令成功，不影响测试结果。
 
 commit摘要
 
-- 计划提交：`fix(ci): wait for frontend proxy before smoke login`
+- 建议提交：`test: expand agent proto contract coverage`
 
 希望接下来的 AI 做什么
 
-1. 优先观察下一次 `compose-smoke` 结果。
-2. 如果仍失败，请优先从 GitHub Actions 日志中核对：
-   - frontend 容器日志
-   - backend 容器日志
-   - `/health` 与 `/api/v1/auth/login` 的代理返回体
-3. 如果这次通过，再继续回到 `P2-1` 主线，补 proto contract tests 或更系统的 integration coverage。
+1. 可以继续考虑 Service/Docker/Cron 的 core-agent gRPC 层覆盖，但建议先做依赖注入或 trait 抽象，避免测试依赖真实 systemd/docker/crontab。
+2. 如果暂不做抽象，当前 contract coverage 已经覆盖 backend client、core-agent 文件服务真实实现、core-agent 文件 gRPC 转发层，可以考虑提交这一批测试。
+3. 如果能访问 GitHub Actions，仍建议观察 compose smoke 是否通过；若失败，优先看 frontend proxy `/health` 与登录代理响应。
 
-by: gpt-5.4
+by: gpt-5.5-codex
