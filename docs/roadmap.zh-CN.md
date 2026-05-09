@@ -51,11 +51,31 @@
 - root README 已补上 observability 命令与文档入口
 - README / roadmap / observability 文档中的历史原型措辞与重复说明已对齐收口
 
-## 后续加固（Post-P2，非阻塞）
+## P3 生产加固
+
+### P3-0 稳定性闸门
+
+`p3-production-hardening` 分支上的本地 P3-0 稳定性闸门已完成：
+
+- `make lint` 通过
+- `make test` 通过
+- backend、core-agent、frontend 分模块门禁通过
+- `make proto-go` 已可在 Windows 本地环境通过 Makefile 自动发现工具链运行
+- 已提交的 Go protobuf bindings 与当前本地 proto 工具链一致
+- Compose mode 的 `/health` 与 `/ready` 冒烟通过
+- Host-agent mode 的 `/health` 与 `/ready` 冒烟通过
+- 验证证据与本地环境说明已记录到 `docs/p3-stabilization-report.md`
+
+该 milestone 推送后仍需等待远端 CI 作为最终确认。
+
+## 后续加固（Post-P3-0）
 
 1. 按团队值班制度把最终告警目的地接入到真实 on-call 通道
 2. 基于真实流量持续调优去重/升级窗口与 SLO 阈值
 3. 若后续排障深度需要，再补浏览器侧 tracing
+4. 实现 backend 与 core-agent 之间的认证边界
+5. 增加敏感配置静态加密与生产启动校验
+6. 将当前 goroutine 异步任务升级为 DB-backed durable worker
 
 ## 当前不优先的方向
 

@@ -40,6 +40,19 @@ P3 Production Hardening
 - 再处理 secrets、task durability、least privilege、audit、backup/restore
 ```
 
+### P3 当前进展
+
+```text
+P3-0 Stabilization Gate
+- local quality gates 已通过：make lint、make test、backend/core-agent/frontend 分模块检查
+- proto generated files 已通过 make proto-go 刷新并纳入提交
+- compose mode /health 与 /ready 冒烟已通过
+- host-agent mode /health 与 /ready 冒烟已通过
+- docs/p3-stabilization-report.md 已新增验证证据
+- docs/roadmap.md 与 docs/roadmap.zh-CN.md 已同步 P3-0 状态
+- 远端 CI 仍需在 push 后作为最终确认
+```
+
 ### 明确暂不优先
 
 ```text

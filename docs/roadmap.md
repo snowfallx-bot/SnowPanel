@@ -51,11 +51,31 @@ This roadmap reflects the current repository state rather than the original boot
 - Root README now exposes observability commands and docs
 - Legacy prototype wording and duplicate observability instructions have been aligned across README/roadmap/observability docs
 
-## Follow-up Hardening (Post-P2, Non-blocking)
+## P3 Production Hardening
+
+### P3-0 Stabilization Gate
+
+Local P3-0 stabilization is complete on branch `p3-production-hardening`:
+
+- `make lint` passes
+- `make test` passes
+- Backend, core-agent, and frontend module-level gates pass
+- `make proto-go` is runnable on Windows local environments through Makefile tool auto-discovery
+- Checked-in Go protobuf bindings are current with the available local proto toolchain
+- Compose mode smoke passes against `/health` and `/ready`
+- Host-agent mode smoke passes against `/health` and `/ready`
+- Evidence and local environment notes are recorded in `docs/p3-stabilization-report.md`
+
+CI remains the final remote confirmation for this milestone after the branch is pushed.
+
+## Follow-up Hardening (Post-P3-0)
 
 1. Wire final alert destinations to real on-call channels under team policy
 2. Tune dedup/escalation windows and SLO thresholds against production traffic
 3. Add browser/frontend tracing if future troubleshooting depth requires it
+4. Implement backend <-> core-agent authentication for the production trust boundary
+5. Add secrets-at-rest encryption and production startup validation
+6. Replace goroutine-only async tasks with a durable DB-backed worker
 
 ## Not Current Priorities
 

@@ -3,6 +3,27 @@
 PROTO_SRC := proto/agent/v1/agent.proto
 PROTO_GO_OUT := backend/internal/grpcclient/pb
 
+CARGO_DEFAULT := cargo
+NPM_DEFAULT := npm
+PROTOC_DEFAULT := protoc
+GO_PLUGIN_BIN_DEFAULT :=
+ifeq ($(OS),Windows_NT)
+	CARGO_HOME_BIN := $(subst \,/,$(USERPROFILE))/.cargo/bin/cargo.exe
+	PROTOC_CANDIDATES := $(wildcard $(subst \,/,$(USERPROFILE))/.cargo/registry/src/*/protoc-bin-vendored-win32-*/bin/protoc.exe)
+	ifneq ($(wildcard $(CARGO_HOME_BIN)),)
+		CARGO_DEFAULT := $(CARGO_HOME_BIN)
+	endif
+	ifneq ($(PROTOC_CANDIDATES),)
+		PROTOC_DEFAULT := $(firstword $(PROTOC_CANDIDATES))
+	endif
+	NPM_DEFAULT := npm.cmd
+	GO_PLUGIN_BIN_DEFAULT := $(subst \,/,$(USERPROFILE))/go/bin
+endif
+CARGO ?= $(CARGO_DEFAULT)
+NPM ?= $(NPM_DEFAULT)
+PROTOC ?= $(PROTOC_DEFAULT)
+GO_PLUGIN_BIN ?= $(GO_PLUGIN_BIN_DEFAULT)
+
 up:
 	docker compose up -d --build
 
@@ -46,10 +67,10 @@ agent:
 	cd core-agent && cargo run
 
 frontend:
-	cd frontend && npm run dev
+	cd frontend && $(NPM) run dev
 
 proto-go:
-	protoc \
+	PATH="$(GO_PLUGIN_BIN):$$PATH" $(PROTOC) \
 	  --proto_path=. \
 	  --go_out=paths=source_relative:$(PROTO_GO_OUT) \
 	  --go-grpc_out=paths=source_relative:$(PROTO_GO_OUT) \
@@ -57,11 +78,11 @@ proto-go:
 
 lint:
 	cd backend && go vet ./...
-	cd core-agent && cargo fmt --all -- --check
-	cd frontend && npm run build
+	cd core-agent && $(CARGO) fmt --all -- --check
+	cd frontend && $(NPM) run build
 
 test:
 	cd backend && go test ./...
-	cd core-agent && cargo test
-	cd frontend && npm run test
-	cd frontend && npm run build
+	cd core-agent && $(CARGO) test
+	cd frontend && $(NPM) run test
+	cd frontend && $(NPM) run build
