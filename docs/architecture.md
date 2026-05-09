@@ -15,7 +15,7 @@ SnowPanel is a monorepo with three runtime services:
 2. Backend validates JWT + permission middleware before entering handlers.
 3. Backend services call core-agent over gRPC for host operations.
 4. Backend persists business/audit/task data to PostgreSQL.
-5. Redis is reserved for cache/transient use in later iterations.
+5. Redis is currently used for optional shared login-attempt throttling state and remains available for other transient data.
 
 ## Layering Conventions
 

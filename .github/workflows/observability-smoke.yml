@@ -1,0 +1,93 @@
+name: Observability Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      agent_mode:
+        description: "Core-agent runtime mode"
+        type: choice
+        required: true
+        default: container-agent
+        options:
+          - container-agent
+          - host-agent
+      host_agent_target:
+        description: "Backend AGENT_TARGET when agent_mode=host-agent"
+        type: string
+        required: false
+        default: host.docker.internal:50051
+      host_agent_metrics_base_url:
+        description: "Host core-agent metrics base URL when agent_mode=host-agent"
+        type: string
+        required: false
+        default: http://127.0.0.1:9108
+      alertmanager_config_file:
+        description: "Alertmanager config file under deploy/observability/alertmanager"
+        type: string
+        required: false
+        default: alertmanager.yml
+
+concurrency:
+  group: observability-smoke-${{ github.workflow }}-${{ github.ref }}-${{ inputs.agent_mode }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  observability-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      HOST_AGENT_LOG_DIR: .github/workflow-logs
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Rust (Host-Agent Mode)
+        if: ${{ inputs.agent_mode == 'host-agent' }}
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+
+      - name: Build Core-Agent (Host-Agent Mode)
+        if: ${{ inputs.agent_mode == 'host-agent' }}
+        working-directory: core-agent
+        run: cargo build --release
+
+      - name: Start Core-Agent On Host
+        if: ${{ inputs.agent_mode == 'host-agent' }}
+        shell: pwsh
+        run: ./scripts/ci/start-host-agent.ps1 -HostAgentTarget "${{ inputs.host_agent_target }}" -HostAgentMetricsBaseUrl "${{ inputs.host_agent_metrics_base_url }}" -LogDir "${{ env.HOST_AGENT_LOG_DIR }}"
+
+      - name: Validate Observability Configs
+        shell: pwsh
+        run: ./scripts/observability/validate-config.ps1
+
+      - name: Run Observability Smoke Test
+        shell: pwsh
+        run: ./scripts/ci/observability-smoke.ps1 -AgentMode "${{ inputs.agent_mode }}" -HostAgentTarget "${{ inputs.host_agent_target }}" -HostAgentMetricsBaseUrl "${{ inputs.host_agent_metrics_base_url }}" -AlertmanagerConfigFile "${{ inputs.alertmanager_config_file }}"
+
+      - name: Stop Core-Agent On Host
+        if: ${{ always() && inputs.agent_mode == 'host-agent' }}
+        shell: pwsh
+        run: ./scripts/ci/stop-host-agent.ps1
+
+      - name: Upload Observability Smoke Logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: observability-smoke-logs
+          path: .github/workflow-logs/observability-smoke
+          if-no-files-found: ignore
+
+      - name: Upload Host-Agent Logs
+        if: ${{ failure() && inputs.agent_mode == 'host-agent' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: host-agent-logs
+          path: .github/workflow-logs
+          if-no-files-found: ignore

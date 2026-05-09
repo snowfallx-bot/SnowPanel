@@ -1,64 +1,236 @@
-# Observability
+# Observability Notes
 
 Language: **English** | [简体中文](observability.zh-CN.md)
 
-SnowPanel currently exposes backend metrics, structured request logs, health
-checks, readiness checks, audit logs, and core-agent tracing logs.
+## Scope
 
-## HTTP Health
+This document describes SnowPanel's current production troubleshooting baseline for:
 
-- `GET /health` reports whether the backend process is alive.
-- `GET /ready` reports dependency readiness, including database and core-agent connectivity.
-- `GET /metrics` exposes Prometheus metrics from the backend.
+- Metrics (Prometheus format)
+- Cross-service request correlation (`X-Request-ID`)
+- Distributed tracing (OTLP -> OTel Collector -> Jaeger)
+- Operational log lookup
 
-## Backend Metrics
+## Metrics
 
-The backend exports Prometheus metrics with the `snowpanel` namespace:
+Backend exposes Prometheus metrics at:
+
+- `GET /metrics`
+
+Core-agent also exposes a standalone Prometheus endpoint (when enabled):
+
+- `GET http://<CORE_AGENT_METRICS_HOST>:<CORE_AGENT_METRICS_PORT>/metrics`
+
+Current key metric families include:
 
 - `snowpanel_http_requests_total`
-  - labels: `method`, `route`, `status`
-  - counts HTTP requests handled by Gin
 - `snowpanel_http_request_duration_seconds`
-  - labels: `method`, `route`
-  - records HTTP request latency
 - `snowpanel_http_requests_in_flight`
-  - tracks in-flight HTTP requests
 - `snowpanel_agent_requests_total`
-  - labels: `outcome`, `transport`
-  - counts backend to core-agent gRPC calls
 - `snowpanel_agent_request_duration_seconds`
-  - labels: `outcome`, `transport`
-  - records core-agent gRPC call latency
+- `snowpanel_core_agent_grpc_requests_total`
+- `snowpanel_core_agent_grpc_request_duration_seconds`
+- `snowpanel_core_agent_grpc_requests_in_flight`
 
-Example scrape target:
+Prometheus recording rules also derive SLO-oriented series:
 
-```yaml
-scrape_configs:
-  - job_name: snowpanel-backend
-    static_configs:
-      - targets:
-          - backend:8080
+- `snowpanel:backend_http_total:rate5m`
+- `snowpanel:backend_http_5xx:rate5m`
+- `snowpanel:backend_http_availability:ratio5m`
+- `snowpanel:backend_http_total:rate30m`
+- `snowpanel:backend_http_5xx:rate30m`
+- `snowpanel:backend_http_availability:ratio30m`
+- `snowpanel:core_agent_grpc_error_ratio:ratio5m`
+
+Agent RPC metrics are labeled by:
+
+- `rpc`
+- `outcome` (`success` / `error`)
+- `transport` (`true` / `false`)
+
+Core-agent gRPC metrics are labeled by:
+
+- `grpc_method`
+- `outcome` (`ok` / `error`)
+
+## Observability Baseline Stack
+
+Repository now includes a baseline observability deployment:
+
+- Compose override: `docker-compose.observability.yml`
+- Prometheus scrape config: `deploy/observability/prometheus/prometheus.yml`
+- Alert rules: `deploy/observability/prometheus/alerts/snowpanel-alerts.yml`
+- Alertmanager routing config: `deploy/observability/alertmanager/alertmanager.yml`
+- Alertmanager production config template: `deploy/observability/alertmanager/alertmanager.production.example.yml`
+- OTel Collector config: `deploy/observability/otel-collector/config.yaml`
+- Jaeger UI: `http://127.0.0.1:${JAEGER_UI_PORT:-16686}`
+
+Start baseline stack:
+
+- Compose mode: `make up-observability`
+- Host-agent mode: `make up-host-agent-observability`
+
+Inspect UIs:
+
+- `http://127.0.0.1:${PROMETHEUS_PORT:-9090}`
+- `http://127.0.0.1:${ALERTMANAGER_PORT:-9093}`
+- `http://127.0.0.1:${JAEGER_UI_PORT:-16686}`
+
+Stop:
+
+- Compose mode: `make down-observability`
+- Host-agent mode: `make down-host-agent-observability`
+
+Notes:
+
+- Baseline scrape targets assume backend `:8080` and core-agent metrics `:9108`.
+- If your runtime ports differ, update `deploy/observability/prometheus/prometheus.yml` accordingly.
+- Baseline Alertmanager receivers are intentionally no-op. Configure real warning/critical webhook/email/slack receivers in `deploy/observability/alertmanager/alertmanager.yml`.
+- Compose observability mode enables OTLP tracing export for `backend` and containerized `core-agent` by default.
+- In host-agent mode, also set OTEL variables in `deploy/core-agent/systemd/core-agent.env.example` (or `/etc/snowpanel/core-agent.env`) so host `core-agent` exports traces to the collector.
+- Before smoke/runtime checks, run `pwsh -File ./scripts/observability/validate-config.ps1` to fail fast on Prometheus/Alertmanager config errors and alert rule regressions (`promtool test rules`). The script uses Docker by default and falls back to local `promtool`/`amtool` binaries when Docker is unavailable.
+- For real alert channel rollout, generate a concrete production config via `pwsh -File ./scripts/observability/generate-alertmanager-config.ps1 ...` and point compose to it with `ALERTMANAGER_CONFIG_FILE=<generated-file>.yml`.
+
+## Request Correlation
+
+SnowPanel now propagates request IDs through the backend to core-agent:
+
+1. Backend HTTP middleware accepts incoming `X-Request-ID` (or generates one).
+2. The request ID is attached to request context and returned in response headers.
+3. Backend gRPC client forwards it as gRPC metadata `x-request-id`.
+4. Core-agent logs each gRPC call with:
+   - `request_id`
+   - `grpc_method`
+
+This allows a single request path to be traced from browser/API client logs to backend logs and into core-agent logs.
+
+## Distributed Tracing Baseline
+
+Current trace path:
+
+1. Backend HTTP requests create server spans.
+2. Backend gRPC client creates child spans and propagates W3C trace context to core-agent.
+3. Core-agent extracts remote context and creates gRPC server spans under the same trace.
+4. Both services export OTLP traces to OTel Collector.
+5. Collector batches and forwards traces to Jaeger.
+
+Recommended OTEL variables:
+
+- `OTEL_TRACING_ENABLED=true`
+- `OTEL_EXPORTER_OTLP_ENDPOINT=<collector-host>:4317`
+- `OTEL_EXPORTER_OTLP_INSECURE=true`
+- `OTEL_TRACES_SAMPLER_ARG=1.0`
+
+Default service names:
+
+- backend: `snowpanel-backend`
+- core-agent: `snowpanel-core-agent`
+
+## Tracing Validation Checklist
+
+Use this checklist to verify the trace chain in either compose mode or host-agent mode.
+
+1. Start stack:
+   - Compose mode: `make up-observability`
+   - Host-agent mode: `make up-host-agent-observability`
+2. Log in and keep a valid bearer token (for protected APIs under `/api/v1/*`).
+3. Call one backend route that must proxy to core-agent, for example:
+   - `GET /api/v1/dashboard/summary`
+   - Include a custom header such as `X-Request-ID: trace-e2e-001`
+4. Confirm backend response still contains the same `X-Request-ID`.
+5. In Jaeger (`http://127.0.0.1:${JAEGER_UI_PORT:-16686}`), verify a single trace contains spans from both services:
+   - `snowpanel-backend`
+   - `snowpanel-core-agent`
+6. If using host-agent mode, also confirm host `core-agent` OTEL vars are set correctly in `/etc/snowpanel/core-agent.env` (or from `deploy/core-agent/systemd/core-agent.env.example`).
+
+Optional helper script (PowerShell):
+
+```powershell
+pwsh -File ./scripts/observability/trace-smoke.ps1 `
+  -AccessToken "<access_token>" `
+  -BackendBaseUrl "http://127.0.0.1:8080" `
+  -JaegerBaseUrl "http://127.0.0.1:16686"
 ```
 
-## Logs And Correlation
+The script triggers `GET /api/v1/dashboard/summary` with a generated `X-Request-ID`, then polls Jaeger and fails unless it finds a recent trace containing both `snowpanel-backend` and `snowpanel-core-agent`.
 
-- Every backend request gets a request id through the request-id middleware.
-- Access logs include `request_id`, method, path, status, latency, client IP, and user agent.
-- Core-agent uses `tracing` logs and should be collected from the host-agent service logs in production.
-- Audit logs record user-facing administrative actions and are available through the audit API and UI.
+See also: [`scripts/observability/README.md`](../scripts/observability/README.md) for both tracing and Alertmanager smoke script usage.
+For a one-shot check, you can run `pwsh -File ./scripts/observability/full-smoke.ps1 -AccessToken "<access_token>"`.
+`full-smoke.ps1` also supports automatic login mode via `-LoginUsername` + `-LoginPassword` if you do not want to fetch token manually.
+Latest CI evidence for compose + host-agent trace/alert smoke is recorded in [`docs/observability-validation.md`](observability-validation.md).
 
-## Operational Checks
+## Fast Triage Flow
 
-For production incidents, start with:
+1. Capture the `X-Request-ID` from browser devtools or API response headers.
+2. Search backend logs by `request_id`.
+3. Search core-agent logs by the same `request_id`.
+4. Check `/metrics` for elevated:
+   - `snowpanel_http_request_duration_seconds`
+   - `snowpanel_agent_request_duration_seconds`
+   - `snowpanel_agent_requests_total{outcome="error",...}`
+5. Check core-agent metrics for method-level pressure:
+   - `snowpanel_core_agent_grpc_requests_total`
+   - `snowpanel_core_agent_grpc_request_duration_seconds`
+   - `snowpanel_core_agent_grpc_requests_in_flight`
 
-1. Check backend `/ready` to separate process liveness from dependency readiness.
-2. Check `snowpanel_agent_requests_total{outcome="error"}` and the `transport` label for backend to agent failures.
-3. Correlate backend access logs by `request_id`.
-4. Inspect core-agent service logs on the host when agent transport errors increase.
-5. Use audit logs to confirm who initiated state-changing operations.
+## Baseline Alerts
 
-## Current Scope
+Default alerts include:
 
-Prometheus metrics are implemented for backend HTTP and backend to core-agent
-calls. Full distributed tracing is not required for the current milestone; if it
-is added later, it should build on the existing request id and structured logs.
+- `SnowPanelBackendDown`
+- `SnowPanelCoreAgentMetricsDown`
+- `SnowPanelBackendP95LatencyHigh`
+- `SnowPanelBackendP95LatencyCritical`
+- `SnowPanelCoreAgentP95LatencyHigh`
+- `SnowPanelCoreAgentP95LatencyCritical`
+- `SnowPanelBackendAgentTransportErrorsHigh`
+- `SnowPanelCoreAgentGrpcErrorRateHigh`
+- `SnowPanelCoreAgentGrpcErrorRateCritical`
+- `SnowPanelCoreAgentInFlightHigh`
+- `SnowPanelBackendAvailabilityBurnRateWarning`
+- `SnowPanelBackendAvailabilityBurnRateCritical`
+- `SnowPanelBackendAvailabilitySLOWarning`
+- `SnowPanelBackendAvailabilitySLOCritical`
+
+## Alert Delivery Baseline
+
+Prometheus forwards alerts to Alertmanager (`alertmanager:9093`) by default.
+
+Current default routing:
+
+- `severity="warning"` -> `snowpanel-warning`
+- `severity="critical"` -> `snowpanel-critical`
+
+Both `snowpanel-warning` and `snowpanel-critical` ship as template no-op receivers with commented webhook examples so teams can wire real notification channels explicitly.
+
+## Alertmanager Rollout Checklist
+
+Use this checklist when moving from baseline no-op routing to real production delivery.
+
+1. Generate a concrete production receiver config:
+   - `pwsh -File ./scripts/observability/generate-alertmanager-config.ps1 ... -OutputPath "deploy/observability/alertmanager/alertmanager.generated.yml"`
+   - Set `ALERTMANAGER_CONFIG_FILE=alertmanager.generated.yml` before starting observability compose.
+2. Keep explicit route ownership by severity:
+   - `critical` -> paging channel
+   - `warning` -> non-paging ops channel
+3. Keep inhibition rules so `critical` suppresses duplicate `warning` noise for the same `alertname` and `instance`.
+4. Use burn-rate + static SLO thresholds together:
+   - `SnowPanelBackendAvailabilityBurnRateWarning/Critical`
+   - `SnowPanelBackendAvailabilitySLOWarning/Critical`
+5. Roll out and validate routing:
+   - `make up-observability` (or `make up-host-agent-observability`)
+   - `pwsh -File ./scripts/observability/prometheus-rules-smoke.ps1 -PrometheusBaseUrl "http://127.0.0.1:${PROMETHEUS_PORT:-9090}"`
+   - verify receiver/routing state in Alertmanager UI (`/#/status`)
+6. Run a controlled delivery test:
+   - either inject a synthetic alert:
+     - `pwsh -File ./scripts/observability/alertmanager-smoke.ps1`
+   - or temporarily lower one alert threshold in `deploy/observability/prometheus/alerts/snowpanel-alerts.yml`
+   - then generate matching traffic/load as needed
+   - confirm notification arrives once per dedup window and includes labels (`alertname`, `severity`, `instance`)
+7. Restore the original threshold after validation and commit the final config/rule set.
+
+## Current Gaps
+
+- No browser/frontend tracing yet.
+- No trace-backed log shipping pipeline; request correlation still mainly relies on logs + `X-Request-ID`.
+- Alert channels are configurable and validated in CI smoke, but final destination ownership/on-call policy remains team-specific operational governance.

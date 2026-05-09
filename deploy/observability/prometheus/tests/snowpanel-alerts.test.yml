@@ -1,0 +1,140 @@
+rule_files:
+  - /etc/prometheus/alerts/snowpanel-alerts.yml
+
+evaluation_interval: 1m
+
+tests:
+  - name: "SnowPanel observability critical alerts should fire under sustained unhealthy signals"
+    interval: 1m
+    input_series:
+      - series: 'up{job="snowpanel-backend"}'
+        values: '0+0x30'
+      - series: 'up{job="snowpanel-core-agent-compose"}'
+        values: '0+0x30'
+      - series: 'up{job="snowpanel-core-agent-host"}'
+        values: '0+0x30'
+
+      - series: 'snowpanel_http_requests_total{route="/api/v1/dashboard/summary",status="200"}'
+        values: '0+100x30'
+      - series: 'snowpanel_http_requests_total{route="/api/v1/dashboard/summary",status="500"}'
+        values: '0+5x30'
+
+      - series: 'snowpanel_core_agent_grpc_requests_total{outcome="ok"}'
+        values: '0+90x30'
+      - series: 'snowpanel_core_agent_grpc_requests_total{outcome="error"}'
+        values: '0+10x30'
+
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: SnowPanelBackendDown
+        exp_alerts:
+          - exp_labels:
+              alertname: SnowPanelBackendDown
+              job: snowpanel-backend
+              severity: critical
+            exp_annotations:
+              summary: SnowPanel backend is down
+              description: Prometheus cannot scrape backend /metrics for 2 minutes.
+
+      - eval_time: 4m
+        alertname: SnowPanelCoreAgentMetricsDown
+        exp_alerts:
+          - exp_labels:
+              alertname: SnowPanelCoreAgentMetricsDown
+              severity: critical
+            exp_annotations:
+              summary: SnowPanel core-agent metrics endpoint is down
+              description: Neither compose-mode nor host-mode core-agent metrics endpoint is reachable.
+
+      - eval_time: 16m
+        alertname: SnowPanelBackendAvailabilityBurnRateCritical
+        exp_alerts:
+          - exp_labels:
+              alertname: SnowPanelBackendAvailabilityBurnRateCritical
+              severity: critical
+            exp_annotations:
+              summary: SnowPanel backend availability burn rate is critical
+              description: Backend error budget burn is critical across 5m/30m windows (5m error rate >1%, 30m error rate >0.5%) for 5 minutes.
+
+      - eval_time: 16m
+        alertname: SnowPanelBackendAvailabilitySLOCritical
+        exp_alerts:
+          - exp_labels:
+              alertname: SnowPanelBackendAvailabilitySLOCritical
+              severity: critical
+            exp_annotations:
+              summary: SnowPanel backend availability SLO is critically low
+              description: Backend 5xx-based availability has been below 98% for 10 minutes.
+
+      - eval_time: 16m
+        alertname: SnowPanelCoreAgentGrpcErrorRateCritical
+        exp_alerts:
+          - exp_labels:
+              alertname: SnowPanelCoreAgentGrpcErrorRateCritical
+              severity: critical
+            exp_annotations:
+              summary: Core-agent gRPC error rate is critically high
+              description: Core-agent gRPC error ratio has exceeded 5% for 10 minutes.
+
+  - name: "SnowPanel warning-only thresholds should not escalate to critical"
+    interval: 1m
+    input_series:
+      - series: 'up{job="snowpanel-backend"}'
+        values: '1+0x30'
+      - series: 'up{job="snowpanel-core-agent-compose"}'
+        values: '1+0x30'
+      - series: 'up{job="snowpanel-core-agent-host"}'
+        values: '1+0x30'
+
+      - series: 'snowpanel_http_requests_total{route="/api/v1/dashboard/summary",status="200"}'
+        values: '0+198x30'
+      - series: 'snowpanel_http_requests_total{route="/api/v1/dashboard/summary",status="500"}'
+        values: '0+2x30'
+
+      - series: 'snowpanel_core_agent_grpc_requests_total{outcome="ok"}'
+        values: '0+97x30'
+      - series: 'snowpanel_core_agent_grpc_requests_total{outcome="error"}'
+        values: '0+3x30'
+
+    alert_rule_test:
+      - eval_time: 21m
+        alertname: SnowPanelBackendAvailabilityBurnRateWarning
+        exp_alerts:
+          - exp_labels:
+              alertname: SnowPanelBackendAvailabilityBurnRateWarning
+              severity: warning
+            exp_annotations:
+              summary: SnowPanel backend availability burn rate is elevated
+              description: Backend error budget burn is high across 5m/30m windows (5m error rate >0.3%, 30m error rate >0.2%) for 10 minutes.
+
+      - eval_time: 16m
+        alertname: SnowPanelBackendAvailabilityBurnRateCritical
+        exp_alerts: []
+
+      - eval_time: 21m
+        alertname: SnowPanelBackendAvailabilitySLOWarning
+        exp_alerts:
+          - exp_labels:
+              alertname: SnowPanelBackendAvailabilitySLOWarning
+              severity: warning
+            exp_annotations:
+              summary: SnowPanel backend availability SLO is degrading
+              description: Backend 5xx-based availability has been below 99.5% for 15 minutes.
+
+      - eval_time: 16m
+        alertname: SnowPanelBackendAvailabilitySLOCritical
+        exp_alerts: []
+
+      - eval_time: 16m
+        alertname: SnowPanelCoreAgentGrpcErrorRateHigh
+        exp_alerts:
+          - exp_labels:
+              alertname: SnowPanelCoreAgentGrpcErrorRateHigh
+              severity: warning
+            exp_annotations:
+              summary: Core-agent gRPC error rate is high
+              description: Core-agent gRPC error ratio has exceeded 2% for 10 minutes.
+
+      - eval_time: 16m
+        alertname: SnowPanelCoreAgentGrpcErrorRateCritical
+        exp_alerts: []

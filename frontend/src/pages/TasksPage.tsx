@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   cancelTask,
@@ -68,9 +68,13 @@ export function TasksPage() {
   const [serviceName, setServiceName] = useState("");
   const statusParam = statusFilter === "all" ? undefined : statusFilter;
   const typeParam = typeFilter === "all" ? undefined : typeFilter;
+  const tasksRootQueryKey = ["tasks"] as const;
+  const tasksListQueryKey = ["tasks", page, size, statusFilter, typeFilter] as const;
+  const selectedTaskDetailQueryKey = ["tasks", "detail", selectedTaskId] as const;
+  const taskDetailQueryKey = (taskID: number) => ["tasks", "detail", taskID] as const;
 
   const tasksQuery = useQuery({
-    queryKey: ["tasks", page, size, statusFilter, typeFilter],
+    queryKey: tasksListQueryKey,
     queryFn: () =>
       listTasks({
         page,
@@ -85,7 +89,7 @@ export function TasksPage() {
   });
 
   const detailQuery = useQuery({
-    queryKey: ["tasks", "detail", selectedTaskId],
+    queryKey: selectedTaskDetailQueryKey,
     queryFn: () => getTaskDetail(selectedTaskId as number),
     enabled: selectedTaskId !== null,
     refetchInterval(query) {
@@ -103,17 +107,29 @@ export function TasksPage() {
     ? describeApiError(detailQuery.error, "Failed to load task detail.")
     : null;
 
+  function describeTasksMutationError(error: unknown, fallback: string) {
+    return describeApiError(error, fallback).message;
+  }
+
+  async function runMutationAction(action: () => Promise<unknown>) {
+    try {
+      await action();
+    } catch {
+      // onError handlers already update feedback.
+    }
+  }
+
   const createDockerRestartMutation = useMutation({
     mutationFn: createDockerRestartTask,
     onSuccess(result) {
       setFeedback(`Queued docker restart task #${result.id}`);
       setSelectedTaskId(result.id);
       setDockerContainerID("");
-      queryClient.invalidateQueries({ queryKey: ["tasks"] });
-      queryClient.invalidateQueries({ queryKey: ["tasks", "detail", result.id] });
+      queryClient.invalidateQueries({ queryKey: tasksRootQueryKey });
+      queryClient.invalidateQueries({ queryKey: taskDetailQueryKey(result.id) });
     },
     onError(error) {
-      setFeedback(error instanceof Error ? error.message : "Create docker restart task failed");
+      setFeedback(describeTasksMutationError(error, "Create docker restart task failed"));
     }
   });
 
@@ -123,11 +139,11 @@ export function TasksPage() {
       setFeedback(`Queued service restart task #${result.id}`);
       setSelectedTaskId(result.id);
       setServiceName("");
-      queryClient.invalidateQueries({ queryKey: ["tasks"] });
-      queryClient.invalidateQueries({ queryKey: ["tasks", "detail", result.id] });
+      queryClient.invalidateQueries({ queryKey: tasksRootQueryKey });
+      queryClient.invalidateQueries({ queryKey: taskDetailQueryKey(result.id) });
     },
     onError(error) {
-      setFeedback(error instanceof Error ? error.message : "Create service restart task failed");
+      setFeedback(describeTasksMutationError(error, "Create service restart task failed"));
     }
   });
 
@@ -135,11 +151,11 @@ export function TasksPage() {
     mutationFn: cancelTask,
     onSuccess(result) {
       setFeedback(`Task #${result.id} canceled`);
-      queryClient.invalidateQueries({ queryKey: ["tasks"] });
-      queryClient.invalidateQueries({ queryKey: ["tasks", "detail", result.id] });
+      queryClient.invalidateQueries({ queryKey: tasksRootQueryKey });
+      queryClient.invalidateQueries({ queryKey: taskDetailQueryKey(result.id) });
     },
     onError(error) {
-      setFeedback(error instanceof Error ? error.message : "Cancel task failed");
+      setFeedback(describeTasksMutationError(error, "Cancel task failed"));
     }
   });
 
@@ -148,17 +164,13 @@ export function TasksPage() {
     onSuccess(result) {
       setFeedback(`Retried task as #${result.id}`);
       setSelectedTaskId(result.id);
-      queryClient.invalidateQueries({ queryKey: ["tasks"] });
-      queryClient.invalidateQueries({ queryKey: ["tasks", "detail", result.id] });
+      queryClient.invalidateQueries({ queryKey: tasksRootQueryKey });
+      queryClient.invalidateQueries({ queryKey: taskDetailQueryKey(result.id) });
     },
     onError(error) {
-      setFeedback(error instanceof Error ? error.message : "Retry task failed");
+      setFeedback(describeTasksMutationError(error, "Retry task failed"));
     }
   });
-
-  const message = useMemo(() => {
-    return feedback;
-  }, [feedback]);
 
   const total = tasksQuery.data?.total ?? 0;
   const maxPage = Math.max(1, Math.ceil(total / size));
@@ -169,7 +181,7 @@ export function TasksPage() {
     if (!containerID) {
       return;
     }
-    await createDockerRestartMutation.mutateAsync({ container_id: containerID });
+    await runMutationAction(() => createDockerRestartMutation.mutateAsync({ container_id: containerID }));
   }
 
   async function handleCreateServiceRestartTask(event: FormEvent<HTMLFormElement>) {
@@ -178,7 +190,7 @@ export function TasksPage() {
     if (!value) {
       return;
     }
-    await createServiceRestartMutation.mutateAsync({ service_name: value });
+    await runMutationAction(() => createServiceRestartMutation.mutateAsync({ service_name: value }));
   }
 
   return (
@@ -467,8 +479,8 @@ export function TasksPage() {
         </CardContent>
       </Card>
 
-      {message && (
-        <p className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">{message}</p>
+      {feedback && (
+        <p className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">{feedback}</p>
       )}
     </div>
   );

@@ -4,6 +4,7 @@ import {
   ListDockerContainersResult,
   ListDockerImagesResult
 } from "@/types/docker";
+import { withEncodedSegment } from "@/api/path";
 
 export function listDockerContainers() {
   return unwrap<ListDockerContainersResult>(http.get("/api/v1/docker/containers"));
@@ -11,19 +12,19 @@ export function listDockerContainers() {
 
 export function startDockerContainer(id: string) {
   return unwrap<DockerContainerActionResult>(
-    http.post(`/api/v1/docker/containers/${encodeURIComponent(id)}/start`)
+    http.post(withEncodedSegment("/api/v1/docker/containers", id, "/start"))
   );
 }
 
 export function stopDockerContainer(id: string) {
   return unwrap<DockerContainerActionResult>(
-    http.post(`/api/v1/docker/containers/${encodeURIComponent(id)}/stop`)
+    http.post(withEncodedSegment("/api/v1/docker/containers", id, "/stop"))
   );
 }
 
 export function restartDockerContainer(id: string) {
   return unwrap<DockerContainerActionResult>(
-    http.post(`/api/v1/docker/containers/${encodeURIComponent(id)}/restart`)
+    http.post(withEncodedSegment("/api/v1/docker/containers", id, "/restart"))
   );
 }
 

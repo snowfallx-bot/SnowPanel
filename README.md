@@ -42,7 +42,7 @@ SnowPanel is a Linux server ops panel built with Vibe Coding.
 - Optional local toolchains:
   - Go `1.25+`
   - Rust stable
-  - Node.js `22+`
+  - Node.js `22+` (recommended; minimum `20.19.0` for frontend tooling)
 
 ## Quick Start
 
@@ -80,10 +80,19 @@ Common commands:
 
 - `make up`: start all services with build
 - `make up-host-agent`: start backend/frontend/postgres/redis with the host-agent compose override
+- `make up-observability`: start the app stack with Prometheus, Alertmanager, OTel Collector, and Jaeger
+- `make up-host-agent-observability`: start host-agent mode with the observability stack
+- `make down-observability`: stop the compose stack that includes observability services
+- `make down-host-agent-observability`: stop the host-agent stack that includes observability services
 - `make down`: stop all services
 - `make down-host-agent`: stop the host-agent compose stack
 - `make logs`: tail compose logs
 - `make logs-host-agent`: tail logs for the host-agent compose stack
+- `make logs-observability`: tail logs for Prometheus, Alertmanager, OTel Collector, and Jaeger
+- `make logs-host-agent-observability`: tail observability logs in host-agent mode
+- `pwsh -File ./scripts/observability/full-smoke.ps1 -AccessToken "<access_token>"`: run one-shot observability smoke checks (trace + alertmanager)
+- `pwsh -File ./scripts/observability/full-smoke.ps1 -LoginUsername "admin" -LoginPassword "<password>"`: run one-shot observability smoke checks with automatic login
+- GitHub Actions manual workflow: `Observability Smoke` (`.github/workflows/observability-smoke.yml`)
 - `make lint`: baseline static checks
 - `make test`: backend/core-agent tests + frontend test/build checks
 
@@ -93,9 +102,9 @@ Common commands:
 - [Development Guide](docs/development.md) | [开发指南](docs/development.zh-CN.md)
 - [API Design](docs/api-design.md) | [API 设计](docs/api-design.zh-CN.md)
 - [Security Notes](docs/security.md) | [安全说明](docs/security.zh-CN.md)
-- [Observability](docs/observability.md) | [可观测性](docs/observability.zh-CN.md)
+- [Observability Notes](docs/observability.md) | [可观测性说明](docs/observability.zh-CN.md)
 - [Deployment Guide](docs/deployment.md) | [部署指南](docs/deployment.zh-CN.md)
-- [Roadmap](docs/roadmap.md) | [路线图草案](docs/roadmap.zh-CN.md)
+- [Roadmap](docs/roadmap.md) | [路线图](docs/roadmap.zh-CN.md)
 
 ## Contributing & Community
 

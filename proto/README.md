@@ -6,7 +6,7 @@ This directory stores gRPC contracts between `backend` and `core-agent`.
 
 - [`agent/v1/agent.proto`](./agent/v1/agent.proto)
 
-## Generate Go Stubs
+## Generate Go Bindings
 
 Prerequisites:
 - `protoc`
@@ -19,7 +19,7 @@ Recommended command from the repository root:
 make proto-go
 ```
 
-This generates the checked-in Go stubs consumed by the backend under:
+This generates the checked-in Go protobuf/gRPC bindings consumed by the backend under:
 
 - `backend/internal/grpcclient/pb/proto/agent/v1/agent.pb.go`
 - `backend/internal/grpcclient/pb/proto/agent/v1/agent_grpc.pb.go`
@@ -34,17 +34,12 @@ protoc \
   proto/agent/v1/agent.proto
 ```
 
-## Generate Rust Stubs
+## Generate Rust Bindings
 
-Recommended approach (tonic + tonic-build via `build.rs`):
+Rust protobuf/gRPC bindings are generated during `core-agent` builds via `build.rs` (`tonic-build` + vendored `protoc`).
 
-1. Add dependencies in `core-agent/Cargo.toml`:
-   - `tonic`
-   - `prost`
-   - build dependency `tonic-build`
-2. Add a `build.rs` invoking `tonic_build::configure().compile(...)`.
-3. Run:
+Run:
 
 ```bash
-cargo build
+cd core-agent && cargo build
 ```

@@ -19,6 +19,17 @@ Language: **English** | [简体中文](api-design.zh-CN.md)
 
 `code != 0` indicates business failure.
 
+## System And Ops Endpoints
+
+- `GET /api/v1/ping`
+  - lightweight API liveness response under the versioned base path
+- `GET /health`
+  - process-level health check
+- `GET /ready`
+  - readiness check (DB + agent dependency path)
+- `GET /metrics`
+  - Prometheus metrics endpoint
+
 ## Authentication
 
 - `POST /auth/login`

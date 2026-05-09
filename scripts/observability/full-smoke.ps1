@@ -1,0 +1,114 @@
+[CmdletBinding(DefaultParameterSetName = "token")]
+param(
+  [Parameter(Mandatory = $true, ParameterSetName = "token")]
+  [string]$AccessToken,
+  [Parameter(Mandatory = $true, ParameterSetName = "login")]
+  [string]$LoginPassword,
+  [Parameter(ParameterSetName = "login")]
+  [string]$LoginUsername = "admin",
+  [string]$BackendBaseUrl = "http://127.0.0.1:8080",
+  [string]$JaegerBaseUrl = "http://127.0.0.1:16686",
+  [string]$AlertmanagerBaseUrl = "http://127.0.0.1:9093",
+  [string]$RequestId = "",
+  [int]$TraceWaitSeconds = 30,
+  [ValidateRange(1, 120)]
+  [int]$TraceTriggerRetryIntervalSeconds = 6,
+  [string]$AlertName = "SnowPanelSmokeAlert",
+  [ValidateSet("critical", "warning")]
+  [string]$Severity = "critical",
+  [int]$AlertDurationSeconds = 120,
+  [ValidateRange(10, 300)]
+  [int]$AlertWaitSeconds = 60,
+  [switch]$ValidateAllAlertSeverities,
+  [switch]$ValidateInhibition,
+  [string]$InhibitionAlertName = "SnowPanelInhibitionSmokeAlert"
+)
+
+$ErrorActionPreference = "Stop"
+Set-StrictMode -Version Latest
+
+$commonScript = Join-Path $PSScriptRoot "common.ps1"
+$traceScript = Join-Path $PSScriptRoot "trace-smoke.ps1"
+$alertScript = Join-Path $PSScriptRoot "alertmanager-smoke.ps1"
+$inhibitionScript = Join-Path $PSScriptRoot "alertmanager-inhibition-smoke.ps1"
+. $commonScript
+
+$resolvedAccessToken = $AccessToken
+if ($PSCmdlet.ParameterSetName -eq "login") {
+  Write-Host "Logging in via $BackendBaseUrl/api/v1/auth/login ..."
+  $loginEnvelope = Invoke-ObservabilityJsonRequest -Method "POST" -Uri "$BackendBaseUrl/api/v1/auth/login" -Body @{
+    username = $LoginUsername
+    password = $LoginPassword
+  } -ExpectedStatusCodes @(200)
+
+  if ($loginEnvelope.code -ne 0) {
+    throw "Login returned non-zero code: $($loginEnvelope | ConvertTo-Json -Depth 10 -Compress)"
+  }
+
+  if ($loginEnvelope.data.user.must_change_password -eq $true) {
+    throw "Login succeeded but user must change password before protected APIs are allowed. Rotate password first, then rerun full smoke."
+  }
+
+  $resolvedAccessToken = [string]$loginEnvelope.data.access_token
+  if ([string]::IsNullOrWhiteSpace($resolvedAccessToken)) {
+    throw "Login response did not include access_token."
+  }
+}
+
+$traceArgs = @{
+  AccessToken      = $resolvedAccessToken
+  BackendBaseUrl   = $BackendBaseUrl
+  JaegerBaseUrl    = $JaegerBaseUrl
+  TraceWaitSeconds = $TraceWaitSeconds
+  TriggerRetryIntervalSeconds = $TraceTriggerRetryIntervalSeconds
+}
+
+if (-not [string]::IsNullOrWhiteSpace($RequestId)) {
+  $traceArgs.RequestId = $RequestId
+}
+
+Write-Host "Running trace smoke validation ..."
+& $traceScript @traceArgs
+
+$severitiesToRun = @($Severity)
+if ($ValidateAllAlertSeverities) {
+  foreach ($candidate in @("critical", "warning")) {
+    if ($candidate -notin $severitiesToRun) {
+      $severitiesToRun += $candidate
+    }
+  }
+}
+
+foreach ($severityToRun in $severitiesToRun) {
+  $alertNameToRun = $AlertName
+  if ($ValidateAllAlertSeverities) {
+    $alertNameToRun = "$AlertName-$severityToRun"
+  }
+
+  $alertArgs = @{
+    AlertmanagerBaseUrl  = $AlertmanagerBaseUrl
+    AlertName            = $alertNameToRun
+    Severity             = $severityToRun
+    AlertDurationSeconds = $AlertDurationSeconds
+    WaitSeconds          = $AlertWaitSeconds
+  }
+
+  Write-Host "Running alertmanager smoke validation (severity=$severityToRun) ..."
+  & $alertScript @alertArgs
+}
+
+if ($ValidateInhibition) {
+  Write-Host "Running alertmanager inhibition smoke validation ..."
+  & $inhibitionScript `
+    -AlertmanagerBaseUrl $AlertmanagerBaseUrl `
+    -AlertName $InhibitionAlertName `
+    -AlertDurationSeconds $AlertDurationSeconds `
+    -WaitSeconds $AlertWaitSeconds
+}
+
+$summary = "Observability full smoke passed (trace + alertmanager severities: $($severitiesToRun -join ', ')"
+if ($ValidateInhibition) {
+  $summary += " + inhibition"
+}
+$summary += ")."
+Write-Host $summary

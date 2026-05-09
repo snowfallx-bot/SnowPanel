@@ -13,6 +13,11 @@ React + TypeScript + Vite admin UI with:
 1. `npm install`
 2. `npm run dev`
 
+## Runtime Requirements
+
+- Node.js `>=20.19.0` (Node.js 22+ recommended)
+- `npm run test` / `npm run test:e2e` include a preflight Node version check.
+
 Optional env:
 - `VITE_API_BASE_URL` (default empty, meaning same-origin requests such as `/api/v1/...`)
 - `VITE_API_PROXY_TARGET` (default `http://127.0.0.1:8080` for local Vite proxy)

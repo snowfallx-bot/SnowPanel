@@ -52,6 +52,26 @@ test.describe("authentication and navigation", () => {
       });
     });
 
+    await page.route("**/api/v1/dashboard/summary", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          code: 0,
+          message: "ok",
+          data: {
+            hostname: "viewer-node",
+            system_version: "Linux",
+            kernel_version: "6.8.0",
+            cpu_usage: 10,
+            memory_usage: 20,
+            disk_usage: 30,
+            uptime: "1d"
+          }
+        })
+      });
+    });
+
     await page.goto("/dashboard");
 
     await expect(page.getByRole("link", { name: "Dashboard" })).toBeVisible();

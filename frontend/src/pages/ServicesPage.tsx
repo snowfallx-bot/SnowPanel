@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { listServices, restartService, startService, stopService } from "@/api/services";
 import { Button } from "@/components/ui/button";
@@ -15,14 +15,19 @@ export function ServicesPage() {
   const [keyword, setKeyword] = useState("");
   const [searchKeyword, setSearchKeyword] = useState("");
   const [feedback, setFeedback] = useState("");
+  const servicesQueryKey = ["services", searchKeyword] as const;
 
   const servicesQuery = useQuery({
-    queryKey: ["services", searchKeyword],
+    queryKey: servicesQueryKey,
     queryFn: () => listServices(searchKeyword)
   });
   const servicesLoadError = servicesQuery.isError
     ? describeApiError(servicesQuery.error, "Failed to load services.")
     : null;
+
+  function describeServiceMutationError(error: unknown, fallback: string) {
+    return describeApiError(error, fallback).message;
+  }
 
   const actionMutation = useMutation({
     mutationFn: async (payload: { name: string; action: ActionType }) => {
@@ -36,16 +41,12 @@ export function ServicesPage() {
     },
     onSuccess(result, variables) {
       setFeedback(`${variables.action} success: ${result.name} -> ${result.status}`);
-      queryClient.invalidateQueries({ queryKey: ["services", searchKeyword] });
+      queryClient.invalidateQueries({ queryKey: servicesQueryKey });
     },
     onError(error) {
-      setFeedback(error instanceof Error ? error.message : "Service action failed");
+      setFeedback(describeServiceMutationError(error, "Service action failed"));
     }
   });
-
-  const message = useMemo(() => {
-    return feedback;
-  }, [feedback]);
 
   function submitSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -145,8 +146,8 @@ export function ServicesPage() {
         </div>
       )}
 
-      {message && (
-        <p className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">{message}</p>
+      {feedback && (
+        <p className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">{feedback}</p>
       )}
     </div>
   );

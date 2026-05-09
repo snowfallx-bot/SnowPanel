@@ -10,10 +10,7 @@
 - cron 不再允许任意 shell 命令，已改成 allowlist 模板并阻止常见 shell metacharacters。
 - RBAC 已落地到 DB 角色/权限模型，session 校验已能感知权限变更和用户禁用。
 - 异步任务已接入真实操作，文件模块已补到下载/上传/重命名/分块读写/二进制提示。
-- P2 阶段收尾项已经补齐：
-  - `P2-1` 测试矩阵已覆盖 backend/core-agent/frontend/proto/compose smoke/frontend e2e。
-  - `P2-2` 生产观测能力已覆盖 backend Prometheus metrics、request id/access log、readiness、core-agent tracing、audit logs 与观测文档。
-  - `P2-3` 已清理已知原型/占位痕迹并更新过时文档。
+- `P2-2` 与 `P2-3` 已完成收口；下一次会话可直接进入新需求。
 
 【完成情况】
 
@@ -94,55 +91,102 @@
 - 当前判断：按原验收标准可视为完成。
 
 ~~P2-1：补齐测试矩阵，不要只停留在零散 unit test~~
-- 当前已有：
-  - backend unit tests
-  - backend + fake agent integration-style tests
-  - cron / auth / path traversal 等安全相关测试
-  - frontend vitest 单测
-  - CI workflow 已增加基于 compose 的 smoke integration，覆盖 login / 强制改密 / refresh rotation / dashboard / files / logout 主链路
-  - CI workflow 已增加 proto-contract job，校验 Go protobuf stubs 与 proto 定义同步。
-  - backend grpcclient 已补 proto contract tests，覆盖 File / Service / Docker / Cron RPC 组字段映射与错误映射。
-  - core-agent 已补文件服务真实实现合同测试，以及文件 gRPC 薄转发层测试。
-  - core-agent 已补 Docker container id、systemd service name、service whitelist 等安全校验单元测试。
-  - frontend Playwright e2e 已覆盖登录、强制改密、文件浏览、权限隐藏。
+- 已完成：
+  - backend unit tests、backend + fake agent integration-style tests、cron/auth/path traversal 安全测试已稳定运行。
+  - proto contract tests 已纳入 CI（`proto-contract` job）。
+  - compose smoke integration 已覆盖 login / 强制改密 / refresh rotation / dashboard / files / logout 主链路。
+  - frontend e2e（登录 / 文件浏览 / 权限隐藏）已纳入 CI 并通过。
+  - 新增 `backend-integration` CI job，补齐 backend + core-agent + postgres 真实链路覆盖，包含 services/docker/cron/tasks/audit 多模块契约与异步任务落库校验。
+  - CI 分层已形成：`compose-smoke`（基础主链路）→ `backend-integration`（后端深链路）+ `frontend-e2e`（前端端到端）。
 - 当前判断：可视为完成。
 
 ~~P2-2：补齐生产化观测能力~~
-- 当前已有：
-  - backend request id
-  - access log
+- 已完成：
+  - backend `/metrics`（Prometheus）已覆盖 HTTP 与 agent RPC 计数/时延（含 `rpc/outcome/transport` 标签）
+  - backend request id / access log（现已追加 `trace_id` / `span_id`）
   - health / readiness
-  - core-agent tracing 日志
+  - core-agent tracing 日志 + 独立 `/metrics` 端点（可输出 gRPC 请求总量/时延/in-flight）
+  - Prometheus 基线部署与抓取配置（`docker-compose.observability.yml` + `deploy/observability/prometheus/prometheus.yml`）
+  - Prometheus 基线告警规则（backend down、agent down、p95 高延迟、agent 错误率与并发 in-flight）
+  - Alertmanager 基线路由与接入点（Prometheus `alerting` + `deploy/observability/alertmanager/alertmanager.yml`）
+  - OTel tracing 基线已接入：
+    - backend HTTP spans + gRPC client spans
+    - core-agent gRPC server spans + remote trace context 提取
+    - `otel-collector -> Jaeger` 基线部署（`deploy/observability/otel-collector/config.yaml`）
   - audit logs 基础检索
-  - backend 已暴露 `/metrics`，包含 HTTP request count/duration/in-flight 与 backend -> core-agent request count/duration。
-  - metrics middleware 与 agent client metrics 已有回归测试。
-  - `docs/observability.md` / `docs/observability.zh-CN.md` 已记录 Prometheus 指标、日志关联、request id、readiness 与生产排障顺序。
-- 当前判断：可视为完成；完整分布式 tracing 可作为后续增强项，不再阻塞当前 progress。
+  - `X-Request-ID` 已打通 backend -> gRPC metadata -> core-agent 日志（可按同一 request_id 联查）
+  - 已新增/更新 `docs/observability.md` / `docs/observability.zh-CN.md`，明确 metrics + tracing 排障路径
+  - `trace-smoke.ps1` 已升级为 request 级强关联校验：强制校验响应 `X-Request-ID`、Jaeger 中 backend/core-agent 的 `snowpanel.request_id` 一致性，以及 core-agent 关键 `grpc.method` span 覆盖
+  - `alertmanager-smoke.ps1` 已支持 receiver 路由校验（含 `/alerts` 与 `/alerts/groups` 回退），并通过 `alertname + instance + severity` 过滤与唯一默认 instance 降低误判
+  - `full-smoke.ps1` 已支持一次性校验 warning/critical 双严重级别；`scripts/ci/observability-smoke.ps1` 已收敛为单入口调用，并支持 `container-agent` / `host-agent` 双模式
+  - `Observability Smoke` workflow 已支持 host-agent 参数化实跑：可在 `agent_mode=host-agent` 下自动构建并启动宿主机 core-agent、执行 smoke、回收进程并上传失败日志
+  - `ci.yml` 已新增自动 observability smoke jobs：`observability-smoke-container`（PR/push）与 `observability-smoke-host-agent`（push main），将两模式观测冒烟纳入主流水线
+  - 已新增 `scripts/observability/generate-alertmanager-config.ps1`，可从真实 webhook 生成生产 Alertmanager 配置，并支持 critical 升级通道。
+  - 已在 `deploy/observability/alertmanager/alertmanager.production.example.yml` 增加 warning/critical cadence 与 critical escalation 路由模板。
+  - 已扩展 SLO burn-rate 规则（5m/30m 双窗口）与 `SnowPanelBackendAvailabilityBurnRateWarning/Critical` 告警，并补齐对应规则回归断言。
+  - 已新增 `docs/observability-validation.md` / `docs/observability-validation.zh-CN.md`，沉淀 `24971113137`（`push main`）的 compose + host-agent 双模式实跑通过证据。
+- 当前判断：可视为完成（仓库侧可交付项已闭环）。
 
 ~~P2-3：清理“原型痕迹”和重复逻辑~~
-- 已完成：
-  - `backend/README.md` 已移除 grpc transport placeholder 过时描述，改为真实 gRPC client 与 metrics 说明。
-  - deployment 文档已将 Compose Prototype 改为 Compose Local / Compose 本地模式。
-  - 前端布局副标题已从 `Linux Panel Prototype` 改为 `Linux Server Operations`，对应 e2e 断言已更新。
-  - core-agent 已移除未使用的 `tail_logs_placeholder`。
-  - README 文档导航已补 observability 文档入口。
+- 已完成清理：
+  - 已清理 `backend/README.md` 中关于 gRPC transport placeholder 的过时描述。
+  - 已移除 `core-agent` 中 `tail_logs_placeholder` 占位方法。
+  - 已把 root README 的 observability 入口与常用命令补齐。
+  - 已将 `docs/roadmap.md` / `docs/roadmap.zh-CN.md` 从初始化草案改为当前状态路线图。
+  - 已修正文档中 “Redis 仅预留后续使用” 的过时描述，改为反映当前登录限流共享状态用途。
+  - 已更新 `docs/development.md` / `docs/development.zh-CN.md` 的 observability 命令与测试矩阵说明。
+  - 已同步 root README 中 roadmap 导航标签，不再继续标注为“草案”。
+  - 已补齐 README / development 文档中的 observability `down/logs` 命令，统一到 `Makefile` 实际命令集。
+  - 已统一 deployment / observability 文档术语，避免仍以 “Prometheus UI/基线” 指代整套可观测性组件。
+  - 已将 deployment 文档中的 “Compose Prototype / 原型模式” 命名统一为 “Compose Mode / Compose 模式”。
+  - 已补齐 `docs/api-design.md` / `docs/api-design.zh-CN.md` 的系统与运维端点说明（`/api/v1/ping`、`/health`、`/ready`、`/metrics`）。
+  - 已移除前端应用壳中的 `Linux Panel Prototype` 文案，并同步 e2e 登录后页面锚点为 `SnowPanel Operations Console`。
+  - 已将 `proto/README.md` 中的 `Stubs` 表述统一为 `Bindings`，避免延续原型期命名。
+  - 已同步 `docs/roadmap.md` / `docs/roadmap.zh-CN.md` 措辞，替换 `placeholder` 等遗留描述并纳入最新清理进展。
+  - 已为 `docs/observability.md` / `docs/observability.zh-CN.md` 增加 tracing 实测清单，明确 compose / host-agent 两种模式下的最小验证路径。
+  - 已在 `docs/development.md` / `docs/development.zh-CN.md` 与 `frontend/README.md` 明确 Node 最低版本（`>=20.19.0`），并在 `frontend/package.json` 增加 `engines.node` 提前暴露环境不匹配问题。
+  - 已为 frontend 测试脚本增加 Node 版本 preflight（`check:node`），当版本低于 `20.19.0` 时以清晰错误信息提前失败，避免 vitest 启动期依赖报错噪音。
+  - 已同步 root `README.md` / `README.zh-CN.md` 的 Node 版本口径，与 development/frontend 文档保持一致。
+  - 已为 `docs/observability.md` / `docs/observability.zh-CN.md` 增加 Alertmanager 落地清单，补齐从 no-op 接收器切换到真实通知渠道的执行步骤与验证路径。
+  - 已新增 `scripts/observability/trace-smoke.ps1`，支持用 access token 触发 `dashboard/summary` 并自动轮询 Jaeger 校验 backend/core-agent 跨服务 trace；中英文 observability 文档已补充脚本用法。
+  - 已在 `docs/development.md` / `docs/development.zh-CN.md` 的常用命令中补充 tracing 脚本入口，便于开发阶段直接执行链路验证。
+  - 已新增 `scripts/observability/alertmanager-smoke.ps1`，支持注入合成告警并校验 Alertmanager 接收；相关用法已写入 observability/development 中英文文档。
+  - 已新增 `scripts/observability/README.md` 汇总 observability 脚本入口，并在 observability 中英文文档加入跳转链接。
+  - 已新增 `scripts/observability/full-smoke.ps1` 一键串行执行 tracing + alertmanager 校验，并在 scripts/development/observability 文档补充入口及执行策略说明。
+  - 已在 root `README.md` / `README.zh-CN.md` 常用命令中补充 `full-smoke` 脚本入口，提升主入口可发现性。
+  - 已同步 `docs/roadmap.md` / `docs/roadmap.zh-CN.md` 的 `P2-2` 进展，纳入 observability 冒烟脚本能力说明。
+  - 已升级 `full-smoke.ps1` 支持 `LoginUsername/LoginPassword` 自动登录取 token，并同步 scripts/docs/README 中英文用法。
+  - 已新增 `scripts/ci/observability-smoke.ps1`，用于在 Docker 环境中自动拉起 observability 栈并执行 full-smoke 端到端校验；development 中英文文档已补命令入口。
+  - 已新增独立手动 workflow `.github/workflows/observability-smoke.yml`（`workflow_dispatch`）执行 observability 端到端冒烟验证；默认 `ci.yml` 保持 push/PR 主流水线职责。
+  - 已将 `ci.yml` 中残留的 `Proto Stubs` 步骤命名统一为 `Proto Bindings`，与仓库文档术语保持一致。
+  - 已在 root `README.md` / `README.zh-CN.md` 常用命令区域补充 `Observability Smoke` 手动 workflow 入口说明。
+  - 已新增 `scripts/ci/README.md` 汇总 CI 脚本职责，并在 development 中英文文档增加跳转入口。
+  - 已扩展 `deploy/observability/prometheus/alerts/snowpanel-alerts.yml`：新增 backend 可用性与 core-agent 错误率 recording rules，并补齐 warning/critical 分级 SLO 告警（含 latency/error/availability）。
+  - 已更新 `deploy/observability/alertmanager/alertmanager.yml` 基线路由为 warning/critical 双接收器结构（no-op 模板），并同步 observability 中英文文档与 roadmap 的 SLO 进展描述。
+  - 已新增 `deploy/observability/alertmanager/alertmanager.production.example.yml` 作为生产接收器模板，加速真实通知渠道落地。
+  - 已新增 `scripts/observability/validate-config.ps1`（容器内 `promtool`/`amtool` 校验），并接入 `scripts/ci/observability-smoke.ps1` 与 GitHub workflows（`ci.yml` 新增 `observability-config` job，`observability-smoke.yml` 增加前置校验）。
+  - 已同步 `docs/roadmap.md` / `docs/roadmap.zh-CN.md`：纳入 observability 配置校验闸门（脚本 + CI job）进展。
+  - 已新增 `scripts/observability/prometheus-rules-smoke.ps1` 校验运行中 Prometheus 是否加载关键 recording/alert 规则，并接入 `scripts/ci/observability-smoke.ps1`。
+  - 已新增 `deploy/observability/prometheus/tests/snowpanel-alerts.test.yml` 并将 `promtool test rules` 接入 `scripts/observability/validate-config.ps1`，把关键 critical 告警行为回归纳入 observability 配置闸门。
+  - 已扩展 `snowpanel-alerts.test.yml` 覆盖 warning-only 阈值场景，新增“warning 触发且 critical 不触发”断言，降低 SLO 告警分级回归风险。
+  - 已增强 `scripts/observability/validate-config.ps1`：默认使用 Docker，若本机缺少 Docker 且存在本地 `promtool`/`amtool` 时自动回退执行，降低环境依赖阻塞。
+  - 已新增并链接 `docs/observability-validation.md` / `docs/observability-validation.zh-CN.md`，把“观测链路已实测通过”从口头描述升级为可追溯证据文档。
+  - 已同步更新 `docs/roadmap.md` / `docs/roadmap.zh-CN.md`，将 `P2-2` / `P2-3` 状态切换为完成态，避免文档之间状态漂移。
 - 当前判断：可视为完成。
 
-【建议剩余执行顺序】
+【后续建议（非阻塞）】
 
-当前 progress 内列出的 P0 / P1 / P2 项均已完成。后续工作建议另开新 progress 项管理，例如：
-
-1. 认证加固：评估 httpOnly cookie 迁移。
-2. 可观测性增强：如 OpenTelemetry tracing、跨 frontend/backend/agent 的 trace id 贯通。
-3. 运维能力扩展：service logs 查询、更多 host-agent 操作审计与回滚策略。
+1. 在真实生产值班组织下接入最终告警目的地（paging/IM/email）并完成审批备案。
+2. 按线上流量持续微调 SLO/SLI 阈值与去重窗口。
+3. 若后续引入浏览器 tracing，再补一轮前后端全链路观测说明与回归脚本。
 
 【不要先做的事】
 
 - 不要先改配色/组件库/动画。
 - 不要先扩页面数量。
 - 不要先做“品牌官网式 README 美化”。
-- 不要在 `P2` 未补齐前就把项目描述成“生产就绪”。
+- 不要在值班制度、发布流程和容量评估未固化前，将项目过早表述为“全面生产就绪”。
 
 【一句话结论】
 
-这个仓库已经从“主链路没打通的原型”推进到了“主链路、安全收口、RBAC、前端 session 管理、真实任务/文件能力、测试矩阵、基础生产观测与文档清理均已完成”的阶段；后续新增能力应另立新 progress 项，不再挂在当前清单下。
+这个仓库已经从“主链路没打通的原型”推进到了“主链路、安全、RBAC、测试矩阵、观测链路与文档收口全部完成”的阶段；下一次会话可以直接切入新的功能或工程目标。

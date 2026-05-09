@@ -67,6 +67,7 @@ sudo bash install.sh --postgres-image postgres:16 --redis-image redis:7
 
 - Frontend：`http://127.0.0.1:<FRONTEND_PORT>`
 - Backend 健康检查：`http://127.0.0.1:<BACKEND_PORT>/health`
+- Core-agent 指标（宿主机）：`http://127.0.0.1:9108/metrics`（默认值，可在 `/etc/snowpanel/core-agent.env` 调整）
 
 安装器默认会把 frontend 配置为同源 API 模式，并由 Vite 容器将 `/api`、`/health`、`/ready` 代理到 backend 服务，这样可避免远程浏览器访问时把 `127.0.0.1` 错指到用户自己电脑而导致登录失败。
 

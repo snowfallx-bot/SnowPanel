@@ -7,7 +7,7 @@
 - Docker + Docker Compose v2
 - Go 1.25+
 - Rust stable toolchain
-- Node.js 22+
+- Node.js 22+（推荐；前端工具链最低 20.19.0）
 
 ## 一键本地环境
 
@@ -38,6 +38,19 @@
 
 - `make logs`：查看 compose 日志
 - `make logs-host-agent`：查看宿主机 Agent 覆盖模式的 compose 日志
+- `make up-observability`：以 Prometheus、Alertmanager、OTel Collector、Jaeger 一起启动应用栈
+- `make up-host-agent-observability`：以宿主机 Agent 模式启动应用栈并附带可观测性组件
+- `make down-observability`：停止附带可观测性组件的 compose 栈
+- `make down-host-agent-observability`：停止宿主机 Agent + 可观测性模式的 compose 栈
+- `make logs-observability`：查看 Prometheus、Alertmanager、OTel Collector、Jaeger 日志
+- `make logs-host-agent-observability`：查看宿主机 Agent + 可观测性模式下的 observability 日志
+- `pwsh -File ./scripts/observability/trace-smoke.ps1 -AccessToken "<access_token>"`：触发一次 core-agent 请求，并校验 Jaeger 中 backend/core-agent spans 是否串联
+- `pwsh -File ./scripts/observability/validate-config.ps1`：用 `promtool`/`amtool` 校验 observability 配置文件，并执行告警规则单测（`promtool test rules`）；默认 Docker，缺失时回退本地二进制
+- `pwsh -File ./scripts/observability/prometheus-rules-smoke.ps1 -PrometheusBaseUrl "http://127.0.0.1:9090"`：校验 Prometheus 已加载必需的 SLO recording 与告警规则
+- `pwsh -File ./scripts/observability/alertmanager-smoke.ps1`：注入一条合成告警并确认 Alertmanager 可见
+- `pwsh -File ./scripts/observability/full-smoke.ps1 -AccessToken "<access_token>"`：一条命令串行完成 tracing + alertmanager 两项冒烟校验
+- `pwsh -File ./scripts/observability/full-smoke.ps1 -LoginUsername "admin" -LoginPassword "<password>"`：自动登录并获取 token 后执行一键冒烟校验
+- `pwsh -File ./scripts/ci/observability-smoke.ps1`：拉起 compose + observability 栈并执行端到端冒烟校验
 - `make lint`：基础静态检查（`go vet`、`cargo fmt --check`、frontend build）
 - `make test`：backend 测试 + rust 测试 + frontend test/build 流程
 
@@ -47,10 +60,15 @@
 
 ## 测试覆盖范围
 
-当前最小测试集重点覆盖：
-- backend auth service 与 auth/permission middleware 行为。
-- core-agent 路径校验器与系统信息服务基本正确性。
-- frontend 登录页渲染基线。
+当前测试矩阵已覆盖：
+- backend unit tests：auth、middleware、grpc client、service 层与安全敏感路径
+- backend + fake-agent integration-style tests：dashboard、files、services、Docker、cron 契约
+- compose smoke：登录、首次强制改密、refresh rotation、dashboard、files、logout 主链路
+- backend integration CI：真实 backend/core-agent/postgres 组合链路
+- frontend e2e：登录、文件浏览、权限感知导航
+- 可选手动 CI：[Observability Smoke](../.github/workflows/observability-smoke.yml)（`workflow_dispatch`）用于 trace + alertmanager 端到端冒烟验证
+
+另见：[`scripts/ci/README.md`](../scripts/ci/README.md)，集中说明各 CI 脚本职责与入口。
 
 ## 编码约定
 

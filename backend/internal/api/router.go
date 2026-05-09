@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -12,6 +13,7 @@ import (
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/middleware"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/security"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/service"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
@@ -19,6 +21,8 @@ import (
 type RouterDeps struct {
 	Logger           *zap.Logger
 	DB               *gorm.DB
+	TracingEnabled   bool
+	TracingSvcName   string
 	AgentClient      grpcclient.AgentClient
 	AuthService      service.AuthService
 	DashboardService service.DashboardService
@@ -39,9 +43,18 @@ func NewRouter(deps RouterDeps) *gin.Engine {
 
 	router := gin.New()
 	metrics := appmetrics.Default()
+	router.Use(middleware.CORS(), middleware.RequestID())
+	if deps.TracingEnabled {
+		serviceName := strings.TrimSpace(deps.TracingSvcName)
+		if serviceName == "" {
+			serviceName = "snowpanel-backend"
+		}
+		router.Use(
+			otelgin.Middleware(serviceName),
+			middleware.TraceRequestFields(),
+		)
+	}
 	router.Use(
-		middleware.CORS(),
-		middleware.RequestID(),
 		middleware.Recover(logger),
 		middleware.Metrics(metrics),
 		middleware.AccessLog(logger),

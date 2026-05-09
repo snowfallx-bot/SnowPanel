@@ -7,7 +7,7 @@ Language: **English** | [简体中文](development.zh-CN.md)
 - Docker + Docker Compose v2
 - Go 1.25+
 - Rust stable toolchain
-- Node.js 22+
+- Node.js 22+ (recommended; minimum 20.19.0 for frontend tooling)
 
 ## One-Command Local Stack
 
@@ -38,6 +38,19 @@ When you want local binaries + containerized dependencies:
 
 - `make logs`: tail compose logs
 - `make logs-host-agent`: tail logs for the host-agent compose stack
+- `make up-observability`: start the app stack with Prometheus, Alertmanager, OTel Collector, and Jaeger
+- `make up-host-agent-observability`: start host-agent mode with the observability stack
+- `make down-observability`: stop the compose stack that includes observability services
+- `make down-host-agent-observability`: stop the host-agent stack that includes observability services
+- `make logs-observability`: tail logs for Prometheus, Alertmanager, OTel Collector, and Jaeger
+- `make logs-host-agent-observability`: tail observability logs in host-agent mode
+- `pwsh -File ./scripts/observability/trace-smoke.ps1 -AccessToken "<access_token>"`: trigger a core-agent request and verify backend/core-agent spans are linked in Jaeger
+- `pwsh -File ./scripts/observability/validate-config.ps1`: run `promtool`/`amtool` validation against observability configs, including alert rule unit tests (`promtool test rules`); Docker-first with local binary fallback
+- `pwsh -File ./scripts/observability/prometheus-rules-smoke.ps1 -PrometheusBaseUrl "http://127.0.0.1:9090"`: verify required SLO recording and alert rules are loaded
+- `pwsh -File ./scripts/observability/alertmanager-smoke.ps1`: inject a synthetic alert and confirm it appears in Alertmanager
+- `pwsh -File ./scripts/observability/full-smoke.ps1 -AccessToken "<access_token>"`: run trace + alertmanager smoke checks in one command
+- `pwsh -File ./scripts/observability/full-smoke.ps1 -LoginUsername "admin" -LoginPassword "<password>"`: full smoke with automatic login/token fetch
+- `pwsh -File ./scripts/ci/observability-smoke.ps1`: bring up compose + observability stack and run full smoke end to end
 - `make lint`: baseline static checks (`go vet`, `cargo fmt --check`, frontend build)
 - `make test`: backend tests + rust tests + frontend test/build flow
 
@@ -47,10 +60,15 @@ If you are using the host-agent runtime mode, keep using `make up-host-agent` / 
 
 ## Test Coverage Scope
 
-Current minimum test suite focuses on:
-- backend auth service and auth/permission middleware behavior.
-- core-agent path validator and system info service sanity.
-- frontend login page render baseline.
+Current test matrix covers:
+- backend unit tests across auth, middleware, grpc client, services, and security-sensitive flows
+- backend + fake-agent integration-style tests for dashboard, files, services, Docker, and cron contracts
+- compose smoke coverage for login, forced password change, refresh rotation, dashboard, files, and logout
+- backend integration CI coverage against real backend/core-agent/postgres wiring
+- frontend e2e coverage for login, file browsing, and permission-aware navigation
+- optional manual CI workflow [Observability Smoke](../.github/workflows/observability-smoke.yml) (`workflow_dispatch`) for trace + alertmanager end-to-end validation
+
+See also: [`scripts/ci/README.md`](../scripts/ci/README.md) for script-level CI workflow notes.
 
 ## Coding Conventions
 

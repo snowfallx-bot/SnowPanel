@@ -25,6 +25,13 @@ This folder provides a baseline host deployment template for running `core-agent
 4. Verify:
    - `sudo systemctl status core-agent --no-pager`
    - `ss -lntp | grep 50051`
+   - `curl -fsS http://127.0.0.1:9108/metrics | head`
+
+If you also want distributed tracing from host `core-agent`, enable these in `/etc/snowpanel/core-agent.env`:
+
+- `OTEL_TRACING_ENABLED=true`
+- `OTEL_SERVICE_NAME=snowpanel-core-agent`
+- `OTEL_EXPORTER_OTLP_ENDPOINT=<collector-host>:4317`
 
 ## Backend Compose with Host Agent
 
@@ -44,5 +51,7 @@ Do not fall back to plain `docker compose up` / `make up`, or backend will recon
 ## Security Notes
 
 - Restrict network access to port `50051` (firewall / private network only).
+- Keep metrics endpoint (`CORE_AGENT_METRICS_HOST:CORE_AGENT_METRICS_PORT`, default `127.0.0.1:9108`) on loopback or trusted scrape network only.
+- Keep OTLP export endpoint limited to trusted collector/backends only.
 - Keep `CORE_AGENT_ALLOWED_ROOTS`, service whitelist, and cron allowlist minimal.
 - If you can, bind `CORE_AGENT_HOST` to private interfaces instead of public `0.0.0.0`.

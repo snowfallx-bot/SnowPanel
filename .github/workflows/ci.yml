@@ -6,10 +6,28 @@ on:
       - main
   pull_request:
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  OBSERVABILITY_ALERTMANAGER_CONFIG_FILE: "alertmanager.yml"
+
 jobs:
+  observability-config:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Validate Observability Configs
+        shell: pwsh
+        run: ./scripts/observability/validate-config.ps1
+
   backend:
     runs-on: ubuntu-latest
     steps:
@@ -90,8 +108,10 @@ jobs:
           cache: true
           cache-dependency-path: backend/go.sum
 
-      - name: Setup Protoc
-        uses: arduino/setup-protoc@v3
+      - name: Install Protoc
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler
 
       - name: Install Go Proto Generators
         working-directory: backend
@@ -99,15 +119,19 @@ jobs:
           GOBIN="$PWD/bin" go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.1
           GOBIN="$PWD/bin" go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.5.1
 
-      - name: Regenerate Go Proto Stubs
+      - name: Regenerate Go Proto Bindings
         run: PATH="$PWD/backend/bin:$PATH" make proto-go
 
-      - name: Verify Generated Proto Stubs Are Current
-        run: git diff --exit-code -- backend/internal/grpcclient/pb/proto/agent/v1/agent.pb.go backend/internal/grpcclient/pb/proto/agent/v1/agent_grpc.pb.go
+      - name: Verify Generated Proto Bindings Are Current
+        run: |
+          git diff --exit-code -I '^[[:space:]]*//[[:space:]]*(-[[:space:]]*)?protoc[[:space:]]+v' -- \
+            backend/internal/grpcclient/pb/proto/agent/v1/agent.pb.go \
+            backend/internal/grpcclient/pb/proto/agent/v1/agent_grpc.pb.go
 
   compose-smoke:
     runs-on: ubuntu-latest
     needs:
+      - observability-config
       - backend
       - core-agent
       - frontend
@@ -121,12 +145,83 @@ jobs:
         shell: pwsh
         run: ./scripts/ci/compose-smoke.ps1
 
+  backend-integration:
+    runs-on: ubuntu-latest
+    needs:
+      - compose-smoke
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Run Backend Integration Test
+        shell: pwsh
+        run: ./scripts/ci/backend-integration.ps1
+
+  observability-smoke-container:
+    runs-on: ubuntu-latest
+    needs:
+      - compose-smoke
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Run Observability Smoke (Container-Agent)
+        shell: pwsh
+        run: ./scripts/ci/observability-smoke.ps1 -AgentMode container-agent -AlertmanagerConfigFile "${{ env.OBSERVABILITY_ALERTMANAGER_CONFIG_FILE }}"
+
+      - name: Upload Observability Container Logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: observability-smoke-container-logs
+          path: .github/workflow-logs/observability-smoke
+          if-no-files-found: ignore
+
+  observability-smoke-host-agent:
+    runs-on: ubuntu-latest
+    needs:
+      - compose-smoke
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    timeout-minutes: 55
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+
+      - name: Build Core-Agent (Release)
+        working-directory: core-agent
+        run: cargo build --release
+
+      - name: Start Host Core-Agent
+        shell: pwsh
+        run: ./scripts/ci/start-host-agent.ps1 -HostAgentTarget "host.docker.internal:50051" -HostAgentMetricsBaseUrl "http://127.0.0.1:9108" -LogDir ".github/workflow-logs"
+
+      - name: Run Observability Smoke (Host-Agent)
+        shell: pwsh
+        run: ./scripts/ci/observability-smoke.ps1 -AgentMode host-agent -HostAgentTarget "host.docker.internal:50051" -HostAgentMetricsBaseUrl "http://127.0.0.1:9108" -AlertmanagerConfigFile "${{ env.OBSERVABILITY_ALERTMANAGER_CONFIG_FILE }}"
+
+      - name: Stop Host Core-Agent
+        if: always()
+        shell: pwsh
+        run: ./scripts/ci/stop-host-agent.ps1
+
+      - name: Upload Host-Agent Logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: observability-smoke-host-agent-logs
+          path: .github/workflow-logs
+          if-no-files-found: ignore
+
   frontend-e2e:
     runs-on: ubuntu-latest
     needs:
-      - backend
-      - core-agent
-      - frontend
       - compose-smoke
     timeout-minutes: 30
     steps:
@@ -151,3 +246,13 @@ jobs:
       - name: Run Frontend E2E
         shell: pwsh
         run: ./scripts/ci/frontend-e2e.ps1
+
+      - name: Upload Frontend E2E Artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-e2e-artifacts
+          path: |
+            frontend/playwright-report
+            frontend/test-results
+          if-no-files-found: ignore

@@ -67,6 +67,7 @@ After install:
 
 - Frontend: `http://127.0.0.1:<FRONTEND_PORT>`
 - Backend health: `http://127.0.0.1:<BACKEND_PORT>/health`
+- Core-agent metrics (host): `http://127.0.0.1:9108/metrics` (default, configurable via `/etc/snowpanel/core-agent.env`)
 
 The installer configures frontend API access in same-origin mode by default and lets the Vite container proxy `/api`, `/health`, and `/ready` to the backend service. This avoids remote-browser login failures caused by `127.0.0.1` pointing to the user's own machine.
 

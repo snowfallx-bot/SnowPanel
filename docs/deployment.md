@@ -6,7 +6,7 @@ Language: **English** | [简体中文](deployment.zh-CN.md)
 
 | Mode | Description | Recommended For |
 | --- | --- | --- |
-| Compose Local | `core-agent` runs as a container in the same compose stack. | Local development and demos. |
+| Compose Mode | `core-agent` runs as a container in the same compose stack. | Local development and demos. |
 | Host-Agent (Recommended) | `core-agent` runs as a host systemd service; backend connects over private network gRPC. | Production and real host operations (docker/systemd/cron). |
 
 ## Ubuntu 25.10 One-Click Install
@@ -15,7 +15,7 @@ For host-agent mode on Ubuntu 25.10, use:
 
 - [One-click installer](../deploy/one-click/ubuntu-25.10/README.md)
 
-## Mode A: Compose Local
+## Mode A: Compose Mode
 
 This project ships with a development-oriented compose stack including:
 - `postgres`
@@ -57,11 +57,30 @@ For later rebuilds and log inspection in host-agent mode, keep using:
 
 Do not fall back to plain `docker compose up` / `make up`, or backend will lose the host-agent override and reconnect to the disabled containerized `core-agent`.
 
-## Port Defaults (Compose Local)
+## Optional: Observability Baseline
+
+Run app stack with the observability baseline:
+
+- Compose mode: `make up-observability`
+- Host-agent mode: `make up-host-agent-observability`
+
+Observability UIs:
+
+- `http://127.0.0.1:${PROMETHEUS_PORT:-9090}`
+- `http://127.0.0.1:${ALERTMANAGER_PORT:-9093}`
+- `http://127.0.0.1:${JAEGER_UI_PORT:-16686}`
+
+Stop:
+
+- Compose mode: `make down-observability`
+- Host-agent mode: `make down-host-agent-observability`
+
+## Port Defaults (Compose Mode)
 
 - Frontend: `5173`
 - Backend: `8080`
 - Core-agent gRPC: internal-only (`50051` in Compose network, not exposed on host by default)
+- Core-agent metrics: internal-only (`9108` in Compose network, not exposed on host by default)
 - PostgreSQL: internal-only (`5432` in Compose network, not exposed on host by default)
 - Redis: internal-only (`6379` in Compose network, not exposed on host by default)
 
@@ -80,6 +99,8 @@ Key settings in `.env`:
 - token lifetimes (`JWT_EXPIRE`, `JWT_REFRESH_EXPIRE`)
 - login attempt limiter mode and thresholds (`LOGIN_ATTEMPT_STORE`, `LOGIN_ATTEMPT_REDIS_PREFIX`, `LOGIN_*`)
 - core-agent safe-root and read/write limits
+- core-agent metrics endpoint config (`CORE_AGENT_METRICS_ENABLED`, `CORE_AGENT_METRICS_HOST`, `CORE_AGENT_METRICS_PORT`)
+- OTEL tracing config (`OTEL_TRACING_ENABLED`, `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_TRACES_SAMPLER_ARG`)
 - PostgreSQL + Redis connection info (`REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`, `REDIS_DB`)
 - frontend API base URL (`VITE_API_BASE_URL`, prefer empty for same-origin requests)
 - frontend Vite proxy target (`VITE_API_PROXY_TARGET`, defaults to backend service in Docker)
@@ -94,3 +115,5 @@ Key settings in `.env`:
 - Use persistent backup strategy for Postgres volumes.
 - Place backend/frontend behind HTTPS reverse proxy.
 - Restrict core-agent (`50051`) exposure to trusted network only.
+- Keep core-agent metrics endpoint (`CORE_AGENT_METRICS_HOST:CORE_AGENT_METRICS_PORT`, default `127.0.0.1:9108` in host mode) in loopback or trusted scrape networks.
+- If you enable host-agent tracing, point `OTEL_EXPORTER_OTLP_ENDPOINT` at the collector address reachable from host (for local compose observability baseline, `127.0.0.1:4317`).

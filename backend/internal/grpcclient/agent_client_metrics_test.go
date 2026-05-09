@@ -27,7 +27,7 @@ func TestClientObserveAgentMetricsOnSuccess(t *testing.T) {
 		t.Fatalf("CheckHealth() error = %v", err)
 	}
 
-	successCount := testutil.ToFloat64(agentMetrics.AgentRequestsTotal.WithLabelValues("success", "false"))
+	successCount := testutil.ToFloat64(agentMetrics.AgentRequestsTotal.WithLabelValues("health.check", "success", "false"))
 	if successCount != 1 {
 		t.Fatalf("expected success counter 1, got %f", successCount)
 	}
@@ -58,7 +58,7 @@ func TestClientObserveAgentMetricsOnStructuredError(t *testing.T) {
 		t.Fatalf("expected AgentError, got %T", err)
 	}
 
-	errorCount := testutil.ToFloat64(agentMetrics.AgentRequestsTotal.WithLabelValues("error", "false"))
+	errorCount := testutil.ToFloat64(agentMetrics.AgentRequestsTotal.WithLabelValues("file.list", "error", "false"))
 	if errorCount != 1 {
 		t.Fatalf("expected structured error counter 1, got %f", errorCount)
 	}
@@ -83,7 +83,7 @@ func TestClientObserveAgentMetricsOnTransportError(t *testing.T) {
 		t.Fatalf("expected AgentError, got %T", err)
 	}
 
-	errorCount := testutil.ToFloat64(agentMetrics.AgentRequestsTotal.WithLabelValues("error", "true"))
+	errorCount := testutil.ToFloat64(agentMetrics.AgentRequestsTotal.WithLabelValues("health.check", "error", "true"))
 	if errorCount != 1 {
 		t.Fatalf("expected transport error counter 1, got %f", errorCount)
 	}
