@@ -477,6 +477,126 @@ func TestRunWorkerClaimsAndExecutesQueuedTask(t *testing.T) {
 	}
 }
 
+func TestRunWorkerClaimsSingleTaskOnlyOnce(t *testing.T) {
+	repo := newFakeTaskRepo()
+	started := make(chan struct{})
+	release := make(chan struct{})
+	var once sync.Once
+	var mu sync.Mutex
+	restartCalls := 0
+	service := NewTaskServiceWithOptions(
+		repo,
+		fakeTaskDockerService{
+			restartFn: func(_ context.Context, id string) (dto.DockerContainerActionResult, error) {
+				mu.Lock()
+				restartCalls++
+				mu.Unlock()
+				once.Do(func() { close(started) })
+				<-release
+				return dto.DockerContainerActionResult{ID: id, State: "running"}, nil
+			},
+		},
+		nil,
+		TaskServiceOptions{
+			AsyncExecution: false,
+			MaxAttempts:    3,
+		},
+	)
+
+	result, err := service.CreateDockerRestartTask(
+		context.Background(),
+		dto.CreateDockerRestartTaskRequest{ContainerID: "web"},
+		nil,
+		"tester",
+	)
+	if err != nil {
+		t.Fatalf("expected create task success, got %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go service.RunWorker(ctx, TaskWorkerOptions{
+		WorkerID:      "worker-1",
+		Concurrency:   2,
+		LeaseDuration: time.Second,
+		PollInterval:  20 * time.Millisecond,
+	})
+
+	select {
+	case <-started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("docker restart function did not start in time")
+	}
+	time.Sleep(80 * time.Millisecond)
+	close(release)
+	waitForTaskStatus(t, repo, result.ID, TaskStatusSuccess, 2*time.Second)
+
+	mu.Lock()
+	defer mu.Unlock()
+	if restartCalls != 1 {
+		t.Fatalf("expected one execution, got %d", restartCalls)
+	}
+}
+
+func TestRunWorkerRecoversStaleLeasedTask(t *testing.T) {
+	repo := newFakeTaskRepo()
+	staleWorker := "stale-worker"
+	staleUntil := time.Now().Add(-time.Minute)
+	if err := repo.Create(context.Background(), &model.Task{
+		Type:        TaskTypeDockerRestart,
+		Status:      TaskStatusRunning,
+		Progress:    30,
+		Payload:     `{"operation":"docker.restart","container_id":"web"}`,
+		Result:      `{}`,
+		LockedBy:    &staleWorker,
+		LockedUntil: &staleUntil,
+		Attempt:     1,
+		MaxAttempts: 3,
+		StartedAt:   &staleUntil,
+		ErrorMsg:    "",
+		TriggeredBy: nil,
+		HostID:      nil,
+		NextRunAt:   nil,
+		FinishedAt:  nil,
+		CreatedAt:   staleUntil,
+		UpdatedAt:   staleUntil,
+	}); err != nil {
+		t.Fatalf("failed to seed stale task: %v", err)
+	}
+
+	service := NewTaskServiceWithOptions(
+		repo,
+		fakeTaskDockerService{
+			restartFn: func(_ context.Context, id string) (dto.DockerContainerActionResult, error) {
+				return dto.DockerContainerActionResult{ID: id, State: "running"}, nil
+			},
+		},
+		nil,
+		TaskServiceOptions{
+			AsyncExecution: false,
+			MaxAttempts:    3,
+		},
+	)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go service.RunWorker(ctx, TaskWorkerOptions{
+		WorkerID:      "worker-2",
+		Concurrency:   1,
+		LeaseDuration: time.Second,
+		PollInterval:  20 * time.Millisecond,
+	})
+
+	waitForTaskStatus(t, repo, 1, TaskStatusSuccess, 2*time.Second)
+	task, err := repo.GetByID(context.Background(), 1)
+	if err != nil {
+		t.Fatalf("failed to load task: %v", err)
+	}
+	if task.Attempt != 2 {
+		t.Fatalf("expected stale task attempt=2 after reclaim, got %d", task.Attempt)
+	}
+}
+
 func TestRunWorkerRetriesFailedTask(t *testing.T) {
 	repo := newFakeTaskRepo()
 	var mu sync.Mutex
@@ -533,6 +653,62 @@ func TestRunWorkerRetriesFailedTask(t *testing.T) {
 	}
 }
 
+func TestRunWorkerStopsRetryingAtMaxAttempts(t *testing.T) {
+	repo := newFakeTaskRepo()
+	var mu sync.Mutex
+	restartCalls := 0
+	service := NewTaskServiceWithOptions(
+		repo,
+		fakeTaskDockerService{
+			restartFn: func(context.Context, string) (dto.DockerContainerActionResult, error) {
+				mu.Lock()
+				restartCalls++
+				mu.Unlock()
+				return dto.DockerContainerActionResult{}, errors.New("permanent restart failure")
+			},
+		},
+		nil,
+		TaskServiceOptions{
+			AsyncExecution: false,
+			MaxAttempts:    1,
+		},
+	)
+
+	result, err := service.CreateDockerRestartTask(
+		context.Background(),
+		dto.CreateDockerRestartTaskRequest{ContainerID: "web"},
+		nil,
+		"tester",
+	)
+	if err != nil {
+		t.Fatalf("expected create task success, got %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go service.RunWorker(ctx, TaskWorkerOptions{
+		WorkerID:      "worker-1",
+		Concurrency:   1,
+		LeaseDuration: time.Second,
+		PollInterval:  20 * time.Millisecond,
+	})
+
+	waitForTaskStatus(t, repo, result.ID, TaskStatusFailed, 2*time.Second)
+	time.Sleep(80 * time.Millisecond)
+	task, err := repo.GetByID(context.Background(), result.ID)
+	if err != nil {
+		t.Fatalf("failed to load task: %v", err)
+	}
+	if task.Attempt != 1 {
+		t.Fatalf("expected attempt=1, got %d", task.Attempt)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if restartCalls != 1 {
+		t.Fatalf("expected one restart attempt, got %d", restartCalls)
+	}
+}
+
 func TestRunWorkerHeartbeatsLongRunningTask(t *testing.T) {
 	repo := newFakeTaskRepo()
 	service := NewTaskServiceWithOptions(
@@ -572,6 +748,115 @@ func TestRunWorkerHeartbeatsLongRunningTask(t *testing.T) {
 	waitForTaskStatus(t, repo, result.ID, TaskStatusSuccess, 2*time.Second)
 	if repo.heartbeatCount() == 0 {
 		t.Fatal("expected at least one heartbeat for long-running task")
+	}
+}
+
+func TestRunWorkerSkipsCanceledQueuedTask(t *testing.T) {
+	repo := newFakeTaskRepo()
+	restartCalled := false
+	service := NewTaskServiceWithOptions(
+		repo,
+		fakeTaskDockerService{
+			restartFn: func(_ context.Context, id string) (dto.DockerContainerActionResult, error) {
+				restartCalled = true
+				return dto.DockerContainerActionResult{ID: id, State: "running"}, nil
+			},
+		},
+		nil,
+		TaskServiceOptions{
+			AsyncExecution: false,
+			MaxAttempts:    2,
+		},
+	)
+
+	result, err := service.CreateDockerRestartTask(
+		context.Background(),
+		dto.CreateDockerRestartTaskRequest{ContainerID: "web"},
+		nil,
+		"tester",
+	)
+	if err != nil {
+		t.Fatalf("expected create task success, got %v", err)
+	}
+	if err := service.CancelTask(context.Background(), result.ID, "tester"); err != nil {
+		t.Fatalf("expected cancel success, got %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go service.RunWorker(ctx, TaskWorkerOptions{
+		WorkerID:      "worker-1",
+		Concurrency:   1,
+		LeaseDuration: time.Second,
+		PollInterval:  20 * time.Millisecond,
+	})
+
+	time.Sleep(80 * time.Millisecond)
+	task, err := repo.GetByID(context.Background(), result.ID)
+	if err != nil {
+		t.Fatalf("failed to load task: %v", err)
+	}
+	if task.Status != TaskStatusCanceled {
+		t.Fatalf("expected task to stay canceled, got %+v", task)
+	}
+	if restartCalled {
+		t.Fatal("did not expect worker to execute canceled queued task")
+	}
+}
+
+func TestRunWorkerKeepsCanceledStatusAfterRunningOperationCompletes(t *testing.T) {
+	repo := newFakeTaskRepo()
+	started := make(chan struct{})
+	release := make(chan struct{})
+	service := NewTaskServiceWithOptions(
+		repo,
+		fakeTaskDockerService{
+			restartFn: func(_ context.Context, id string) (dto.DockerContainerActionResult, error) {
+				close(started)
+				<-release
+				return dto.DockerContainerActionResult{ID: id, State: "running"}, nil
+			},
+		},
+		nil,
+		TaskServiceOptions{
+			AsyncExecution: false,
+			MaxAttempts:    2,
+		},
+	)
+
+	result, err := service.CreateDockerRestartTask(
+		context.Background(),
+		dto.CreateDockerRestartTaskRequest{ContainerID: "web"},
+		nil,
+		"tester",
+	)
+	if err != nil {
+		t.Fatalf("expected create task success, got %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go service.RunWorker(ctx, TaskWorkerOptions{
+		WorkerID:      "worker-1",
+		Concurrency:   1,
+		LeaseDuration: time.Second,
+		PollInterval:  20 * time.Millisecond,
+	})
+
+	select {
+	case <-started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("docker restart function did not start in time")
+	}
+
+	if err := service.CancelTask(context.Background(), result.ID, "tester"); err != nil {
+		t.Fatalf("expected cancel success, got %v", err)
+	}
+	close(release)
+
+	task := waitForTaskTerminalStatus(t, repo, result.ID, 2*time.Second)
+	if task.Status != TaskStatusCanceled {
+		t.Fatalf("expected final status canceled, got %+v", task)
 	}
 }
 

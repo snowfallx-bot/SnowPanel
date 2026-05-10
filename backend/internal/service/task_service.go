@@ -817,6 +817,16 @@ func (s *taskService) failClaimedTask(
 	err error,
 	metadata map[string]interface{},
 ) {
+	if s.isCanceled(ctx, task.ID) {
+		_ = s.repo.AppendLog(ctx, &model.TaskLog{
+			TaskID:   task.ID,
+			Level:    "warn",
+			Message:  "task canceled while operation was running",
+			Metadata: marshalTaskMetadata(map[string]interface{}{"worker_id": workerID}),
+		})
+		return
+	}
+
 	now := time.Now()
 	nextRunAt := nextTaskRetryAt(now, task.Attempt, task.MaxAttempts)
 	fields := map[string]interface{}{

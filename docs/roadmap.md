@@ -119,7 +119,7 @@ Local P3-4 durable worker wiring is in progress:
 - Task creation queues work for the durable worker by default; the legacy goroutine executor remains available when the worker is disabled.
 - The worker loop supports concurrency, lease heartbeat, stale lease release, max-attempt retry, and retry backoff.
 - Task and worker metrics now expose queue depth, running count, completion totals, task duration, and claim outcomes.
-- Service tests cover enqueue-only mode, worker claim/execute, failed task retry, long-running heartbeat behavior, and task metric recording.
+- Service tests cover enqueue-only mode, worker claim/execute, claim-only-once behavior, stale lease recovery, failed task retry, max-attempt exhaustion, queued/running cancellation, long-running heartbeat behavior, and task metric recording.
 - Local backend gate passed: `cd backend && go test ./...`.
 
 ## Follow-up Hardening (Post-P3-0)
