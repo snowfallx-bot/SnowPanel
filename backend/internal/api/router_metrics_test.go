@@ -35,6 +35,12 @@ func TestRouterExposesMetricsEndpoint(t *testing.T) {
 	if !strings.Contains(body, "snowpanel_http_requests_in_flight") {
 		t.Fatalf("expected metrics body to contain in-flight gauge")
 	}
+	if !strings.Contains(body, "snowpanel_tasks_queue_depth") {
+		t.Fatalf("expected metrics body to contain task queue depth gauge")
+	}
+	if !strings.Contains(body, "snowpanel_task_worker_claims_total") {
+		t.Fatalf("expected metrics body to contain task worker claim counter")
+	}
 	if !strings.Contains(body, "route=\"/health\"") {
 		t.Fatalf("expected metrics body to include /health route label")
 	}

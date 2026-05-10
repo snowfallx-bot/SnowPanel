@@ -9,7 +9,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/dto"
+	appmetrics "github.com/snowfallx-bot/SnowPanel/backend/internal/metrics"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/model"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/repository"
 )
@@ -181,6 +184,19 @@ func (r *fakeTaskRepo) UpdateStatus(
 	task.ErrorMsg = errorMessage
 	task.UpdatedAt = time.Now()
 	return nil
+}
+
+func (r *fakeTaskRepo) CountByStatus(_ context.Context, status string) (int64, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	var count int64
+	for _, task := range r.tasks {
+		if task.Status == status {
+			count++
+		}
+	}
+	return count, nil
 }
 
 func (r *fakeTaskRepo) GetByID(_ context.Context, id int64) (*model.Task, error) {
@@ -556,6 +572,57 @@ func TestRunWorkerHeartbeatsLongRunningTask(t *testing.T) {
 	waitForTaskStatus(t, repo, result.ID, TaskStatusSuccess, 2*time.Second)
 	if repo.heartbeatCount() == 0 {
 		t.Fatal("expected at least one heartbeat for long-running task")
+	}
+}
+
+func TestRunWorkerRecordsTaskMetrics(t *testing.T) {
+	repo := newFakeTaskRepo()
+	registry := prometheus.NewRegistry()
+	metricsSet := appmetrics.New(registry)
+	service := NewTaskServiceWithOptions(
+		repo,
+		fakeTaskDockerService{
+			restartFn: func(_ context.Context, id string) (dto.DockerContainerActionResult, error) {
+				return dto.DockerContainerActionResult{ID: id, State: "running"}, nil
+			},
+		},
+		nil,
+		TaskServiceOptions{
+			AsyncExecution: false,
+			MaxAttempts:    2,
+			Metrics:        metricsSet,
+		},
+	)
+
+	result, err := service.CreateDockerRestartTask(
+		context.Background(),
+		dto.CreateDockerRestartTaskRequest{ContainerID: "web"},
+		nil,
+		"tester",
+	)
+	if err != nil {
+		t.Fatalf("expected create task success, got %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go service.RunWorker(ctx, TaskWorkerOptions{
+		WorkerID:      "worker-1",
+		Concurrency:   1,
+		LeaseDuration: time.Second,
+		PollInterval:  20 * time.Millisecond,
+	})
+
+	waitForTaskStatus(t, repo, result.ID, TaskStatusSuccess, 2*time.Second)
+
+	if got := testutil.ToFloat64(metricsSet.TaskWorkerClaims.WithLabelValues("success")); got != 1 {
+		t.Fatalf("expected one successful claim metric, got %f", got)
+	}
+	if got := testutil.ToFloat64(metricsSet.TasksCompletedTotal.WithLabelValues(TaskTypeDockerRestart, TaskStatusSuccess)); got != 1 {
+		t.Fatalf("expected one completed task metric, got %f", got)
+	}
+	if got := testutil.CollectAndCount(metricsSet.TaskDuration); got == 0 {
+		t.Fatal("expected task duration metric to be collected")
 	}
 }
 

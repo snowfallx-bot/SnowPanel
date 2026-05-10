@@ -24,6 +24,7 @@ type TaskRepository interface {
 	FailTask(ctx context.Context, taskID int64, workerID string, errorMessage string, nextRunAt *time.Time) error
 	ReleaseStaleTasks(ctx context.Context, now time.Time) (int64, error)
 	UpdateStatus(ctx context.Context, id int64, status string, progress int, errorMessage string) error
+	CountByStatus(ctx context.Context, status string) (int64, error)
 	GetByID(ctx context.Context, id int64) (*model.Task, error)
 	List(ctx context.Context, filter TaskListFilter) ([]model.Task, int64, error)
 	AppendLog(ctx context.Context, log *model.TaskLog) error
@@ -178,6 +179,17 @@ func (r *taskRepository) UpdateStatus(
 		"error_message": errorMessage,
 	}
 	return r.db.WithContext(ctx).Model(&model.Task{}).Where("id = ?", id).Updates(updates).Error
+}
+
+func (r *taskRepository) CountByStatus(ctx context.Context, status string) (int64, error) {
+	var count int64
+	if err := r.db.WithContext(ctx).
+		Model(&model.Task{}).
+		Where("status = ?", status).
+		Count(&count).Error; err != nil {
+		return 0, err
+	}
+	return count, nil
 }
 
 func (r *taskRepository) GetByID(ctx context.Context, id int64) (*model.Task, error) {

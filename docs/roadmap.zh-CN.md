@@ -118,7 +118,8 @@
 - backend 启动时已在 `TASK_WORKER_ENABLED=true` 下运行 DB-backed worker。
 - 任务创建默认只入队，由 durable worker claim 后执行；关闭 worker 时仍保留 legacy goroutine executor 作为兼容/回滚路径。
 - worker loop 已支持 concurrency、lease heartbeat、stale lease release、max-attempt retry 与 retry backoff。
-- service tests 已覆盖 enqueue-only、worker claim/execute、失败重试、长任务 heartbeat。
+- task/worker metrics 已暴露 queue depth、running count、completion totals、task duration 与 claim outcomes。
+- service tests 已覆盖 enqueue-only、worker claim/execute、失败重试、长任务 heartbeat 与 task metric 记录。
 - 本地 backend 门禁已通过：`cd backend && go test ./...`。
 
 ## 后续加固（Post-P3-0）

@@ -11,6 +11,7 @@ import (
 
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/apperror"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/dto"
+	appmetrics "github.com/snowfallx-bot/SnowPanel/backend/internal/metrics"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/model"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/repository"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/security"
@@ -55,11 +56,13 @@ type taskService struct {
 	dockerService  DockerService
 	serviceManager ServiceManagerService
 	options        TaskServiceOptions
+	metrics        *appmetrics.Set
 }
 
 type TaskServiceOptions struct {
 	AsyncExecution bool
 	MaxAttempts    int
+	Metrics        *appmetrics.Set
 }
 
 type TaskWorkerOptions struct {
@@ -100,6 +103,7 @@ func NewTaskServiceWithOptions(
 		dockerService:  dockerService,
 		serviceManager: serviceManager,
 		options:        options,
+		metrics:        options.Metrics,
 	}
 }
 
@@ -581,6 +585,7 @@ func (s *taskService) RunWorker(ctx context.Context, options TaskWorkerOptions) 
 		}
 
 		_, _ = s.repo.ReleaseStaleTasks(ctx, time.Now())
+		s.refreshTaskGauges(ctx)
 		s.claimAvailableTasks(ctx, options, workers)
 
 		select {
@@ -604,10 +609,17 @@ func (s *taskService) claimAvailableTasks(
 		}
 
 		task, err := s.repo.ClaimNextTask(ctx, options.WorkerID, options.LeaseDuration)
-		if err != nil || task == nil {
+		if err != nil {
+			s.metrics.ObserveTaskWorkerClaim("error")
 			<-workers
 			return
 		}
+		if task == nil {
+			s.metrics.ObserveTaskWorkerClaim("empty")
+			<-workers
+			return
+		}
+		s.metrics.ObserveTaskWorkerClaim("success")
 
 		go func(claimed model.Task) {
 			defer func() {
@@ -685,6 +697,7 @@ func (s *taskService) runClaimedTask(
 	}
 
 	_ = s.repo.CompleteTask(ctx, task.ID, workerID, `{}`)
+	s.metrics.ObserveTaskCompleted(task.Type, TaskStatusSuccess, time.Since(task.CreatedAt))
 	_ = s.repo.AppendLog(ctx, &model.TaskLog{
 		TaskID:  task.ID,
 		Level:   "info",
@@ -822,12 +835,27 @@ func (s *taskService) failClaimedTask(
 	}
 
 	_ = s.repo.FailTask(ctx, task.ID, workerID, err.Error(), nextRunAt)
+	if nextRunAt == nil {
+		s.metrics.ObserveTaskCompleted(task.Type, TaskStatusFailed, time.Since(task.CreatedAt))
+	}
 	_ = s.repo.AppendLog(ctx, &model.TaskLog{
 		TaskID:   task.ID,
 		Level:    "error",
 		Message:  message,
 		Metadata: marshalTaskMetadata(fields),
 	})
+}
+
+func (s *taskService) refreshTaskGauges(ctx context.Context) {
+	if s.metrics == nil {
+		return
+	}
+	if count, err := s.repo.CountByStatus(ctx, TaskStatusPending); err == nil {
+		s.metrics.SetTaskQueueDepth(count)
+	}
+	if count, err := s.repo.CountByStatus(ctx, TaskStatusRunning); err == nil {
+		s.metrics.SetTasksRunning(count)
+	}
 }
 
 func taskHeartbeatInterval(leaseDuration time.Duration) time.Duration {

@@ -93,7 +93,9 @@ P3-4 Durable Task Worker
 - backend startup 已接入 durable worker：TASK_WORKER_ENABLED=true 时任务只入队，由 DB-backed worker claim 后执行
 - TASK_WORKER_ENABLED=false 时保留 legacy goroutine execution，便于本地/回滚兼容
 - worker loop 已支持 concurrency、lease heartbeat、stale lease release、max_attempt retry 与 backoff
+- task/worker metrics 已新增：queue_depth、running、completed_total、duration_seconds、worker claims
 - service tests 已覆盖 enqueue-only、worker claim/execute、failure retry、long-running heartbeat
+- metrics tests 已覆盖 worker claims/completed 打点与 /metrics 暴露
 - local backend gate 已通过：cd backend && go test ./...
 - 远端 CI 仍需在 push 后作为最终确认
 ```

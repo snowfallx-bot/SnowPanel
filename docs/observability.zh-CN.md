@@ -28,6 +28,11 @@ core-agent 在启用时也会暴露独立 Prometheus 端点：
 - `snowpanel_http_requests_in_flight`
 - `snowpanel_agent_requests_total`
 - `snowpanel_agent_request_duration_seconds`
+- `snowpanel_tasks_queue_depth`
+- `snowpanel_tasks_running`
+- `snowpanel_tasks_completed_total`
+- `snowpanel_tasks_duration_seconds`
+- `snowpanel_task_worker_claims_total`
 - `snowpanel_core_agent_grpc_requests_total`
 - `snowpanel_core_agent_grpc_request_duration_seconds`
 - `snowpanel_core_agent_grpc_requests_in_flight`
@@ -47,6 +52,11 @@ Prometheus 还提供了面向 SLO 的 recording rules：
 - `rpc`
 - `outcome`（`success` / `error`）
 - `transport`（`true` / `false`）
+
+其中 durable task 指标包含以下标签：
+
+- completed/duration：`type`、`status`
+- worker claims：`outcome`（`success` / `empty` / `error`）
 
 其中 core-agent gRPC 指标包含以下标签：
 

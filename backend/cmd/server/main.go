@@ -14,6 +14,7 @@ import (
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/database"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/grpcclient"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/logger"
+	appmetrics "github.com/snowfallx-bot/SnowPanel/backend/internal/metrics"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/observability"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/repository"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/security"
@@ -80,6 +81,7 @@ func main() {
 	serviceManager := service.NewServiceManagerService(agentClient)
 	dockerService := service.NewDockerService(agentClient)
 	cronService := service.NewCronService(agentClient)
+	metricsSet := appmetrics.Default()
 	taskService := service.NewTaskServiceWithOptions(
 		taskRepo,
 		dockerService,
@@ -87,6 +89,7 @@ func main() {
 		service.TaskServiceOptions{
 			AsyncExecution: !cfg.TaskWorker.Enabled,
 			MaxAttempts:    cfg.TaskWorker.MaxAttempts,
+			Metrics:        metricsSet,
 		},
 	)
 	if cfg.TaskWorker.Enabled {

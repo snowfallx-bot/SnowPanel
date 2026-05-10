@@ -21,6 +21,11 @@ type Set struct {
 	HTTPRequestsInFlight prometheus.Gauge
 	AgentRequestsTotal   *prometheus.CounterVec
 	AgentRequestDuration *prometheus.HistogramVec
+	TaskQueueDepth       prometheus.Gauge
+	TasksRunning         prometheus.Gauge
+	TasksCompletedTotal  *prometheus.CounterVec
+	TaskDuration         *prometheus.HistogramVec
+	TaskWorkerClaims     *prometheus.CounterVec
 }
 
 func Default() *Set {
@@ -78,6 +83,50 @@ func New(registerer prometheus.Registerer) *Set {
 			},
 			[]string{"rpc", "outcome", "transport"},
 		),
+		TaskQueueDepth: prometheus.NewGauge(
+			prometheus.GaugeOpts{
+				Namespace: Namespace,
+				Subsystem: "tasks",
+				Name:      "queue_depth",
+				Help:      "Current number of pending durable tasks ready or waiting to run.",
+			},
+		),
+		TasksRunning: prometheus.NewGauge(
+			prometheus.GaugeOpts{
+				Namespace: Namespace,
+				Subsystem: "tasks",
+				Name:      "running",
+				Help:      "Current number of durable tasks in running status.",
+			},
+		),
+		TasksCompletedTotal: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Namespace: Namespace,
+				Subsystem: "tasks",
+				Name:      "completed_total",
+				Help:      "Total number of durable tasks completed by type and terminal status.",
+			},
+			[]string{"type", "status"},
+		),
+		TaskDuration: prometheus.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Namespace: Namespace,
+				Subsystem: "tasks",
+				Name:      "duration_seconds",
+				Help:      "Duration of durable tasks by type and terminal status.",
+				Buckets:   taskDurationBuckets(),
+			},
+			[]string{"type", "status"},
+		),
+		TaskWorkerClaims: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Namespace: Namespace,
+				Subsystem: "task_worker",
+				Name:      "claims_total",
+				Help:      "Total number of durable task worker claim attempts by outcome.",
+			},
+			[]string{"outcome"},
+		),
 	}
 
 	if registerer != nil {
@@ -87,8 +136,15 @@ func New(registerer prometheus.Registerer) *Set {
 			metrics.HTTPRequestsInFlight,
 			metrics.AgentRequestsTotal,
 			metrics.AgentRequestDuration,
+			metrics.TaskQueueDepth,
+			metrics.TasksRunning,
+			metrics.TasksCompletedTotal,
+			metrics.TaskDuration,
+			metrics.TaskWorkerClaims,
 		)
 	}
+
+	metrics.initTaskMetricSeries()
 
 	return metrics
 }
@@ -121,4 +177,58 @@ func (s *Set) ObserveAgentRequest(rpc string, transport bool, err error, duratio
 
 	s.AgentRequestsTotal.WithLabelValues(rpc, outcome, transportLabel).Inc()
 	s.AgentRequestDuration.WithLabelValues(rpc, outcome, transportLabel).Observe(duration.Seconds())
+}
+
+func (s *Set) SetTaskQueueDepth(depth int64) {
+	if s == nil {
+		return
+	}
+	s.TaskQueueDepth.Set(float64(depth))
+}
+
+func (s *Set) SetTasksRunning(count int64) {
+	if s == nil {
+		return
+	}
+	s.TasksRunning.Set(float64(count))
+}
+
+func (s *Set) ObserveTaskCompleted(taskType, status string, duration time.Duration) {
+	if s == nil {
+		return
+	}
+	if taskType == "" {
+		taskType = "unknown"
+	}
+	if status == "" {
+		status = "unknown"
+	}
+	s.TasksCompletedTotal.WithLabelValues(taskType, status).Inc()
+	s.TaskDuration.WithLabelValues(taskType, status).Observe(duration.Seconds())
+}
+
+func (s *Set) ObserveTaskWorkerClaim(outcome string) {
+	if s == nil {
+		return
+	}
+	if outcome == "" {
+		outcome = "unknown"
+	}
+	s.TaskWorkerClaims.WithLabelValues(outcome).Inc()
+}
+
+func taskDurationBuckets() []float64 {
+	return []float64{0.1, 0.5, 1, 2.5, 5, 10, 30, 60, 120, 300}
+}
+
+func (s *Set) initTaskMetricSeries() {
+	for _, outcome := range []string{"success", "empty", "error"} {
+		s.TaskWorkerClaims.WithLabelValues(outcome).Add(0)
+	}
+	for _, taskType := range []string{"docker_restart", "service_restart"} {
+		for _, status := range []string{"success", "failed", "canceled"} {
+			s.TasksCompletedTotal.WithLabelValues(taskType, status).Add(0)
+			_ = s.TaskDuration.WithLabelValues(taskType, status)
+		}
+	}
 }

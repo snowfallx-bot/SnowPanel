@@ -28,6 +28,11 @@ Current key metric families include:
 - `snowpanel_http_requests_in_flight`
 - `snowpanel_agent_requests_total`
 - `snowpanel_agent_request_duration_seconds`
+- `snowpanel_tasks_queue_depth`
+- `snowpanel_tasks_running`
+- `snowpanel_tasks_completed_total`
+- `snowpanel_tasks_duration_seconds`
+- `snowpanel_task_worker_claims_total`
 - `snowpanel_core_agent_grpc_requests_total`
 - `snowpanel_core_agent_grpc_request_duration_seconds`
 - `snowpanel_core_agent_grpc_requests_in_flight`
@@ -47,6 +52,11 @@ Agent RPC metrics are labeled by:
 - `rpc`
 - `outcome` (`success` / `error`)
 - `transport` (`true` / `false`)
+
+Durable task metrics are labeled by:
+
+- completed/duration: `type`, `status`
+- worker claims: `outcome` (`success` / `empty` / `error`)
 
 Core-agent gRPC metrics are labeled by:
 
