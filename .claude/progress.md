@@ -81,6 +81,7 @@ P3-3 Secrets & Settings Hardening
 - SNOWPANEL_ENCRYPTION_KEY / SNOWPANEL_ENCRYPTION_KEY_ID 配置入口已新增
 - SystemSetting repository/service encryption 已新增：is_encrypted=true 写入前加密，读取时解密
 - 测试已覆盖 encrypted write/read、missing key fail、wrong key fail、plaintext setting
+- startup validation 已新增：无效 encryption key 拒绝启动；已有 encrypted settings 但缺 key 时 fail fast
 ```
 
 ### 明确暂不优先

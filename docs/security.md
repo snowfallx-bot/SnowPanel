@@ -74,6 +74,7 @@ Language: **English** | [简体中文](security.zh-CN.md)
 - The backend has an AES-256-GCM encryption helper for sensitive settings and future secret-bearing records.
 - `SystemSettingService` encrypts `is_encrypted=true` values before persistence and decrypts them on read.
 - Encrypted setting reads/writes fail if `SNOWPANEL_ENCRYPTION_KEY` is missing or wrong.
+- Backend startup fails if an invalid encryption key is configured, or if encrypted settings already exist while no key is configured.
 - Encrypted payloads include `version`, `algorithm`, `key_id`, `nonce`, and `ciphertext`.
 - Set `SNOWPANEL_ENCRYPTION_KEY` to a 32-byte base64 key before enabling encrypted setting writes.
 - `SNOWPANEL_ENCRYPTION_KEY_ID` labels the active key for future key rotation.

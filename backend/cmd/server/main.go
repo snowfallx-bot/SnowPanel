@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -55,6 +57,14 @@ func main() {
 	userRepo := repository.NewUserRepository(db)
 	auditRepo := repository.NewAuditRepository(db)
 	taskRepo := repository.NewTaskRepository(db)
+	systemSettingRepo := repository.NewSystemSettingRepository(db)
+	settingsEncryptor, err := newSettingsEncryptor(cfg.Security)
+	if err != nil {
+		zapLogger.Fatal("invalid settings encryption config", logger.Err(err))
+	}
+	if err := validateEncryptedSettingsStartup(context.Background(), systemSettingRepo, settingsEncryptor); err != nil {
+		zapLogger.Fatal("invalid encrypted settings config", logger.Err(err))
+	}
 	auditService := service.NewAuditService(auditRepo)
 	authService := service.NewAuthService(userRepo, cfg.Auth)
 	if err := authService.EnsureDefaultAdmin(context.Background()); err != nil {
@@ -142,4 +152,26 @@ func main() {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	_ = database.Close(shutdownCtx, db)
+}
+
+func newSettingsEncryptor(cfg config.SecurityConfig) (*security.Encryptor, error) {
+	if cfg.EncryptionKey == "" {
+		return nil, nil
+	}
+	return security.NewEncryptor(cfg.EncryptionKey, cfg.EncryptionKeyID)
+}
+
+func validateEncryptedSettingsStartup(
+	ctx context.Context,
+	repo repository.SystemSettingRepository,
+	encryptor *security.Encryptor,
+) error {
+	hasEncryptedSettings, err := repo.HasEncryptedSettings(ctx)
+	if err != nil {
+		return fmt.Errorf("check encrypted settings: %w", err)
+	}
+	if hasEncryptedSettings && encryptor == nil {
+		return errors.New("SNOWPANEL_ENCRYPTION_KEY cannot be empty when encrypted settings exist")
+	}
+	return nil
 }

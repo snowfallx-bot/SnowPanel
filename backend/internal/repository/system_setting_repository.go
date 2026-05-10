@@ -10,6 +10,7 @@ import (
 
 type SystemSettingRepository interface {
 	GetByKey(ctx context.Context, key string) (*model.SystemSetting, error)
+	HasEncryptedSettings(ctx context.Context) (bool, error)
 	Upsert(ctx context.Context, setting *model.SystemSetting) error
 }
 
@@ -33,6 +34,18 @@ func (r *systemSettingRepository) GetByKey(
 		return nil, err
 	}
 	return &setting, nil
+}
+
+func (r *systemSettingRepository) HasEncryptedSettings(ctx context.Context) (bool, error) {
+	var count int64
+	if err := r.db.WithContext(ctx).
+		Model(&model.SystemSetting{}).
+		Where("is_encrypted = ?", true).
+		Limit(1).
+		Count(&count).Error; err != nil {
+		return false, err
+	}
+	return count > 0, nil
 }
 
 func (r *systemSettingRepository) Upsert(

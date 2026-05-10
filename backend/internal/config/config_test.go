@@ -113,3 +113,23 @@ func TestValidateRejectsUnknownLoginAttemptStore(t *testing.T) {
 		t.Fatalf("expected validation error for unknown LOGIN_ATTEMPT_STORE")
 	}
 }
+
+func TestValidateRejectsInvalidEncryptionKey(t *testing.T) {
+	cfg := Config{
+		AppEnv: "production",
+		Auth: AuthConfig{
+			AppEnv:               "production",
+			JWTSecret:            "VeryStrongJWTSecret_For_Production_Use_1234567890!",
+			BootstrapAdmin:       false,
+			DefaultAdminUsername: "admin",
+			DefaultAdminEmail:    "admin@example.com",
+		},
+		Security: SecurityConfig{
+			EncryptionKey: "too-short",
+		},
+	}
+
+	if err := cfg.Validate(); err == nil {
+		t.Fatalf("expected validation error for invalid encryption key")
+	}
+}

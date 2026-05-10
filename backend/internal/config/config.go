@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/snowfallx-bot/SnowPanel/backend/internal/security"
 	"github.com/spf13/viper"
 )
 
@@ -254,6 +255,12 @@ func (c Config) Validate() error {
 	rawStore := strings.TrimSpace(strings.ToLower(c.Auth.LoginAttemptStore))
 	if rawStore != "" && rawStore != "memory" && rawStore != "redis" {
 		return errors.New("LOGIN_ATTEMPT_STORE must be one of: memory, redis")
+	}
+
+	if strings.TrimSpace(c.Security.EncryptionKey) != "" {
+		if _, err := security.DecodeEncryptionKey(c.Security.EncryptionKey); err != nil {
+			return err
+		}
 	}
 
 	switch c.AgentAuth.Mode {

@@ -38,6 +38,18 @@ func (r *fakeSystemSettingRepo) GetByKey(_ context.Context, key string) (*model.
 	return &cloned, nil
 }
 
+func (r *fakeSystemSettingRepo) HasEncryptedSettings(_ context.Context) (bool, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	for _, setting := range r.settings {
+		if setting.IsEncrypted {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func (r *fakeSystemSettingRepo) Upsert(_ context.Context, setting *model.SystemSetting) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
