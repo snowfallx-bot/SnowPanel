@@ -17,6 +17,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./backend/migrations/0001_init_schema.up.sql:/docker-entrypoint-initdb.d/0001_init_schema.sql:ro
+      - ./backend/migrations/0002_durable_tasks.up.sql:/docker-entrypoint-initdb.d/0002_durable_tasks.sql:ro
 
   redis:
     image: ${REDIS_IMAGE:-redis:7-alpine}

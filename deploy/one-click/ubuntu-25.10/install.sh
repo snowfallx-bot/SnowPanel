@@ -543,12 +543,12 @@ run_with_retry "${DOCKER_PULL_RETRIES}" "docker compose up" \
 popd >/dev/null
 
 apply_postgres_schema() {
-  log "ensuring postgres baseline schema is applied"
+  log "ensuring postgres schema migrations are applied"
   pushd "${INSTALL_DIR}" >/dev/null
   if ! compose_stack exec -T postgres \
-    sh -lc 'psql -v ON_ERROR_STOP=1 -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" -f /docker-entrypoint-initdb.d/0001_init_schema.sql'; then
+    sh -lc 'for migration in /docker-entrypoint-initdb.d/*.sql; do psql -v ON_ERROR_STOP=1 -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" -f "${migration}"; done'; then
     popd >/dev/null
-    die "failed to apply postgres baseline schema"
+    die "failed to apply postgres schema migrations"
   fi
   if ! compose_stack up -d backend frontend >/dev/null; then
     popd >/dev/null
