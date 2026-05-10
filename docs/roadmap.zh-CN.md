@@ -96,12 +96,16 @@
 
 ### P3-3 Secrets & Settings Hardening
 
-进行中：
+本地 P3-3 secrets and settings hardening 已完成：
 
 - audit request summary、audit result message、task log metadata 在持久化前会对常见敏感字段做脱敏。
 - 前端 token storage 决策已记录在 `docs/security-token-storage-decision.md`。
 - AES-256-GCM 加密 helper 与 `SNOWPANEL_ENCRYPTION_KEY` 配置已实现。
 - SystemSetting repository/service encryption 已支持 `is_encrypted=true` 值。
+- startup validation 会拒绝无效 encryption key，并在已有 encrypted settings 但缺少 key 时 fail fast。
+- 本地门禁已通过：`go test ./...`、`make lint`、`make test`。
+
+该 milestone 推送后仍需等待远端 CI 作为最终确认。
 
 ## 后续加固（Post-P3-0）
 

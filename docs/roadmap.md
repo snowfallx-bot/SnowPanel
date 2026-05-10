@@ -96,12 +96,16 @@ In progress:
 
 ### P3-3 Secrets & Settings Hardening
 
-In progress:
+Local P3-3 secrets and settings hardening is complete:
 
 - Audit request summaries, audit result messages, and task log metadata are redacted before persistence for common sensitive keys.
 - Frontend token storage decision is documented in `docs/security-token-storage-decision.md`.
 - AES-256-GCM encryption helpers and `SNOWPANEL_ENCRYPTION_KEY` config are implemented.
 - SystemSetting repository/service encryption wiring is implemented for `is_encrypted=true` values.
+- Startup validation rejects invalid encryption keys and fails fast when encrypted settings exist without a configured key.
+- Local gates passed: `go test ./...`, `make lint`, and `make test`.
+
+CI remains the final remote confirmation for this milestone after the branch is pushed.
 
 ## Follow-up Hardening (Post-P3-0)
 
