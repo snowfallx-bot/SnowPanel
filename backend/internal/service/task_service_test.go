@@ -50,6 +50,30 @@ func (r *fakeTaskRepo) Create(_ context.Context, task *model.Task) error {
 	return nil
 }
 
+func (r *fakeTaskRepo) ClaimNextTask(
+	context.Context,
+	string,
+	time.Duration,
+) (*model.Task, error) {
+	return nil, nil
+}
+
+func (r *fakeTaskRepo) HeartbeatTask(context.Context, int64, string, time.Duration) error {
+	return nil
+}
+
+func (r *fakeTaskRepo) CompleteTask(context.Context, int64, string, string) error {
+	return nil
+}
+
+func (r *fakeTaskRepo) FailTask(context.Context, int64, string, string, *time.Time) error {
+	return nil
+}
+
+func (r *fakeTaskRepo) ReleaseStaleTasks(context.Context, time.Time) (int64, error) {
+	return 0, nil
+}
+
 func (r *fakeTaskRepo) UpdateStatus(
 	_ context.Context,
 	id int64,

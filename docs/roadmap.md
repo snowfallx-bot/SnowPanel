@@ -107,6 +107,16 @@ Local P3-3 secrets and settings hardening is complete:
 
 CI remains the final remote confirmation for this milestone after the branch is pushed.
 
+### P3-4 Durable Task Worker
+
+In progress:
+
+- Durable task schema fields are added through `backend/migrations/0002_durable_tasks.*.sql`.
+- Task model now carries lease, retry, idempotency, and next-run metadata.
+- Worker configuration envs are available under `TASK_WORKER_*`.
+- Task repository exposes claim, heartbeat, complete, fail, and stale-release APIs.
+- The durable worker loop has not replaced the existing goroutine executor yet.
+
 ## Follow-up Hardening (Post-P3-0)
 
 1. Wire final alert destinations to real on-call channels under team policy

@@ -6,6 +6,8 @@ SQL migration files for PostgreSQL.
 
 - `0001_init_schema.up.sql`: creates baseline schema
 - `0001_init_schema.down.sql`: drops baseline schema
+- `0002_durable_tasks.up.sql`: adds durable task lease, retry, and idempotency fields
+- `0002_durable_tasks.down.sql`: removes durable task fields
 
 ## Apply (example with psql)
 

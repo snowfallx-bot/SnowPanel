@@ -21,6 +21,7 @@ type Config struct {
 	Security     SecurityConfig
 	Tracing      TracingConfig
 	AgentAuth    AgentAuthConfig
+	TaskWorker   TaskWorkerConfig
 	AgentTarget  string
 	AgentTimeout time.Duration
 }
@@ -91,6 +92,15 @@ type AgentAuthConfig struct {
 	TLSKeyFile  string
 }
 
+type TaskWorkerConfig struct {
+	Enabled       bool
+	WorkerID      string
+	Concurrency   int
+	LeaseDuration time.Duration
+	PollInterval  time.Duration
+	MaxAttempts   int
+}
+
 func Load() Config {
 	v := viper.New()
 	v.SetConfigName(".env")
@@ -129,6 +139,12 @@ func Load() Config {
 	v.SetDefault("DEFAULT_ADMIN_PASSWORD", "")
 	v.SetDefault("SNOWPANEL_ENCRYPTION_KEY", "")
 	v.SetDefault("SNOWPANEL_ENCRYPTION_KEY_ID", "")
+	v.SetDefault("TASK_WORKER_ENABLED", true)
+	v.SetDefault("TASK_WORKER_ID", "")
+	v.SetDefault("TASK_WORKER_CONCURRENCY", 2)
+	v.SetDefault("TASK_WORKER_LEASE_DURATION", "30s")
+	v.SetDefault("TASK_WORKER_POLL_INTERVAL", "2s")
+	v.SetDefault("TASK_WORKER_MAX_ATTEMPTS", 3)
 	v.SetDefault("OTEL_TRACING_ENABLED", false)
 	v.SetDefault("OTEL_SERVICE_NAME", "snowpanel-backend")
 	v.SetDefault("OTEL_SERVICE_VERSION", "")
@@ -230,6 +246,14 @@ func Load() Config {
 			TLSCertFile: strings.TrimSpace(v.GetString("BACKEND_AGENT_TLS_CERT_FILE")),
 			TLSKeyFile:  strings.TrimSpace(v.GetString("BACKEND_AGENT_TLS_KEY_FILE")),
 		},
+		TaskWorker: TaskWorkerConfig{
+			Enabled:       v.GetBool("TASK_WORKER_ENABLED"),
+			WorkerID:      strings.TrimSpace(v.GetString("TASK_WORKER_ID")),
+			Concurrency:   v.GetInt("TASK_WORKER_CONCURRENCY"),
+			LeaseDuration: mustDuration(v.GetString("TASK_WORKER_LEASE_DURATION"), 30*time.Second),
+			PollInterval:  mustDuration(v.GetString("TASK_WORKER_POLL_INTERVAL"), 2*time.Second),
+			MaxAttempts:   v.GetInt("TASK_WORKER_MAX_ATTEMPTS"),
+		},
 	}
 }
 
@@ -261,6 +285,19 @@ func (c Config) Validate() error {
 		if _, err := security.DecodeEncryptionKey(c.Security.EncryptionKey); err != nil {
 			return err
 		}
+	}
+
+	if c.TaskWorker.Concurrency < 1 {
+		return errors.New("TASK_WORKER_CONCURRENCY must be greater than 0")
+	}
+	if c.TaskWorker.LeaseDuration <= 0 {
+		return errors.New("TASK_WORKER_LEASE_DURATION must be greater than 0")
+	}
+	if c.TaskWorker.PollInterval <= 0 {
+		return errors.New("TASK_WORKER_POLL_INTERVAL must be greater than 0")
+	}
+	if c.TaskWorker.MaxAttempts < 1 {
+		return errors.New("TASK_WORKER_MAX_ATTEMPTS must be greater than 0")
 	}
 
 	switch c.AgentAuth.Mode {

@@ -107,6 +107,16 @@
 
 该 milestone 推送后仍需等待远端 CI 作为最终确认。
 
+### P3-4 Durable Task Worker
+
+进行中：
+
+- durable task schema 字段已通过 `backend/migrations/0002_durable_tasks.*.sql` 新增。
+- task model 已包含 lease、retry、idempotency、next-run 元数据。
+- worker 配置环境变量已加入 `TASK_WORKER_*`。
+- TaskRepository 已暴露 claim、heartbeat、complete、fail、stale-release API。
+- durable worker loop 尚未替换现有 goroutine executor。
+
 ## 后续加固（Post-P3-0）
 
 1. 按团队值班制度把最终告警目的地接入到真实 on-call 通道

@@ -84,6 +84,13 @@ P3-3 Secrets & Settings Hardening
 - startup validation 已新增：无效 encryption key 拒绝启动；已有 encrypted settings 但缺 key 时 fail fast
 - local quality gates 已通过：go test ./...、make lint、make test
 - 远端 CI 仍需在 push 后作为最终确认
+
+P3-4 Durable Task Worker
+- durable task schema migration 已新增：locked_by、locked_until、attempt、max_attempts、idempotency_key、next_run_at
+- task model 已新增 lease/retry/idempotency 字段
+- task worker 配置入口已新增：TASK_WORKER_ENABLED/ID/CONCURRENCY/LEASE_DURATION/POLL_INTERVAL/MAX_ATTEMPTS
+- TaskRepository 已新增 claim/heartbeat/complete/fail/release stale API 基线
+- worker loop 尚未接管现有 goroutine execution，下一步继续推进
 ```
 
 ### 明确暂不优先

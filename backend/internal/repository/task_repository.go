@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"strings"
+	"time"
 
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/model"
 	"gorm.io/gorm"
@@ -17,6 +18,11 @@ type TaskListFilter struct {
 
 type TaskRepository interface {
 	Create(ctx context.Context, task *model.Task) error
+	ClaimNextTask(ctx context.Context, workerID string, leaseDuration time.Duration) (*model.Task, error)
+	HeartbeatTask(ctx context.Context, taskID int64, workerID string, leaseDuration time.Duration) error
+	CompleteTask(ctx context.Context, taskID int64, workerID string, result string) error
+	FailTask(ctx context.Context, taskID int64, workerID string, errorMessage string, nextRunAt *time.Time) error
+	ReleaseStaleTasks(ctx context.Context, now time.Time) (int64, error)
 	UpdateStatus(ctx context.Context, id int64, status string, progress int, errorMessage string) error
 	GetByID(ctx context.Context, id int64) (*model.Task, error)
 	List(ctx context.Context, filter TaskListFilter) ([]model.Task, int64, error)
@@ -33,7 +39,130 @@ func NewTaskRepository(db *gorm.DB) TaskRepository {
 }
 
 func (r *taskRepository) Create(ctx context.Context, task *model.Task) error {
+	if task.MaxAttempts <= 0 {
+		task.MaxAttempts = 1
+	}
 	return r.db.WithContext(ctx).Create(task).Error
+}
+
+func (r *taskRepository) ClaimNextTask(
+	ctx context.Context,
+	workerID string,
+	leaseDuration time.Duration,
+) (*model.Task, error) {
+	now := time.Now()
+	lockedUntil := now.Add(leaseDuration)
+	var task model.Task
+	err := r.db.WithContext(ctx).Raw(`
+UPDATE tasks
+SET status = 'running',
+    locked_by = ?,
+    locked_until = ?,
+    attempt = attempt + 1,
+    started_at = COALESCE(started_at, ?),
+    updated_at = ?
+WHERE id = (
+    SELECT id
+    FROM tasks
+    WHERE status = 'pending'
+      AND (next_run_at IS NULL OR next_run_at <= ?)
+      AND attempt < max_attempts
+    ORDER BY created_at ASC
+    FOR UPDATE SKIP LOCKED
+    LIMIT 1
+)
+RETURNING *`,
+		workerID,
+		lockedUntil,
+		now,
+		now,
+		now,
+	).Scan(&task).Error
+	if err != nil {
+		return nil, err
+	}
+	if task.ID == 0 {
+		return nil, nil
+	}
+	return &task, nil
+}
+
+func (r *taskRepository) HeartbeatTask(
+	ctx context.Context,
+	taskID int64,
+	workerID string,
+	leaseDuration time.Duration,
+) error {
+	updates := map[string]interface{}{
+		"locked_until": time.Now().Add(leaseDuration),
+	}
+	return r.db.WithContext(ctx).
+		Model(&model.Task{}).
+		Where("id = ? AND locked_by = ? AND status = ?", taskID, workerID, "running").
+		Updates(updates).Error
+}
+
+func (r *taskRepository) CompleteTask(
+	ctx context.Context,
+	taskID int64,
+	workerID string,
+	result string,
+) error {
+	now := time.Now()
+	updates := map[string]interface{}{
+		"status":        "success",
+		"progress":      100,
+		"result":        result,
+		"error_message": "",
+		"locked_by":     nil,
+		"locked_until":  nil,
+		"finished_at":   now,
+	}
+	return r.db.WithContext(ctx).
+		Model(&model.Task{}).
+		Where("id = ? AND locked_by = ? AND status = ?", taskID, workerID, "running").
+		Updates(updates).Error
+}
+
+func (r *taskRepository) FailTask(
+	ctx context.Context,
+	taskID int64,
+	workerID string,
+	errorMessage string,
+	nextRunAt *time.Time,
+) error {
+	status := "failed"
+	if nextRunAt != nil {
+		status = "pending"
+	}
+	updates := map[string]interface{}{
+		"status":        status,
+		"error_message": errorMessage,
+		"locked_by":     nil,
+		"locked_until":  nil,
+		"next_run_at":   nextRunAt,
+	}
+	if status == "failed" {
+		updates["progress"] = 100
+		updates["finished_at"] = time.Now()
+	}
+	return r.db.WithContext(ctx).
+		Model(&model.Task{}).
+		Where("id = ? AND locked_by = ? AND status = ?", taskID, workerID, "running").
+		Updates(updates).Error
+}
+
+func (r *taskRepository) ReleaseStaleTasks(ctx context.Context, now time.Time) (int64, error) {
+	result := r.db.WithContext(ctx).
+		Model(&model.Task{}).
+		Where("status = ? AND locked_until IS NOT NULL AND locked_until < ?", "running", now).
+		Updates(map[string]interface{}{
+			"status":       "pending",
+			"locked_by":    nil,
+			"locked_until": nil,
+			"next_run_at":  now,
+		})
+	return result.RowsAffected, result.Error
 }
 
 func (r *taskRepository) UpdateStatus(

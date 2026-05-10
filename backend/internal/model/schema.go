@@ -116,19 +116,25 @@ func (Host) TableName() string {
 }
 
 type Task struct {
-	ID          int64      `json:"id" gorm:"column:id;primaryKey;autoIncrement"`
-	Type        string     `json:"type" gorm:"column:type;size:64;not null"`
-	Status      string     `json:"status" gorm:"column:status;size:16;not null"`
-	Progress    int        `json:"progress" gorm:"column:progress;not null"`
-	Payload     string     `json:"payload" gorm:"column:payload;type:jsonb;not null"`
-	Result      string     `json:"result" gorm:"column:result;type:jsonb;not null"`
-	ErrorMsg    string     `json:"error_message" gorm:"column:error_message;not null"`
-	TriggeredBy *int64     `json:"triggered_by" gorm:"column:triggered_by"`
-	HostID      *int64     `json:"host_id" gorm:"column:host_id"`
-	StartedAt   *time.Time `json:"started_at" gorm:"column:started_at"`
-	FinishedAt  *time.Time `json:"finished_at" gorm:"column:finished_at"`
-	CreatedAt   time.Time  `json:"created_at" gorm:"column:created_at;autoCreateTime"`
-	UpdatedAt   time.Time  `json:"updated_at" gorm:"column:updated_at;autoUpdateTime"`
+	ID             int64      `json:"id" gorm:"column:id;primaryKey;autoIncrement"`
+	Type           string     `json:"type" gorm:"column:type;size:64;not null"`
+	Status         string     `json:"status" gorm:"column:status;size:16;not null"`
+	Progress       int        `json:"progress" gorm:"column:progress;not null"`
+	Payload        string     `json:"payload" gorm:"column:payload;type:jsonb;not null"`
+	Result         string     `json:"result" gorm:"column:result;type:jsonb;not null"`
+	ErrorMsg       string     `json:"error_message" gorm:"column:error_message;not null"`
+	TriggeredBy    *int64     `json:"triggered_by" gorm:"column:triggered_by"`
+	HostID         *int64     `json:"host_id" gorm:"column:host_id"`
+	LockedBy       *string    `json:"locked_by" gorm:"column:locked_by"`
+	LockedUntil    *time.Time `json:"locked_until" gorm:"column:locked_until"`
+	Attempt        int        `json:"attempt" gorm:"column:attempt;not null"`
+	MaxAttempts    int        `json:"max_attempts" gorm:"column:max_attempts;not null"`
+	IdempotencyKey *string    `json:"idempotency_key" gorm:"column:idempotency_key"`
+	NextRunAt      *time.Time `json:"next_run_at" gorm:"column:next_run_at"`
+	StartedAt      *time.Time `json:"started_at" gorm:"column:started_at"`
+	FinishedAt     *time.Time `json:"finished_at" gorm:"column:finished_at"`
+	CreatedAt      time.Time  `json:"created_at" gorm:"column:created_at;autoCreateTime"`
+	UpdatedAt      time.Time  `json:"updated_at" gorm:"column:updated_at;autoUpdateTime"`
 }
 
 func (Task) TableName() string {
