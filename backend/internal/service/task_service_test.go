@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -389,6 +390,22 @@ func TestCancelTaskKeepsCanceledStatusAfterRunningOperationCompletes(t *testing.
 	task := waitForTaskTerminalStatus(t, repo, result.ID, 2*time.Second)
 	if task.Status != TaskStatusCanceled {
 		t.Fatalf("expected final status canceled, got %+v", task)
+	}
+}
+
+func TestMarshalTaskMetadataRedactsSensitiveFields(t *testing.T) {
+	metadata := marshalTaskMetadata(map[string]interface{}{
+		"actor":         "tester",
+		"access_token":  "secret-token",
+		"service_name":  "nginx.service",
+		"nested_secret": map[string]interface{}{"password": "plain"},
+	})
+
+	if strings.Contains(metadata, "secret-token") || strings.Contains(metadata, "plain") {
+		t.Fatalf("task metadata leaked sensitive data: %s", metadata)
+	}
+	if !strings.Contains(metadata, "nginx.service") {
+		t.Fatalf("expected non-sensitive metadata to remain visible: %s", metadata)
 	}
 }
 

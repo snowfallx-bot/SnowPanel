@@ -94,6 +94,14 @@
 - 测试已覆盖 token metadata 注入、auth failure 映射、core-agent allow/deny 路径，并确认错误不泄露 token 值。
 - 本地 token-auth compose smoke 已通过 `/health` 与 `/ready`。
 
+### P3-3 Secrets & Settings Hardening
+
+进行中：
+
+- audit request summary、audit result message、task log metadata 在持久化前会对常见敏感字段做脱敏。
+- 前端 token storage 决策已记录在 `docs/security-token-storage-decision.md`。
+- SystemSetting encryption 尚未完成。
+
 ## 后续加固（Post-P3-0）
 
 1. 按团队值班制度把最终告警目的地接入到真实 on-call 通道

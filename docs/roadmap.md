@@ -94,6 +94,14 @@ In progress:
 - Tests cover token metadata injection, auth failure mapping, and core-agent allow/deny paths without leaking token values.
 - Local token-auth compose smoke passed for `/health` and `/ready`.
 
+### P3-3 Secrets & Settings Hardening
+
+In progress:
+
+- Audit request summaries, audit result messages, and task log metadata are redacted before persistence for common sensitive keys.
+- Frontend token storage decision is documented in `docs/security-token-storage-decision.md`.
+- SystemSetting encryption is still pending.
+
 ## Follow-up Hardening (Post-P3-0)
 
 1. Wire final alert destinations to real on-call channels under team policy

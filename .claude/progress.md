@@ -72,6 +72,12 @@ P3-2 Backend ↔ Core-Agent Trust Boundary
 - 测试已覆盖 backend token metadata 注入、auth failure 映射、core-agent missing/wrong/correct token、错误不泄露 token
 - token auth compose smoke 已通过：/health 与 /ready 均返回 up/ready
 - deployment/security/systemd/env 文档已同步 token 模式与生产注意事项
+
+P3-3 Secrets & Settings Hardening
+- secret redaction 已新增：audit request summary、audit result message、task log metadata 持久化前脱敏
+- redaction 测试已覆盖嵌套 JSON、文本 assignment、audit record、task metadata
+- docs/security-token-storage-decision.md / .zh-CN.md 已新增，记录前端 token storage 阶段性决策与迁移前置条件
+- SystemSetting encryption 尚未完成，下一步继续推进
 ```
 
 ### 明确暂不优先

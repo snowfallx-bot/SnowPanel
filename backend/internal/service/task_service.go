@@ -12,6 +12,7 @@ import (
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/dto"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/model"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/repository"
+	"github.com/snowfallx-bot/SnowPanel/backend/internal/security"
 )
 
 const (
@@ -552,7 +553,7 @@ func marshalTaskMetadata(data map[string]interface{}) string {
 	if err != nil {
 		return "{}"
 	}
-	return string(bytes)
+	return security.RedactJSON(string(bytes))
 }
 
 func marshalTaskPayload(payload taskPayload) string {

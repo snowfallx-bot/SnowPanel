@@ -8,6 +8,7 @@ import (
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/dto"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/model"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/repository"
+	"github.com/snowfallx-bot/SnowPanel/backend/internal/security"
 )
 
 type AuditService interface {
@@ -34,10 +35,10 @@ func (s *auditService) Record(ctx context.Context, input dto.RecordAuditInput) {
 		Action:         input.Action,
 		TargetType:     input.TargetType,
 		TargetID:       input.TargetID,
-		RequestSummary: input.RequestSummary,
+		RequestSummary: security.RedactJSON(input.RequestSummary),
 		Success:        input.Success,
 		ResultCode:     input.ResultCode,
-		ResultMessage:  input.ResultMessage,
+		ResultMessage:  security.RedactText(input.ResultMessage),
 	}
 	_ = s.repo.Create(ctx, item)
 }

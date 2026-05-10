@@ -28,7 +28,7 @@
 - 后端还会校验 token 内 RBAC 摘要与数据库当前角色/权限是否一致，角色或权限变更后旧会话会被强制失效并要求重新登录。
 - 已支持 access/refresh 双令牌，`/auth/refresh` 会轮转两个令牌并推进会话时间戳。
 - `/auth/logout` 会通过轮转会话时间戳撤销当前逻辑会话。
-- 当前结论（2026-04-24）：SnowPanel 暂时继续把 access/refresh token 存在前端持久化 auth store 中，不在这一阶段迁移到 httpOnly cookie。
+- 当前结论（更新于 2026-05-10）：SnowPanel 暂时继续把 access/refresh token 存在前端持久化 auth store 中，不在这一阶段迁移到 httpOnly cookie。详见[前端 Token 存储决策](security-token-storage-decision.zh-CN.md)。
 - 原因：当前同源代理部署、非浏览器 API 客户端，以及现有 backend Bearer Token 链路在这个方案下更直接；而数据库支撑的 session 校验、refresh rotation、首次登录强制改密、`401` 自动跳转等控制面已经满足当前会话安全目标。
 - 只有在 backend 下发安全 cookie、CSRF 防护、受信任反向代理/域名策略这三者一起设计完成，并补齐浏览器与 API client 回归测试后，才重新评估 cookie 迁移。
 - 登录接口已增加基于 `username + client IP` 的防爆破保护。
@@ -66,6 +66,7 @@
 
 - 审计记录包含 user id、username、IP、module、action、target、请求摘要与结果。
 - 文件/服务/docker/cron/任务操作路径都已接入审计写入。
+- audit request summary、audit result message 与 task log metadata 在持久化前会针对 password、token、secret、key、credential、authorization、cookie 等常见敏感字段做脱敏。
 
 ## 错误处理
 

@@ -28,7 +28,7 @@ Language: **English** | [简体中文](security.zh-CN.md)
 - Backend also validates a token RBAC checksum against current DB roles/permissions, so role/permission changes force re-authentication.
 - Access/refresh token pair is supported; `/auth/refresh` rotates both tokens and advances session timestamp.
 - `/auth/logout` revokes current logical session by rotating session timestamp.
-- Current decision (2026-04-24): SnowPanel keeps access/refresh tokens in the persisted frontend auth store instead of migrating to httpOnly cookies yet.
+- Current decision (updated 2026-05-10): SnowPanel keeps access/refresh tokens in the persisted frontend auth store instead of migrating to httpOnly cookies yet. See [Frontend Token Storage Decision](security-token-storage-decision.md).
 - Rationale: the current same-origin proxy setup, non-browser API clients, and existing backend bearer-token flow stay simpler this way, while DB-backed session validation, refresh rotation, forced password change, and `401` redirect handling already provide the intended session-control guarantees.
 - Revisit cookie migration only after backend-issued secure cookies, CSRF protection, and trusted reverse-proxy/domain handling are designed together and covered by browser + API-client regression tests.
 - Login endpoint has brute-force protection keyed by `username + client IP`.
@@ -67,6 +67,7 @@ Language: **English** | [简体中文](security.zh-CN.md)
 
 - Audit records include user id, username, IP, module, action, target, request summary, and result.
 - File/service/docker/cron/task operation paths are instrumented with audit writes.
+- Audit request summaries, audit result messages, and task log metadata are redacted before persistence for common sensitive keys such as password, token, secret, key, credential, authorization, and cookies.
 
 ## Error Handling
 
