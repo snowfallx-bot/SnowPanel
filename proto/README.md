@@ -10,8 +10,8 @@ This directory stores gRPC contracts between `backend` and `core-agent`.
 
 Prerequisites:
 - `protoc`
-- `protoc-gen-go`
-- `protoc-gen-go-grpc`
+- `protoc-gen-go` v1.36.5
+- `protoc-gen-go-grpc` v1.5.1
 
 Recommended command from the repository root:
 
