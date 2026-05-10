@@ -68,6 +68,13 @@
 - 文件/服务/docker/cron/任务操作路径都已接入审计写入。
 - audit request summary、audit result message 与 task log metadata 在持久化前会针对 password、token、secret、key、credential、authorization、cookie 等常见敏感字段做脱敏。
 
+## 静态密钥安全
+
+- backend 已新增 AES-256-GCM 加密辅助能力，用于敏感 SystemSetting 以及后续包含 secret 的记录。
+- 加密 payload 包含 `version`、`algorithm`、`key_id`、`nonce`、`ciphertext`。
+- 启用加密设置写入前，需要将 `SNOWPANEL_ENCRYPTION_KEY` 配置为 32 字节 base64 key。
+- `SNOWPANEL_ENCRYPTION_KEY_ID` 用于标识当前活跃 key，便于后续轮换。
+
 ## 错误处理
 
 - 后端采用统一业务错误模型与稳定错误码。

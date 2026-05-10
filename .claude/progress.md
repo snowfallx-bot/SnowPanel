@@ -77,7 +77,9 @@ P3-3 Secrets & Settings Hardening
 - secret redaction 已新增：audit request summary、audit result message、task log metadata 持久化前脱敏
 - redaction 测试已覆盖嵌套 JSON、文本 assignment、audit record、task metadata
 - docs/security-token-storage-decision.md / .zh-CN.md 已新增，记录前端 token storage 阶段性决策与迁移前置条件
-- SystemSetting encryption 尚未完成，下一步继续推进
+- AES-256-GCM encryption helper 已新增：支持 32-byte key、versioned payload、wrong-key failure、明文不落 payload
+- SNOWPANEL_ENCRYPTION_KEY / SNOWPANEL_ENCRYPTION_KEY_ID 配置入口已新增
+- SystemSetting repository/service encryption 接入尚未完成，下一步继续推进
 ```
 
 ### 明确暂不优先

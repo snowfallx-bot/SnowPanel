@@ -69,6 +69,13 @@ Language: **English** | [简体中文](security.zh-CN.md)
 - File/service/docker/cron/task operation paths are instrumented with audit writes.
 - Audit request summaries, audit result messages, and task log metadata are redacted before persistence for common sensitive keys such as password, token, secret, key, credential, authorization, and cookies.
 
+## Secrets at Rest
+
+- The backend has an AES-256-GCM encryption helper for sensitive settings and future secret-bearing records.
+- Encrypted payloads include `version`, `algorithm`, `key_id`, `nonce`, and `ciphertext`.
+- Set `SNOWPANEL_ENCRYPTION_KEY` to a 32-byte base64 key before enabling encrypted setting writes.
+- `SNOWPANEL_ENCRYPTION_KEY_ID` labels the active key for future key rotation.
+
 ## Error Handling
 
 - Unified backend business error model with stable error codes.

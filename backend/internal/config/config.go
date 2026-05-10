@@ -17,6 +17,7 @@ type Config struct {
 	Database     DatabaseConfig
 	Redis        RedisConfig
 	Auth         AuthConfig
+	Security     SecurityConfig
 	Tracing      TracingConfig
 	AgentAuth    AgentAuthConfig
 	AgentTarget  string
@@ -65,6 +66,11 @@ type AuthConfig struct {
 	DefaultAdminUsername string
 	DefaultAdminEmail    string
 	DefaultAdminPassword string
+}
+
+type SecurityConfig struct {
+	EncryptionKey   string
+	EncryptionKeyID string
 }
 
 type TracingConfig struct {
@@ -120,6 +126,8 @@ func Load() Config {
 	v.SetDefault("DEFAULT_ADMIN_USERNAME", "admin")
 	v.SetDefault("DEFAULT_ADMIN_EMAIL", "admin@snowpanel.local")
 	v.SetDefault("DEFAULT_ADMIN_PASSWORD", "")
+	v.SetDefault("SNOWPANEL_ENCRYPTION_KEY", "")
+	v.SetDefault("SNOWPANEL_ENCRYPTION_KEY_ID", "")
 	v.SetDefault("OTEL_TRACING_ENABLED", false)
 	v.SetDefault("OTEL_SERVICE_NAME", "snowpanel-backend")
 	v.SetDefault("OTEL_SERVICE_VERSION", "")
@@ -201,6 +209,10 @@ func Load() Config {
 			DefaultAdminUsername: v.GetString("DEFAULT_ADMIN_USERNAME"),
 			DefaultAdminEmail:    v.GetString("DEFAULT_ADMIN_EMAIL"),
 			DefaultAdminPassword: v.GetString("DEFAULT_ADMIN_PASSWORD"),
+		},
+		Security: SecurityConfig{
+			EncryptionKey:   strings.TrimSpace(v.GetString("SNOWPANEL_ENCRYPTION_KEY")),
+			EncryptionKeyID: strings.TrimSpace(v.GetString("SNOWPANEL_ENCRYPTION_KEY_ID")),
 		},
 		Tracing: TracingConfig{
 			Enabled:        v.GetBool("OTEL_TRACING_ENABLED"),

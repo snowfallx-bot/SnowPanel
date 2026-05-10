@@ -100,7 +100,8 @@ In progress:
 
 - Audit request summaries, audit result messages, and task log metadata are redacted before persistence for common sensitive keys.
 - Frontend token storage decision is documented in `docs/security-token-storage-decision.md`.
-- SystemSetting encryption is still pending.
+- AES-256-GCM encryption helpers and `SNOWPANEL_ENCRYPTION_KEY` config are implemented.
+- SystemSetting repository/service encryption wiring is still pending.
 
 ## Follow-up Hardening (Post-P3-0)
 
