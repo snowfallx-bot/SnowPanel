@@ -79,7 +79,8 @@ P3-3 Secrets & Settings Hardening
 - docs/security-token-storage-decision.md / .zh-CN.md 已新增，记录前端 token storage 阶段性决策与迁移前置条件
 - AES-256-GCM encryption helper 已新增：支持 32-byte key、versioned payload、wrong-key failure、明文不落 payload
 - SNOWPANEL_ENCRYPTION_KEY / SNOWPANEL_ENCRYPTION_KEY_ID 配置入口已新增
-- SystemSetting repository/service encryption 接入尚未完成，下一步继续推进
+- SystemSetting repository/service encryption 已新增：is_encrypted=true 写入前加密，读取时解密
+- 测试已覆盖 encrypted write/read、missing key fail、wrong key fail、plaintext setting
 ```
 
 ### 明确暂不优先

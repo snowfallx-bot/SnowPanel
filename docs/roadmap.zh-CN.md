@@ -101,7 +101,7 @@
 - audit request summary、audit result message、task log metadata 在持久化前会对常见敏感字段做脱敏。
 - 前端 token storage 决策已记录在 `docs/security-token-storage-decision.md`。
 - AES-256-GCM 加密 helper 与 `SNOWPANEL_ENCRYPTION_KEY` 配置已实现。
-- SystemSetting repository/service encryption 接入尚未完成。
+- SystemSetting repository/service encryption 已支持 `is_encrypted=true` 值。
 
 ## 后续加固（Post-P3-0）
 
