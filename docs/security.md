@@ -50,6 +50,19 @@ Language: **English** | [简体中文](security.zh-CN.md)
 - Cron command scheduling is restricted to allowlisted command templates
   (`CORE_AGENT_CRON_ALLOWED_COMMANDS`) and blocks shell metacharacters.
 
+## Backend to Core-Agent Trust Boundary
+
+- Local development may keep `BACKEND_AGENT_AUTH_MODE=none` and `CORE_AGENT_AUTH_MODE=none`.
+- Production should enable `token` mode at minimum:
+  - backend: `BACKEND_AGENT_AUTH_MODE=token` and `BACKEND_AGENT_SHARED_TOKEN=<shared secret>`
+  - core-agent: `CORE_AGENT_AUTH_MODE=token` and `CORE_AGENT_SHARED_TOKEN=<same shared secret>`
+- The token is sent as gRPC metadata key `x-snowpanel-agent-token`.
+- Missing or wrong tokens are rejected by core-agent with `Unauthenticated`; backend maps this to `core agent authentication failed`.
+- Token values must never be logged, returned in API errors, or stored in docs/examples with real values.
+- Rotate by deploying a new shared token to core-agent and backend during the same maintenance window, then restart/reload both services.
+- `mtls` mode is reserved in config for a future certificate-based boundary; it intentionally fails fast until implemented.
+- Even with token mode, keep core-agent gRPC port `50051` restricted to trusted private networks. Do not expose core-agent gRPC to the public internet.
+
 ## Auditability
 
 - Audit records include user id, username, IP, module, action, target, request summary, and result.

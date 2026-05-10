@@ -14,6 +14,7 @@ use anyhow::Result;
 #[tokio::main]
 async fn main() -> Result<()> {
     let cfg = config::Config::from_env();
+    cfg.validate()?;
     let _tracing_guard = match observability::tracing::TracingGuard::init(&cfg) {
         Ok(guard) => guard,
         Err(err) => {
@@ -38,6 +39,7 @@ async fn main() -> Result<()> {
         cfg.max_write_bytes,
         cfg.service_whitelist.clone(),
         cfg.cron_allowed_commands.clone(),
+        cfg.agent_auth.clone(),
     )?;
 
     if metrics_enabled {

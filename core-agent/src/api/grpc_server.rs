@@ -35,6 +35,7 @@ use crate::api::proto::{
     UpdateCronTaskResponse, WriteFileChunkRequest, WriteFileChunkResponse, WriteTextFileRequest,
     WriteTextFileResponse,
 };
+use crate::config::{AgentAuthConfig, AgentAuthMode};
 use crate::cron::service::{CronError, CronService};
 use crate::docker::service::{DockerAction, DockerError, DockerService};
 use crate::file::service::FileService as FileOperatorService;
@@ -50,6 +51,7 @@ pub struct GrpcServer {
     service_manager: Arc<SystemdServiceManager>,
     docker_service: Arc<DockerService>,
     cron_service: Arc<CronService>,
+    agent_auth: AgentAuthConfig,
 }
 
 impl GrpcServer {
@@ -59,6 +61,7 @@ impl GrpcServer {
         max_write_bytes: usize,
         service_whitelist: Vec<String>,
         cron_allowed_commands: Vec<String>,
+        agent_auth: AgentAuthConfig,
     ) -> Result<Self> {
         let roots = allowed_roots
             .into_iter()
@@ -77,6 +80,7 @@ impl GrpcServer {
             service_manager: Arc::new(SystemdServiceManager::new(service_whitelist)),
             docker_service: Arc::new(docker_service),
             cron_service: Arc::new(CronService::new(cron_allowed_commands)),
+            agent_auth,
         })
     }
 
@@ -87,40 +91,47 @@ impl GrpcServer {
 
         info!("core-agent grpc server listening on {}", socket_addr);
 
+        let health_auth = self.agent_auth.clone();
+        let system_auth = self.agent_auth.clone();
+        let file_auth = self.agent_auth.clone();
+        let service_auth = self.agent_auth.clone();
+        let docker_auth = self.agent_auth.clone();
+        let cron_auth = self.agent_auth.clone();
+
         tonic::transport::Server::builder()
             .add_service(HealthServiceServer::with_interceptor(
                 HealthServiceImpl,
-                request_logging_interceptor,
+                move |request| request_auth_logging_interceptor(request, &health_auth),
             ))
             .add_service(SystemServiceServer::with_interceptor(
                 SystemServiceImpl {
                     system_info_service: self.system_info_service.clone(),
                 },
-                request_logging_interceptor,
+                move |request| request_auth_logging_interceptor(request, &system_auth),
             ))
             .add_service(FileServiceServer::with_interceptor(
                 FileServiceImpl {
                     file_service: self.file_service.clone(),
                 },
-                request_logging_interceptor,
+                move |request| request_auth_logging_interceptor(request, &file_auth),
             ))
             .add_service(ServiceManagerServiceServer::with_interceptor(
                 ServiceManagerServiceImpl {
                     service_manager: self.service_manager.clone(),
                 },
-                request_logging_interceptor,
+                move |request| request_auth_logging_interceptor(request, &service_auth),
             ))
             .add_service(DockerServiceServer::with_interceptor(
                 DockerServiceImpl {
                     docker_service: self.docker_service.clone(),
                 },
-                request_logging_interceptor,
+                move |request| request_auth_logging_interceptor(request, &docker_auth),
             ))
             .add_service(CronServiceServer::with_interceptor(
                 CronServiceImpl {
                     cron_service: self.cron_service.clone(),
                 },
-                request_logging_interceptor,
+                move |request| request_auth_logging_interceptor(request, &cron_auth),
             ))
             .serve(socket_addr)
             .await
@@ -433,12 +444,73 @@ where
     result
 }
 
-fn request_logging_interceptor(request: Request<()>) -> Result<Request<()>, Status> {
+fn request_auth_logging_interceptor(
+    request: Request<()>,
+    auth_config: &AgentAuthConfig,
+) -> Result<Request<()>, Status> {
     let request_id = request_id_from_metadata(request.metadata());
 
     info!(request_id = request_id.as_str(), "core-agent grpc request");
 
+    authenticate_request(request.metadata(), auth_config, request_id.as_str())?;
+
     Ok(request)
+}
+
+fn authenticate_request(
+    metadata: &MetadataMap,
+    auth_config: &AgentAuthConfig,
+    request_id: &str,
+) -> Result<(), Status> {
+    match auth_config.mode {
+        AgentAuthMode::None => Ok(()),
+        AgentAuthMode::Token => {
+            let Some(raw_token) = metadata.get("x-snowpanel-agent-token") else {
+                info!(
+                    request_id,
+                    auth_mode = "token",
+                    "core-agent grpc authentication rejected"
+                );
+                return Err(Status::unauthenticated("agent authentication failed"));
+            };
+            let Ok(token) = raw_token.to_str() else {
+                info!(
+                    request_id,
+                    auth_mode = "token",
+                    "core-agent grpc authentication rejected"
+                );
+                return Err(Status::unauthenticated("agent authentication failed"));
+            };
+
+            if constant_time_eq(token.as_bytes(), auth_config.shared_token.as_bytes()) {
+                return Ok(());
+            }
+
+            info!(
+                request_id,
+                auth_mode = "token",
+                "core-agent grpc authentication rejected"
+            );
+            Err(Status::unauthenticated("agent authentication failed"))
+        }
+        AgentAuthMode::Mtls => Err(Status::unimplemented(
+            "core-agent mtls authentication is not implemented yet",
+        )),
+        AgentAuthMode::Unknown(_) => Err(Status::failed_precondition(
+            "core-agent authentication mode is invalid",
+        )),
+    }
+}
+
+fn constant_time_eq(left: &[u8], right: &[u8]) -> bool {
+    let max_len = left.len().max(right.len());
+    let mut diff = left.len() ^ right.len();
+    for idx in 0..max_len {
+        let left_byte = left.get(idx).copied().unwrap_or(0);
+        let right_byte = right.get(idx).copied().unwrap_or(0);
+        diff |= (left_byte ^ right_byte) as usize;
+    }
+    diff == 0
 }
 
 fn grpc_request_span(grpc_method: &str, metadata: &MetadataMap) -> tracing::Span {
@@ -971,18 +1043,20 @@ fn to_proto_cron_task(task: crate::cron::service::CronTaskEntity) -> CronTask {
 
 #[cfg(test)]
 mod tests {
-    use super::{FileOperatorService, FileServiceImpl};
+    use super::{authenticate_request, FileOperatorService, FileServiceImpl};
     use crate::api::proto::file_service_server::FileService as FileGrpcService;
     use crate::api::proto::{
         CreateDirectoryRequest, DeleteFileRequest, ListFilesRequest, PathSafetyContext,
         ReadFileChunkRequest, ReadTextFileRequest, RenameFileRequest, WriteFileChunkRequest,
         WriteTextFileRequest,
     };
+    use crate::config::{AgentAuthConfig, AgentAuthMode};
     use crate::security::path_validator::PathValidator;
     use std::fs;
     use std::path::{Path, PathBuf};
     use std::sync::Arc;
     use std::time::{SystemTime, UNIX_EPOCH};
+    use tonic::metadata::MetadataValue;
     use tonic::Request;
 
     struct TempDir {
@@ -1058,6 +1132,69 @@ mod tests {
     fn assert_ok(error: Option<crate::api::proto::Error>) {
         let error = error.expect("response should include error envelope");
         assert_eq!(error.code, 0, "response error should be ok: {:?}", error);
+    }
+
+    fn token_auth_config() -> AgentAuthConfig {
+        AgentAuthConfig {
+            mode: AgentAuthMode::Token,
+            shared_token: "agent-secret-token".to_string(),
+            tls_ca_file: String::new(),
+            tls_cert_file: String::new(),
+            tls_key_file: String::new(),
+        }
+    }
+
+    #[test]
+    fn none_mode_allows_request_without_token() {
+        let auth = AgentAuthConfig {
+            mode: AgentAuthMode::None,
+            shared_token: String::new(),
+            tls_ca_file: String::new(),
+            tls_cert_file: String::new(),
+            tls_key_file: String::new(),
+        };
+        let metadata = tonic::metadata::MetadataMap::new();
+
+        authenticate_request(&metadata, &auth, "req-none").expect("none auth should allow request");
+    }
+
+    #[test]
+    fn token_mode_rejects_missing_token() {
+        let metadata = tonic::metadata::MetadataMap::new();
+
+        let err = authenticate_request(&metadata, &token_auth_config(), "req-missing")
+            .expect_err("missing token should be rejected");
+
+        assert_eq!(err.code(), tonic::Code::Unauthenticated);
+        assert_eq!(err.message(), "agent authentication failed");
+    }
+
+    #[test]
+    fn token_mode_rejects_wrong_token_without_leaking_secret() {
+        let mut metadata = tonic::metadata::MetadataMap::new();
+        metadata.insert(
+            "x-snowpanel-agent-token",
+            MetadataValue::try_from("wrong-token").expect("metadata value should be valid"),
+        );
+
+        let err = authenticate_request(&metadata, &token_auth_config(), "req-wrong")
+            .expect_err("wrong token should be rejected");
+
+        assert_eq!(err.code(), tonic::Code::Unauthenticated);
+        assert!(!err.message().contains("wrong-token"));
+        assert!(!err.message().contains("agent-secret-token"));
+    }
+
+    #[test]
+    fn token_mode_allows_correct_token() {
+        let mut metadata = tonic::metadata::MetadataMap::new();
+        metadata.insert(
+            "x-snowpanel-agent-token",
+            MetadataValue::try_from("agent-secret-token").expect("metadata value should be valid"),
+        );
+
+        authenticate_request(&metadata, &token_auth_config(), "req-ok")
+            .expect("correct token should allow request");
     }
 
     #[tokio::test]

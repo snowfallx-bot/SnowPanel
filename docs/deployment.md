@@ -44,6 +44,7 @@ This project ships with a development-oriented compose stack including:
 2. Prepare app environment:
    - `cp .env.example .env`
    - set `AGENT_TARGET` to host-accessible address (for example `host.docker.internal:50051` when backend runs in Docker)
+   - for production, set `BACKEND_AGENT_AUTH_MODE=token` and use the same `BACKEND_AGENT_SHARED_TOKEN` value as host `CORE_AGENT_SHARED_TOKEN`
 3. Start backend/frontend + dependencies with host-agent override:
    - `make up-host-agent`
 4. Verify:
@@ -98,6 +99,8 @@ Key settings in `.env`:
 - backend host/port/JWT/admin bootstrap variables
 - token lifetimes (`JWT_EXPIRE`, `JWT_REFRESH_EXPIRE`)
 - login attempt limiter mode and thresholds (`LOGIN_ATTEMPT_STORE`, `LOGIN_ATTEMPT_REDIS_PREFIX`, `LOGIN_*`)
+- backend <-> core-agent auth mode (`BACKEND_AGENT_AUTH_MODE`, `BACKEND_AGENT_SHARED_TOKEN`)
+- core-agent auth mode (`CORE_AGENT_AUTH_MODE`, `CORE_AGENT_SHARED_TOKEN`)
 - core-agent safe-root and read/write limits
 - core-agent metrics endpoint config (`CORE_AGENT_METRICS_ENABLED`, `CORE_AGENT_METRICS_HOST`, `CORE_AGENT_METRICS_PORT`)
 - OTEL tracing config (`OTEL_TRACING_ENABLED`, `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_TRACES_SAMPLER_ARG`)
@@ -112,8 +115,10 @@ Key settings in `.env`:
 - Prefer host-agent mode for real host control paths.
 - Set `APP_ENV=production` and provide a strong explicit `JWT_SECRET`.
 - If bootstrap admin is enabled, provide a strong explicit `DEFAULT_ADMIN_PASSWORD`.
+- Enable backend <-> core-agent token auth in production unless the deployment has a stronger private mTLS boundary.
 - Use persistent backup strategy for Postgres volumes.
 - Place backend/frontend behind HTTPS reverse proxy.
 - Restrict core-agent (`50051`) exposure to trusted network only.
+- Never expose core-agent gRPC (`50051`) to the public internet.
 - Keep core-agent metrics endpoint (`CORE_AGENT_METRICS_HOST:CORE_AGENT_METRICS_PORT`, default `127.0.0.1:9108` in host mode) in loopback or trusted scrape networks.
 - If you enable host-agent tracing, point `OTEL_EXPORTER_OTLP_ENDPOINT` at the collector address reachable from host (for local compose observability baseline, `127.0.0.1:4317`).

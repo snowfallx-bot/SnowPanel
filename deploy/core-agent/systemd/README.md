@@ -33,6 +33,8 @@ If you also want distributed tracing from host `core-agent`, enable these in `/e
 - `OTEL_SERVICE_NAME=snowpanel-core-agent`
 - `OTEL_EXPORTER_OTLP_ENDPOINT=<collector-host>:4317`
 
+For production backend authentication to host `core-agent`, keep `CORE_AGENT_AUTH_MODE=token`, set a strong `CORE_AGENT_SHARED_TOKEN`, and configure backend with the same value in `BACKEND_AGENT_SHARED_TOKEN`.
+
 ## Backend Compose with Host Agent
 
 When backend runs in Docker but `core-agent` runs on host, use:
@@ -51,6 +53,7 @@ Do not fall back to plain `docker compose up` / `make up`, or backend will recon
 ## Security Notes
 
 - Restrict network access to port `50051` (firewall / private network only).
+- Keep `CORE_AGENT_AUTH_MODE=token` in production until mTLS support is implemented, and never log or publish `CORE_AGENT_SHARED_TOKEN`.
 - Keep metrics endpoint (`CORE_AGENT_METRICS_HOST:CORE_AGENT_METRICS_PORT`, default `127.0.0.1:9108`) on loopback or trusted scrape network only.
 - Keep OTLP export endpoint limited to trusted collector/backends only.
 - Keep `CORE_AGENT_ALLOWED_ROOTS`, service whitelist, and cron allowlist minimal.

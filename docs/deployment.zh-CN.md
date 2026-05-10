@@ -44,6 +44,7 @@
 2. 准备应用环境变量：
    - `cp .env.example .env`
    - 将 `AGENT_TARGET` 指向宿主机可访问地址（例如 backend 在 Docker 中时可用 `host.docker.internal:50051`）
+   - 生产环境设置 `BACKEND_AGENT_AUTH_MODE=token`，并确保 `BACKEND_AGENT_SHARED_TOKEN` 与宿主机 `CORE_AGENT_SHARED_TOKEN` 一致
 3. 使用宿主机 agent 覆盖配置启动 backend/frontend 与依赖：
    - `make up-host-agent`
 4. 验证：
@@ -98,6 +99,8 @@ PostgreSQL 首次初始化时，会加载以下 schema SQL：
 - backend host/port/JWT/管理员初始化变量
 - 令牌有效期配置（`JWT_EXPIRE`、`JWT_REFRESH_EXPIRE`）
 - 登录防爆破模式与阈值（`LOGIN_ATTEMPT_STORE`、`LOGIN_ATTEMPT_REDIS_PREFIX`、`LOGIN_*`）
+- backend 到 core-agent 的认证模式（`BACKEND_AGENT_AUTH_MODE`、`BACKEND_AGENT_SHARED_TOKEN`）
+- core-agent 认证模式（`CORE_AGENT_AUTH_MODE`、`CORE_AGENT_SHARED_TOKEN`）
 - core-agent 安全根目录与读写大小限制
 - core-agent 指标端点配置（`CORE_AGENT_METRICS_ENABLED`、`CORE_AGENT_METRICS_HOST`、`CORE_AGENT_METRICS_PORT`）
 - OTEL tracing 配置（`OTEL_TRACING_ENABLED`、`OTEL_EXPORTER_OTLP_ENDPOINT`、`OTEL_TRACES_SAMPLER_ARG`）
@@ -112,8 +115,10 @@ PostgreSQL 首次初始化时，会加载以下 schema SQL：
 - 真实宿主机控制链路优先使用“宿主机 Agent 模式”。
 - 设置 `APP_ENV=production` 并显式提供强 `JWT_SECRET`。
 - 若启用管理员初始化（`BOOTSTRAP_ADMIN=true`），显式提供强 `DEFAULT_ADMIN_PASSWORD`。
+- 生产环境启用 backend 到 core-agent 的 token 认证，除非部署环境已经提供更强的私有 mTLS 边界。
 - 为 Postgres 数据卷配置持久化备份策略。
 - 在 backend/frontend 前加 HTTPS 反向代理。
 - 仅在可信网络暴露 core-agent（`50051`）。
+- 禁止将 core-agent gRPC（`50051`）暴露到公网。
 - 将 core-agent metrics 端点（宿主机模式默认 `127.0.0.1:9108`）限制在本地或可信采集网络。
 - 若宿主机 Agent 模式启用 tracing，请将 `OTEL_EXPORTER_OTLP_ENDPOINT` 指向宿主机可访问的 collector 地址（本仓库 compose 可观测性基线下可用 `127.0.0.1:4317`）。

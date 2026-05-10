@@ -61,7 +61,10 @@ func main() {
 		zapLogger.Fatal("failed to ensure default admin", logger.Err(err))
 	}
 
-	agentClient := grpcclient.New(cfg.AgentTarget, cfg.AgentTimeout)
+	agentClient := grpcclient.NewWithAuth(cfg.AgentTarget, cfg.AgentTimeout, grpcclient.AuthConfig{
+		Mode:        cfg.AgentAuth.Mode,
+		SharedToken: cfg.AgentAuth.SharedToken,
+	})
 	dashboardService := service.NewDashboardService(agentClient)
 	fileService := service.NewFileService(agentClient)
 	serviceManager := service.NewServiceManagerService(agentClient)

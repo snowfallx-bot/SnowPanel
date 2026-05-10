@@ -82,6 +82,18 @@ Local P3-1 alerting governance is complete:
 
 CI remains the final remote confirmation for this milestone after the branch is pushed.
 
+### P3-2 Backend <-> Core-Agent Trust Boundary
+
+In progress:
+
+- Token auth mode is implemented for backend -> core-agent gRPC metadata.
+- Core-agent rejects missing or wrong `x-snowpanel-agent-token` metadata in token mode.
+- Local `none` mode remains available for development.
+- `mtls` config fields are reserved and fail fast until certificate support is implemented.
+- Backend maps gRPC `Unauthenticated` to `core agent authentication failed`.
+- Tests cover token metadata injection, auth failure mapping, and core-agent allow/deny paths without leaking token values.
+- Local token-auth compose smoke passed for `/health` and `/ready`.
+
 ## Follow-up Hardening (Post-P3-0)
 
 1. Wire final alert destinations to real on-call channels under team policy

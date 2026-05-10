@@ -23,6 +23,7 @@ const (
 	agentUnavailableCode    int32 = 3001
 	agentInvalidPayloadCode int32 = 3002
 	requestIDMetadataKey          = "x-request-id"
+	agentTokenMetadataKey         = "x-snowpanel-agent-token"
 )
 
 var agentMetrics = appmetrics.Default()
@@ -318,14 +319,25 @@ type AgentClient interface {
 }
 
 type Client struct {
-	target  string
-	timeout time.Duration
+	target     string
+	timeout    time.Duration
+	authConfig AuthConfig
+}
+
+type AuthConfig struct {
+	Mode        string
+	SharedToken string
 }
 
 func New(target string, timeout time.Duration) *Client {
+	return NewWithAuth(target, timeout, AuthConfig{Mode: "none"})
+}
+
+func NewWithAuth(target string, timeout time.Duration, authConfig AuthConfig) *Client {
 	return &Client{
-		target:  target,
-		timeout: timeout,
+		target:     target,
+		timeout:    timeout,
+		authConfig: normalizeAuthConfig(authConfig),
 	}
 }
 
@@ -981,6 +993,7 @@ func (c *Client) invoke(
 	}
 	defer cancel()
 	callCtx = withOutgoingRequestID(callCtx)
+	callCtx = c.withOutgoingAuth(callCtx)
 
 	conn, err := grpc.DialContext(
 		callCtx,
@@ -1024,6 +1037,13 @@ func withOutgoingRequestID(ctx context.Context) context.Context {
 	return metadata.AppendToOutgoingContext(ctx, requestIDMetadataKey, requestID)
 }
 
+func (c *Client) withOutgoingAuth(ctx context.Context) context.Context {
+	if c.authConfig.Mode != "token" {
+		return ctx
+	}
+	return metadata.AppendToOutgoingContext(ctx, agentTokenMetadataKey, c.authConfig.SharedToken)
+}
+
 func responseError(err *agentv1.Error) error {
 	if err == nil {
 		return invalidPayloadError("missing error envelope")
@@ -1061,6 +1081,8 @@ func transportError(err error) error {
 	switch st.Code() {
 	case codes.InvalidArgument:
 		message = "invalid request to core agent"
+	case codes.Unauthenticated:
+		message = "core agent authentication failed"
 	case codes.PermissionDenied:
 		message = "core agent permission denied"
 	case codes.Unimplemented:
@@ -1073,6 +1095,17 @@ func transportError(err error) error {
 		Detail:   st.Message(),
 		GRPCCode: st.Code(),
 		Cause:    err,
+	}
+}
+
+func normalizeAuthConfig(authConfig AuthConfig) AuthConfig {
+	mode := strings.TrimSpace(strings.ToLower(authConfig.Mode))
+	if mode == "" {
+		mode = "none"
+	}
+	return AuthConfig{
+		Mode:        mode,
+		SharedToken: strings.TrimSpace(authConfig.SharedToken),
 	}
 }
 

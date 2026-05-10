@@ -65,6 +65,43 @@ func TestClientCheckHealthPropagatesRequestID(t *testing.T) {
 	}
 }
 
+func TestClientTokenModeAttachesAgentTokenMetadata(t *testing.T) {
+	tokenCh := make(chan string, 1)
+	target := startProtoContractServer(t, protoContractOptions{
+		healthObserver: func(ctx context.Context) {
+			md, ok := metadata.FromIncomingContext(ctx)
+			if !ok {
+				tokenCh <- ""
+				return
+			}
+			values := md.Get(agentTokenMetadataKey)
+			if len(values) == 0 {
+				tokenCh <- ""
+				return
+			}
+			tokenCh <- values[0]
+		},
+	})
+	client := NewWithAuth(target, 2*time.Second, AuthConfig{
+		Mode:        "token",
+		SharedToken: "agent-secret-token",
+	})
+
+	_, err := client.CheckHealth(context.Background())
+	if err != nil {
+		t.Fatalf("CheckHealth() error = %v", err)
+	}
+
+	select {
+	case observed := <-tokenCh:
+		if observed != "agent-secret-token" {
+			t.Fatalf("expected propagated agent token, got %q", observed)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for propagated agent token")
+	}
+}
+
 func TestClientGetRealtimeResourceViaProtoContract(t *testing.T) {
 	target := startProtoContractServer(t, protoContractOptions{})
 	client := New(target, 2*time.Second)
@@ -418,6 +455,30 @@ func TestClientCheckHealthMapsTransportError(t *testing.T) {
 	}
 	if !strings.Contains(agentErr.Detail, "health check not implemented") {
 		t.Fatalf("unexpected transport detail: %s", agentErr.Detail)
+	}
+}
+
+func TestClientCheckHealthMapsAuthenticationFailure(t *testing.T) {
+	target := startProtoContractServer(t, protoContractOptions{healthTransportCode: codes.Unauthenticated})
+	client := New(target, 2*time.Second)
+
+	_, err := client.CheckHealth(context.Background())
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+
+	var agentErr *AgentError
+	if !errors.As(err, &agentErr) {
+		t.Fatalf("expected AgentError, got %T", err)
+	}
+	if !agentErr.IsTransport() {
+		t.Fatal("expected transport error")
+	}
+	if agentErr.GRPCCode != codes.Unauthenticated {
+		t.Fatalf("unexpected gRPC code: %s", agentErr.GRPCCode)
+	}
+	if agentErr.Message != "core agent authentication failed" {
+		t.Fatalf("unexpected authentication message: %s", agentErr.Message)
 	}
 }
 

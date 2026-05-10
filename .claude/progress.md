@@ -63,6 +63,15 @@ P3-1 Alert Delivery & Operational Governance
 - warning-only 告警规则 fixture 已修正，避免误触发 burn-rate critical
 - docs/observability-validation.md / docs/observability-validation.zh-CN.md 已记录本地 P3-1 验证证据
 - 远端 CI 仍需在 push 后作为最终确认
+
+P3-2 Backend ↔ Core-Agent Trust Boundary
+- token mode 已实现：backend 自动附加 x-snowpanel-agent-token，core-agent 校验 metadata token
+- none mode 保持本地开发行为
+- mtls mode 已保留配置入口并 fail fast，等待后续证书实现
+- backend / core-agent 已增加 token auth 配置校验
+- 测试已覆盖 backend token metadata 注入、auth failure 映射、core-agent missing/wrong/correct token、错误不泄露 token
+- token auth compose smoke 已通过：/health 与 /ready 均返回 up/ready
+- deployment/security/systemd/env 文档已同步 token 模式与生产注意事项
 ```
 
 ### 明确暂不优先

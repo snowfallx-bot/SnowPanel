@@ -56,6 +56,46 @@ func TestValidateAllowsStrongProductionConfig(t *testing.T) {
 	}
 }
 
+func TestValidateRejectsMissingBackendAgentToken(t *testing.T) {
+	cfg := Config{
+		AppEnv: "production",
+		Auth: AuthConfig{
+			AppEnv:               "production",
+			JWTSecret:            "VeryStrongJWTSecret_For_Production_Use_1234567890!",
+			BootstrapAdmin:       false,
+			DefaultAdminUsername: "admin",
+			DefaultAdminEmail:    "admin@example.com",
+		},
+		AgentAuth: AgentAuthConfig{
+			Mode: "token",
+		},
+	}
+
+	if err := cfg.Validate(); err == nil {
+		t.Fatalf("expected validation error for missing backend agent token")
+	}
+}
+
+func TestValidateRejectsUnsupportedBackendAgentMTLS(t *testing.T) {
+	cfg := Config{
+		AppEnv: "production",
+		Auth: AuthConfig{
+			AppEnv:               "production",
+			JWTSecret:            "VeryStrongJWTSecret_For_Production_Use_1234567890!",
+			BootstrapAdmin:       false,
+			DefaultAdminUsername: "admin",
+			DefaultAdminEmail:    "admin@example.com",
+		},
+		AgentAuth: AgentAuthConfig{
+			Mode: "mtls",
+		},
+	}
+
+	if err := cfg.Validate(); err == nil {
+		t.Fatalf("expected validation error for unsupported backend agent mtls mode")
+	}
+}
+
 func TestValidateRejectsUnknownLoginAttemptStore(t *testing.T) {
 	cfg := Config{
 		AppEnv: "production",

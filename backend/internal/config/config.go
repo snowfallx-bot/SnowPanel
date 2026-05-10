@@ -18,6 +18,7 @@ type Config struct {
 	Redis        RedisConfig
 	Auth         AuthConfig
 	Tracing      TracingConfig
+	AgentAuth    AgentAuthConfig
 	AgentTarget  string
 	AgentTimeout time.Duration
 }
@@ -75,6 +76,14 @@ type TracingConfig struct {
 	SampleRatio    float64
 }
 
+type AgentAuthConfig struct {
+	Mode        string
+	SharedToken string
+	TLSCAFile   string
+	TLSCertFile string
+	TLSKeyFile  string
+}
+
 func Load() Config {
 	v := viper.New()
 	v.SetConfigName(".env")
@@ -93,6 +102,11 @@ func Load() Config {
 	v.SetDefault("BACKEND_WRITE_TIMEOUT", "10s")
 	v.SetDefault("AGENT_TARGET", "127.0.0.1:50051")
 	v.SetDefault("AGENT_TIMEOUT", "3s")
+	v.SetDefault("BACKEND_AGENT_AUTH_MODE", "none")
+	v.SetDefault("BACKEND_AGENT_SHARED_TOKEN", "")
+	v.SetDefault("BACKEND_AGENT_TLS_CA_FILE", "")
+	v.SetDefault("BACKEND_AGENT_TLS_CERT_FILE", "")
+	v.SetDefault("BACKEND_AGENT_TLS_KEY_FILE", "")
 	v.SetDefault("JWT_SECRET", "")
 	v.SetDefault("JWT_ISSUER", "snowpanel-backend")
 	v.SetDefault("JWT_EXPIRE", "24h")
@@ -196,6 +210,13 @@ func Load() Config {
 			Insecure:       v.GetBool("OTEL_EXPORTER_OTLP_INSECURE"),
 			SampleRatio:    clampSampleRatio(v.GetFloat64("OTEL_TRACES_SAMPLER_ARG")),
 		},
+		AgentAuth: AgentAuthConfig{
+			Mode:        normalizeAgentAuthMode(v.GetString("BACKEND_AGENT_AUTH_MODE")),
+			SharedToken: strings.TrimSpace(v.GetString("BACKEND_AGENT_SHARED_TOKEN")),
+			TLSCAFile:   strings.TrimSpace(v.GetString("BACKEND_AGENT_TLS_CA_FILE")),
+			TLSCertFile: strings.TrimSpace(v.GetString("BACKEND_AGENT_TLS_CERT_FILE")),
+			TLSKeyFile:  strings.TrimSpace(v.GetString("BACKEND_AGENT_TLS_KEY_FILE")),
+		},
 	}
 }
 
@@ -221,6 +242,18 @@ func (c Config) Validate() error {
 	rawStore := strings.TrimSpace(strings.ToLower(c.Auth.LoginAttemptStore))
 	if rawStore != "" && rawStore != "memory" && rawStore != "redis" {
 		return errors.New("LOGIN_ATTEMPT_STORE must be one of: memory, redis")
+	}
+
+	switch c.AgentAuth.Mode {
+	case "", "none":
+	case "token":
+		if strings.TrimSpace(c.AgentAuth.SharedToken) == "" {
+			return errors.New("BACKEND_AGENT_SHARED_TOKEN cannot be empty when BACKEND_AGENT_AUTH_MODE=token")
+		}
+	case "mtls":
+		return errors.New("BACKEND_AGENT_AUTH_MODE=mtls is reserved but not implemented yet")
+	default:
+		return errors.New("BACKEND_AGENT_AUTH_MODE must be one of: none, token, mtls")
 	}
 
 	return nil
@@ -273,6 +306,14 @@ func normalizeLoginAttemptStore(raw string) string {
 		return "redis"
 	}
 	return "memory"
+}
+
+func normalizeAgentAuthMode(raw string) string {
+	normalized := strings.TrimSpace(strings.ToLower(raw))
+	if normalized == "" {
+		return "none"
+	}
+	return normalized
 }
 
 func isProductionEnv(raw string) bool {

@@ -82,6 +82,18 @@
 
 该 milestone 推送后仍需等待远端 CI 作为最终确认。
 
+### P3-2 Backend 到 Core-Agent 信任边界
+
+进行中：
+
+- backend -> core-agent gRPC metadata token auth mode 已实现。
+- core-agent 在 token mode 下会拒绝缺失或错误的 `x-snowpanel-agent-token`。
+- 本地开发仍保留 `none` 模式。
+- `mtls` 配置项已预留，并在证书支持实现前 fail fast。
+- backend 会将 gRPC `Unauthenticated` 映射为 `core agent authentication failed`。
+- 测试已覆盖 token metadata 注入、auth failure 映射、core-agent allow/deny 路径，并确认错误不泄露 token 值。
+- 本地 token-auth compose smoke 已通过 `/health` 与 `/ready`。
+
 ## 后续加固（Post-P3-0）
 
 1. 按团队值班制度把最终告警目的地接入到真实 on-call 通道

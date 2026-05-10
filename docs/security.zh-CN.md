@@ -49,6 +49,19 @@
 - Cron 操作通过结构化模型与校验流程执行。
 - Cron 调度仅允许命令模板白名单（`CORE_AGENT_CRON_ALLOWED_COMMANDS`），并拒绝 shell 元字符。
 
+## Backend 到 Core-Agent 信任边界
+
+- 本地开发可以继续使用 `BACKEND_AGENT_AUTH_MODE=none` 与 `CORE_AGENT_AUTH_MODE=none`。
+- 生产环境至少应启用 `token` 模式：
+  - backend：`BACKEND_AGENT_AUTH_MODE=token` 与 `BACKEND_AGENT_SHARED_TOKEN=<shared secret>`
+  - core-agent：`CORE_AGENT_AUTH_MODE=token` 与 `CORE_AGENT_SHARED_TOKEN=<same shared secret>`
+- token 会通过 gRPC metadata key `x-snowpanel-agent-token` 发送。
+- 缺失或错误 token 会被 core-agent 以 `Unauthenticated` 拒绝；backend 会映射为 `core agent authentication failed`。
+- token 值不得写入日志、API 错误或文档示例中的真实值。
+- 轮换 token 时，应在同一个维护窗口将新 shared token 同步部署到 core-agent 与 backend，然后重启或 reload 两端服务。
+- `mtls` 模式已预留配置位置，供未来证书认证边界使用；在实现前会 fail fast。
+- 即使启用 token 模式，也必须将 core-agent gRPC 端口 `50051` 限制在可信私网内，禁止暴露到公网。
+
 ## 可审计性
 
 - 审计记录包含 user id、username、IP、module、action、target、请求摘要与结果。

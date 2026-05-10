@@ -33,6 +33,8 @@
 - `OTEL_SERVICE_NAME=snowpanel-core-agent`
 - `OTEL_EXPORTER_OTLP_ENDPOINT=<collector-host>:4317`
 
+生产环境中 backend 连接宿主机 `core-agent` 时，保持 `CORE_AGENT_AUTH_MODE=token`，设置强 `CORE_AGENT_SHARED_TOKEN`，并在 backend 侧用相同值配置 `BACKEND_AGENT_SHARED_TOKEN`。
+
 ## backend 容器 + 宿主机 agent 运行方式
 
 当 backend 在 Docker 中运行、`core-agent` 在宿主机运行时，使用：
@@ -51,6 +53,7 @@
 ## 安全提示
 
 - 将 `50051` 端口限制在可信网络（防火墙/内网）内。
+- 生产环境在 mTLS 支持实现前保持 `CORE_AGENT_AUTH_MODE=token`，并且不要记录或公开 `CORE_AGENT_SHARED_TOKEN`。
 - 将 metrics 端点（`CORE_AGENT_METRICS_HOST:CORE_AGENT_METRICS_PORT`，默认 `127.0.0.1:9108`）限制在本地回环或可信采集网络内。
 - 将 OTLP 导出目标限制在可信 collector / tracing backend 范围内。
 - 收紧 `CORE_AGENT_ALLOWED_ROOTS`、服务白名单、Cron 命令白名单。
