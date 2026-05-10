@@ -7,11 +7,13 @@ type CreateTaskResult struct {
 }
 
 type CreateDockerRestartTaskRequest struct {
-	ContainerID string `json:"container_id" binding:"required,min=2,max=128"`
+	ContainerID    string `json:"container_id" binding:"required,min=2,max=128"`
+	IdempotencyKey string `json:"idempotency_key,omitempty" binding:"omitempty,max=128"`
 }
 
 type CreateServiceRestartTaskRequest struct {
-	ServiceName string `json:"service_name" binding:"required,min=2,max=128"`
+	ServiceName    string `json:"service_name" binding:"required,min=2,max=128"`
+	IdempotencyKey string `json:"idempotency_key,omitempty" binding:"omitempty,max=128"`
 }
 
 type ListTasksQuery struct {

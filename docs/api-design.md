@@ -153,11 +153,13 @@ Security constraints:
   - query: `page`, `size`, optional `status`, optional `type`
 - `GET /tasks/:id` (`tasks.read`)
 - `POST /tasks/docker/restart` (`tasks.manage`)
-  - body: `{ "container_id": "..." }`
+  - body: `{ "container_id": "...", "idempotency_key": "optional-client-key" }`
   - queues a real docker restart operation as background task
+  - duplicate `idempotency_key` values return the existing task instead of creating a second task
 - `POST /tasks/services/restart` (`tasks.manage`)
-  - body: `{ "service_name": "..." }`
+  - body: `{ "service_name": "...", "idempotency_key": "optional-client-key" }`
   - queues a real system service restart operation as background task
+  - duplicate `idempotency_key` values return the existing task instead of creating a second task
 - `POST /tasks/:id/cancel` (`tasks.manage`)
   - cancels a pending/running task
 - `POST /tasks/:id/retry` (`tasks.manage`)

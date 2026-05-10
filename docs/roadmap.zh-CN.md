@@ -117,9 +117,10 @@
 - TaskRepository 已暴露 claim、heartbeat、complete、fail、stale-release API。
 - backend 启动时已在 `TASK_WORKER_ENABLED=true` 下运行 DB-backed worker。
 - 任务创建默认只入队，由 durable worker claim 后执行；关闭 worker 时仍保留 legacy goroutine executor 作为兼容/回滚路径。
+- Docker/service restart 任务创建已支持可选 `idempotency_key`；重复 key 会返回已有任务，不会重复入队。
 - worker loop 已支持 concurrency、lease heartbeat、stale lease release、max-attempt retry 与 retry backoff。
 - task/worker metrics 已暴露 queue depth、running count、completion totals、task duration 与 claim outcomes。
-- service tests 已覆盖 enqueue-only、worker claim/execute、claim-only-once、stale lease recovery、失败重试、max-attempt 耗尽、排队/运行中取消、长任务 heartbeat 与 task metric 记录。
+- service tests 已覆盖 enqueue-only、idempotency duplicate、worker claim/execute、claim-only-once、stale lease recovery、失败重试、max-attempt 耗尽、排队/运行中取消、长任务 heartbeat 与 task metric 记录。
 - 本地 backend 门禁已通过：`cd backend && go test ./...`。
 
 ## 后续加固（Post-P3-0）

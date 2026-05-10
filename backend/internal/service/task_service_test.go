@@ -211,6 +211,19 @@ func (r *fakeTaskRepo) GetByID(_ context.Context, id int64) (*model.Task, error)
 	return &cloned, nil
 }
 
+func (r *fakeTaskRepo) GetByIdempotencyKey(_ context.Context, key string) (*model.Task, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	for _, task := range r.tasks {
+		if task.IdempotencyKey != nil && *task.IdempotencyKey == key {
+			cloned := *task
+			return &cloned, nil
+		}
+	}
+	return nil, nil
+}
+
 func (r *fakeTaskRepo) List(_ context.Context, filter repository.TaskListFilter) ([]model.Task, int64, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -423,6 +436,79 @@ func TestCreateDockerRestartTaskCanQueueWithoutImmediateExecution(t *testing.T) 
 	}
 	if restartCalled {
 		t.Fatal("did not expect queued task to execute immediately")
+	}
+}
+
+func TestCreateDockerRestartTaskReturnsExistingTaskForDuplicateIdempotencyKey(t *testing.T) {
+	repo := newFakeTaskRepo()
+	service := NewTaskServiceWithOptions(
+		repo,
+		fakeTaskDockerService{},
+		nil,
+		TaskServiceOptions{
+			AsyncExecution: false,
+			MaxAttempts:    3,
+		},
+	)
+
+	first, err := service.CreateDockerRestartTask(
+		context.Background(),
+		dto.CreateDockerRestartTaskRequest{
+			ContainerID:    "web",
+			IdempotencyKey: "restart-web-1",
+		},
+		nil,
+		"tester",
+	)
+	if err != nil {
+		t.Fatalf("expected first create task success, got %v", err)
+	}
+	second, err := service.CreateDockerRestartTask(
+		context.Background(),
+		dto.CreateDockerRestartTaskRequest{
+			ContainerID:    "web",
+			IdempotencyKey: " restart-web-1 ",
+		},
+		nil,
+		"tester",
+	)
+	if err != nil {
+		t.Fatalf("expected duplicate create task success, got %v", err)
+	}
+	if second.ID != first.ID {
+		t.Fatalf("expected duplicate request to return task %d, got %d", first.ID, second.ID)
+	}
+	count, err := repo.CountByStatus(context.Background(), TaskStatusPending)
+	if err != nil {
+		t.Fatalf("failed to count pending tasks: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("expected one pending task, got %d", count)
+	}
+}
+
+func TestCreateDockerRestartTaskRejectsInvalidIdempotencyKey(t *testing.T) {
+	service := NewTaskServiceWithOptions(
+		newFakeTaskRepo(),
+		fakeTaskDockerService{},
+		nil,
+		TaskServiceOptions{
+			AsyncExecution: false,
+			MaxAttempts:    3,
+		},
+	)
+
+	_, err := service.CreateDockerRestartTask(
+		context.Background(),
+		dto.CreateDockerRestartTaskRequest{
+			ContainerID:    "web",
+			IdempotencyKey: "bad\nkey",
+		},
+		nil,
+		"tester",
+	)
+	if err == nil {
+		t.Fatal("expected invalid idempotency key error")
 	}
 }
 

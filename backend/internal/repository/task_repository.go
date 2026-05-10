@@ -26,6 +26,7 @@ type TaskRepository interface {
 	UpdateStatus(ctx context.Context, id int64, status string, progress int, errorMessage string) error
 	CountByStatus(ctx context.Context, status string) (int64, error)
 	GetByID(ctx context.Context, id int64) (*model.Task, error)
+	GetByIdempotencyKey(ctx context.Context, key string) (*model.Task, error)
 	List(ctx context.Context, filter TaskListFilter) ([]model.Task, int64, error)
 	AppendLog(ctx context.Context, log *model.TaskLog) error
 	ListLogs(ctx context.Context, taskID int64, limit int) ([]model.TaskLog, error)
@@ -195,6 +196,17 @@ func (r *taskRepository) CountByStatus(ctx context.Context, status string) (int6
 func (r *taskRepository) GetByID(ctx context.Context, id int64) (*model.Task, error) {
 	var task model.Task
 	if err := r.db.WithContext(ctx).First(&task, "id = ?", id).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &task, nil
+}
+
+func (r *taskRepository) GetByIdempotencyKey(ctx context.Context, key string) (*model.Task, error) {
+	var task model.Task
+	if err := r.db.WithContext(ctx).First(&task, "idempotency_key = ?", key).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, nil
 		}

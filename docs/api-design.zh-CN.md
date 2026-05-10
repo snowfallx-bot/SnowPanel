@@ -153,11 +153,13 @@
   - 查询参数：`page`、`size`，可选 `status`、可选 `type`
 - `GET /tasks/:id`（`tasks.read`）
 - `POST /tasks/docker/restart`（`tasks.manage`）
-  - 请求体：`{ "container_id": "..." }`
+  - 请求体：`{ "container_id": "...", "idempotency_key": "optional-client-key" }`
   - 将真实 Docker 重启动作加入后台任务队列
+  - 重复的 `idempotency_key` 会返回已有任务，不会创建第二个任务
 - `POST /tasks/services/restart`（`tasks.manage`）
-  - 请求体：`{ "service_name": "..." }`
+  - 请求体：`{ "service_name": "...", "idempotency_key": "optional-client-key" }`
   - 将真实 system service 重启动作加入后台任务队列
+  - 重复的 `idempotency_key` 会返回已有任务，不会创建第二个任务
 - `POST /tasks/:id/cancel`（`tasks.manage`）
   - 取消 `pending/running` 任务
 - `POST /tasks/:id/retry`（`tasks.manage`）

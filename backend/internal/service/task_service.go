@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/apperror"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/dto"
@@ -131,6 +132,15 @@ func (s *taskService) CreateDockerRestartTask(
 			errors.New("docker service is not configured"),
 		)
 	}
+	idempotencyKey, err := normalizeTaskIdempotencyKey(req.IdempotencyKey)
+	if err != nil {
+		return dto.CreateTaskResult{}, apperror.Wrap(
+			apperror.ErrBadRequest.Code,
+			apperror.ErrBadRequest.HTTPStatus,
+			apperror.ErrBadRequest.Message,
+			err,
+		)
+	}
 
 	return s.createAndRunTask(
 		ctx,
@@ -141,6 +151,7 @@ func (s *taskService) CreateDockerRestartTask(
 		},
 		triggeredBy,
 		username,
+		idempotencyKey,
 	)
 }
 
@@ -168,6 +179,15 @@ func (s *taskService) CreateServiceRestartTask(
 			errors.New("service manager is not configured"),
 		)
 	}
+	idempotencyKey, err := normalizeTaskIdempotencyKey(req.IdempotencyKey)
+	if err != nil {
+		return dto.CreateTaskResult{}, apperror.Wrap(
+			apperror.ErrBadRequest.Code,
+			apperror.ErrBadRequest.HTTPStatus,
+			apperror.ErrBadRequest.Message,
+			err,
+		)
+	}
 
 	return s.createAndRunTask(
 		ctx,
@@ -178,6 +198,7 @@ func (s *taskService) CreateServiceRestartTask(
 		},
 		triggeredBy,
 		username,
+		idempotencyKey,
 	)
 }
 
@@ -267,7 +288,7 @@ func (s *taskService) RetryTask(
 		)
 	}
 
-	result, err := s.createAndRunTask(ctx, task.Type, payload, triggeredBy, username)
+	result, err := s.createAndRunTask(ctx, task.Type, payload, triggeredBy, username, nil)
 	if err != nil {
 		return dto.CreateTaskResult{}, err
 	}
@@ -370,18 +391,49 @@ func (s *taskService) createAndRunTask(
 	payload taskPayload,
 	triggeredBy *int64,
 	username string,
+	idempotencyKey *string,
 ) (dto.CreateTaskResult, error) {
+	if idempotencyKey != nil {
+		existing, err := s.repo.GetByIdempotencyKey(ctx, *idempotencyKey)
+		if err != nil {
+			return dto.CreateTaskResult{}, apperror.Wrap(
+				apperror.ErrInternal.Code,
+				apperror.ErrInternal.HTTPStatus,
+				apperror.ErrInternal.Message,
+				err,
+			)
+		}
+		if existing != nil {
+			return dto.CreateTaskResult{
+				ID:     existing.ID,
+				Type:   existing.Type,
+				Status: existing.Status,
+			}, nil
+		}
+	}
+
 	task := &model.Task{
-		Type:        taskType,
-		Status:      TaskStatusPending,
-		Progress:    0,
-		Payload:     marshalTaskPayload(payload),
-		Result:      `{}`,
-		ErrorMsg:    "",
-		TriggeredBy: triggeredBy,
-		MaxAttempts: s.options.MaxAttempts,
+		Type:           taskType,
+		Status:         TaskStatusPending,
+		Progress:       0,
+		Payload:        marshalTaskPayload(payload),
+		Result:         `{}`,
+		ErrorMsg:       "",
+		TriggeredBy:    triggeredBy,
+		IdempotencyKey: idempotencyKey,
+		MaxAttempts:    s.options.MaxAttempts,
 	}
 	if err := s.repo.Create(ctx, task); err != nil {
+		if idempotencyKey != nil {
+			existing, findErr := s.repo.GetByIdempotencyKey(ctx, *idempotencyKey)
+			if findErr == nil && existing != nil {
+				return dto.CreateTaskResult{
+					ID:     existing.ID,
+					Type:   existing.Type,
+					Status: existing.Status,
+				}, nil
+			}
+		}
 		return dto.CreateTaskResult{}, apperror.Wrap(
 			apperror.ErrInternal.Code,
 			apperror.ErrInternal.HTTPStatus,
@@ -975,6 +1027,20 @@ func unmarshalTaskPayload(raw string) (taskPayload, error) {
 	}
 
 	return payload, nil
+}
+
+func normalizeTaskIdempotencyKey(raw string) (*string, error) {
+	key := strings.TrimSpace(raw)
+	if key == "" {
+		return nil, nil
+	}
+	if len(key) > 128 {
+		return nil, errors.New("idempotency_key must be at most 128 bytes")
+	}
+	if strings.ContainsFunc(key, unicode.IsControl) {
+		return nil, errors.New("idempotency_key cannot contain control characters")
+	}
+	return &key, nil
 }
 
 func (s *taskService) isCanceled(ctx context.Context, taskID int64) bool {

@@ -117,9 +117,10 @@ Local P3-4 durable worker wiring is in progress:
 - Task repository exposes claim, heartbeat, complete, fail, and stale-release APIs.
 - Backend startup now runs the DB-backed worker when `TASK_WORKER_ENABLED=true`.
 - Task creation queues work for the durable worker by default; the legacy goroutine executor remains available when the worker is disabled.
+- Docker/service restart task creation accepts an optional `idempotency_key`; duplicate keys return the existing task instead of enqueueing duplicate work.
 - The worker loop supports concurrency, lease heartbeat, stale lease release, max-attempt retry, and retry backoff.
 - Task and worker metrics now expose queue depth, running count, completion totals, task duration, and claim outcomes.
-- Service tests cover enqueue-only mode, worker claim/execute, claim-only-once behavior, stale lease recovery, failed task retry, max-attempt exhaustion, queued/running cancellation, long-running heartbeat behavior, and task metric recording.
+- Service tests cover enqueue-only mode, idempotency duplicate handling, worker claim/execute, claim-only-once behavior, stale lease recovery, failed task retry, max-attempt exhaustion, queued/running cancellation, long-running heartbeat behavior, and task metric recording.
 - Local backend gate passed: `cd backend && go test ./...`.
 
 ## Follow-up Hardening (Post-P3-0)
