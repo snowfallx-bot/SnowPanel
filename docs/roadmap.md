@@ -70,13 +70,17 @@ CI remains the final remote confirmation for this milestone after the branch is 
 
 ### P3-1 Alert Delivery & Operational Governance
 
-In progress:
+Local P3-1 alerting governance is complete:
 
 - Alerting runbook added in `docs/alerting-runbook.md`
 - Warning and critical ownership, paging policy, escalation path, dedup cadence, inhibition, silence, rollback, and synthetic alert procedure are documented
 - Observability docs now link to the alerting runbook
 - `scripts/observability/validate-config.ps1` can validate an extra generated Alertmanager config file
-- Synthetic alert smoke and final config validation remain pending until Docker or local `promtool`/`amtool` is available in the execution environment
+- Prometheus config/rules/tests, Alertmanager baseline, production example, and generated production config validation pass
+- Warning, critical, and inhibition synthetic Alertmanager smoke tests pass
+- Local evidence is recorded in `docs/observability-validation.md`
+
+CI remains the final remote confirmation for this milestone after the branch is pushed.
 
 ## Follow-up Hardening (Post-P3-0)
 

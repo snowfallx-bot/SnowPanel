@@ -58,7 +58,11 @@ P3-1 Alert Delivery & Operational Governance
 - docs/observability.md / docs/observability.zh-CN.md 已链接 alerting runbook
 - validate-config.ps1 已支持额外校验生成的 Alertmanager 配置
 - production config 生成脚本已用示例 webhook 成功生成临时配置
-- Docker daemon 当前不可用，validate-config 与 synthetic alert smoke 待 Docker 可用后继续
+- validate-config 已通过：Prometheus config/rules/tests、Alertmanager baseline、production example、generated production config
+- synthetic alert smoke 已通过：warning receiver、critical receiver、inhibition
+- warning-only 告警规则 fixture 已修正，避免误触发 burn-rate critical
+- docs/observability-validation.md / docs/observability-validation.zh-CN.md 已记录本地 P3-1 验证证据
+- 远端 CI 仍需在 push 后作为最终确认
 ```
 
 ### 明确暂不优先

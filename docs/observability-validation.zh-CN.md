@@ -29,3 +29,21 @@
 - `observability-smoke-container` 证明 compose 模式可观测性链路通过。
 - `observability-smoke-host-agent` 证明 host-agent 模式可观测性链路通过。
 - 同一 run 下主链路（认证/会话、文件、任务、agent 契约）也保持健康。
+
+## 本地 P3-1 告警验证
+
+- 日期：`2026-05-10`（Asia/Shanghai）
+- 分支：`main`
+- 范围：Alertmanager 生产配置生成、配置校验、warning/critical 合成告警路由、inhibition 冒烟。
+
+命令与结果：
+
+- `pwsh -File ./scripts/observability/generate-alertmanager-config.ps1 ... -OutputPath deploy/observability/alertmanager/alertmanager.generated.smoke.yml`：通过
+- `pwsh -File ./scripts/observability/validate-config.ps1 -ExtraAlertmanagerConfigFiles deploy/observability/alertmanager/alertmanager.generated.smoke.yml`：通过
+- `pwsh -File ./scripts/observability/alertmanager-smoke.ps1 -Severity warning -AlertName SnowPanelP31SmokeWarning`：通过，receiver 为 `snowpanel-warning`
+- `pwsh -File ./scripts/observability/alertmanager-smoke.ps1 -Severity critical -AlertName SnowPanelP31SmokeCritical`：通过，receiver 为 `snowpanel-critical`
+- `pwsh -File ./scripts/observability/alertmanager-inhibition-smoke.ps1 -AlertName SnowPanelP31InhibitionSmoke`：通过
+
+验证期间修复：
+
+- warning-only Prometheus 告警规则 fixture 原先使用的 backend 5xx 比例过高，会触发 burn-rate critical 告警；现已调整为 warning-only 比例，确保 warning 与 critical 分级保持区分。

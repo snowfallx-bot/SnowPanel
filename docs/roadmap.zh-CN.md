@@ -70,13 +70,17 @@
 
 ### P3-1 告警投递与运维治理
 
-进行中：
+本地 P3-1 告警治理已完成：
 
 - 已新增告警运行手册 `docs/alerting-runbook.zh-CN.md`
 - 已文档化 warning/critical 归属、paging 策略、升级路径、去重节奏、inhibition、silence、回滚与合成告警测试流程
 - observability 文档已链接告警运行手册
 - `scripts/observability/validate-config.ps1` 已支持额外校验生成的 Alertmanager 配置文件
-- synthetic alert smoke 与最终配置校验仍需等待当前环境提供 Docker 或本地 `promtool`/`amtool`
+- Prometheus config/rules/tests、Alertmanager baseline、production example、generated production config 校验通过
+- warning、critical、inhibition 合成告警冒烟通过
+- 本地证据已记录到 `docs/observability-validation.zh-CN.md`
+
+该 milestone 推送后仍需等待远端 CI 作为最终确认。
 
 ## 后续加固（Post-P3-0）
 
