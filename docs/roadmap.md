@@ -109,13 +109,17 @@ CI remains the final remote confirmation for this milestone after the branch is 
 
 ### P3-4 Durable Task Worker
 
-In progress:
+Local P3-4 durable worker wiring is in progress:
 
 - Durable task schema fields are added through `backend/migrations/0002_durable_tasks.*.sql`.
 - Task model now carries lease, retry, idempotency, and next-run metadata.
 - Worker configuration envs are available under `TASK_WORKER_*`.
 - Task repository exposes claim, heartbeat, complete, fail, and stale-release APIs.
-- The durable worker loop has not replaced the existing goroutine executor yet.
+- Backend startup now runs the DB-backed worker when `TASK_WORKER_ENABLED=true`.
+- Task creation queues work for the durable worker by default; the legacy goroutine executor remains available when the worker is disabled.
+- The worker loop supports concurrency, lease heartbeat, stale lease release, max-attempt retry, and retry backoff.
+- Service tests cover enqueue-only mode, worker claim/execute, failed task retry, and long-running heartbeat behavior.
+- Local backend gate passed: `cd backend && go test ./...`.
 
 ## Follow-up Hardening (Post-P3-0)
 

@@ -90,7 +90,12 @@ P3-4 Durable Task Worker
 - task model 已新增 lease/retry/idempotency 字段
 - task worker 配置入口已新增：TASK_WORKER_ENABLED/ID/CONCURRENCY/LEASE_DURATION/POLL_INTERVAL/MAX_ATTEMPTS
 - TaskRepository 已新增 claim/heartbeat/complete/fail/release stale API 基线
-- worker loop 尚未接管现有 goroutine execution，下一步继续推进
+- backend startup 已接入 durable worker：TASK_WORKER_ENABLED=true 时任务只入队，由 DB-backed worker claim 后执行
+- TASK_WORKER_ENABLED=false 时保留 legacy goroutine execution，便于本地/回滚兼容
+- worker loop 已支持 concurrency、lease heartbeat、stale lease release、max_attempt retry 与 backoff
+- service tests 已覆盖 enqueue-only、worker claim/execute、failure retry、long-running heartbeat
+- local backend gate 已通过：cd backend && go test ./...
+- 远端 CI 仍需在 push 后作为最终确认
 ```
 
 ### 明确暂不优先

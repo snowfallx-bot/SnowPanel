@@ -101,6 +101,7 @@ Key settings in `.env`:
 - login attempt limiter mode and thresholds (`LOGIN_ATTEMPT_STORE`, `LOGIN_ATTEMPT_REDIS_PREFIX`, `LOGIN_*`)
 - backend <-> core-agent auth mode (`BACKEND_AGENT_AUTH_MODE`, `BACKEND_AGENT_SHARED_TOKEN`)
 - core-agent auth mode (`CORE_AGENT_AUTH_MODE`, `CORE_AGENT_SHARED_TOKEN`)
+- durable task worker controls (`TASK_WORKER_ENABLED`, `TASK_WORKER_CONCURRENCY`, `TASK_WORKER_LEASE_DURATION`, `TASK_WORKER_MAX_ATTEMPTS`)
 - core-agent safe-root and read/write limits
 - core-agent metrics endpoint config (`CORE_AGENT_METRICS_ENABLED`, `CORE_AGENT_METRICS_HOST`, `CORE_AGENT_METRICS_PORT`)
 - OTEL tracing config (`OTEL_TRACING_ENABLED`, `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_TRACES_SAMPLER_ARG`)
@@ -116,6 +117,8 @@ Key settings in `.env`:
 - Set `APP_ENV=production` and provide a strong explicit `JWT_SECRET`.
 - If bootstrap admin is enabled, provide a strong explicit `DEFAULT_ADMIN_PASSWORD`.
 - Enable backend <-> core-agent token auth in production unless the deployment has a stronger private mTLS boundary.
+- Keep `TASK_WORKER_ENABLED=true` for production so Docker/service restart tasks are executed by the DB-backed durable worker with leases and retries.
+- Use `TASK_WORKER_ENABLED=false` only as a temporary local compatibility or rollback mode; it falls back to the legacy in-process goroutine executor.
 - Use persistent backup strategy for Postgres volumes.
 - Place backend/frontend behind HTTPS reverse proxy.
 - Restrict core-agent (`50051`) exposure to trusted network only.

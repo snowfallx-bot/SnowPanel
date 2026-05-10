@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -46,12 +47,26 @@ type TaskService interface {
 	RetryTask(ctx context.Context, id int64, triggeredBy *int64, username string) (dto.CreateTaskResult, error)
 	ListTasks(ctx context.Context, query dto.ListTasksQuery) (dto.ListTasksResult, error)
 	GetTaskDetail(ctx context.Context, id int64) (dto.TaskDetail, error)
+	RunWorker(ctx context.Context, options TaskWorkerOptions)
 }
 
 type taskService struct {
 	repo           repository.TaskRepository
 	dockerService  DockerService
 	serviceManager ServiceManagerService
+	options        TaskServiceOptions
+}
+
+type TaskServiceOptions struct {
+	AsyncExecution bool
+	MaxAttempts    int
+}
+
+type TaskWorkerOptions struct {
+	WorkerID      string
+	Concurrency   int
+	LeaseDuration time.Duration
+	PollInterval  time.Duration
 }
 
 type taskPayload struct {
@@ -65,10 +80,26 @@ func NewTaskService(
 	dockerService DockerService,
 	serviceManager ServiceManagerService,
 ) TaskService {
+	return NewTaskServiceWithOptions(repo, dockerService, serviceManager, TaskServiceOptions{
+		AsyncExecution: true,
+		MaxAttempts:    1,
+	})
+}
+
+func NewTaskServiceWithOptions(
+	repo repository.TaskRepository,
+	dockerService DockerService,
+	serviceManager ServiceManagerService,
+	options TaskServiceOptions,
+) TaskService {
+	if options.MaxAttempts <= 0 {
+		options.MaxAttempts = 1
+	}
 	return &taskService{
 		repo:           repo,
 		dockerService:  dockerService,
 		serviceManager: serviceManager,
+		options:        options,
 	}
 }
 
@@ -344,6 +375,7 @@ func (s *taskService) createAndRunTask(
 		Result:      `{}`,
 		ErrorMsg:    "",
 		TriggeredBy: triggeredBy,
+		MaxAttempts: s.options.MaxAttempts,
 	}
 	if err := s.repo.Create(ctx, task); err != nil {
 		return dto.CreateTaskResult{}, apperror.Wrap(
@@ -367,7 +399,9 @@ func (s *taskService) createAndRunTask(
 		}),
 	})
 
-	go s.runTask(task.ID, payload)
+	if s.options.AsyncExecution {
+		go s.runTask(task.ID, payload)
+	}
 
 	return dto.CreateTaskResult{
 		ID:     task.ID,
@@ -533,6 +567,325 @@ func (s *taskService) runTask(taskID int64, payload taskPayload) {
 			"progress":  100,
 		}),
 	})
+}
+
+func (s *taskService) RunWorker(ctx context.Context, options TaskWorkerOptions) {
+	options = normalizeTaskWorkerOptions(options)
+	workers := make(chan struct{}, options.Concurrency)
+	ticker := time.NewTicker(options.PollInterval)
+	defer ticker.Stop()
+
+	for {
+		if err := ctx.Err(); err != nil {
+			return
+		}
+
+		_, _ = s.repo.ReleaseStaleTasks(ctx, time.Now())
+		s.claimAvailableTasks(ctx, options, workers)
+
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
+}
+
+func (s *taskService) claimAvailableTasks(
+	ctx context.Context,
+	options TaskWorkerOptions,
+	workers chan struct{},
+) {
+	for {
+		select {
+		case workers <- struct{}{}:
+		default:
+			return
+		}
+
+		task, err := s.repo.ClaimNextTask(ctx, options.WorkerID, options.LeaseDuration)
+		if err != nil || task == nil {
+			<-workers
+			return
+		}
+
+		go func(claimed model.Task) {
+			defer func() {
+				<-workers
+			}()
+			s.runClaimedTask(ctx, options.WorkerID, options.LeaseDuration, claimed)
+		}(*task)
+	}
+}
+
+func (s *taskService) runClaimedTask(
+	ctx context.Context,
+	workerID string,
+	leaseDuration time.Duration,
+	task model.Task,
+) {
+	stopHeartbeat := s.startTaskHeartbeat(ctx, task.ID, workerID, leaseDuration)
+	defer stopHeartbeat()
+
+	payload, err := unmarshalTaskPayload(task.Payload)
+	if err != nil {
+		s.failClaimedTask(ctx, task, workerID, err, map[string]interface{}{"payload": task.Payload})
+		return
+	}
+
+	_ = s.repo.AppendLog(ctx, &model.TaskLog{
+		TaskID:  task.ID,
+		Level:   "info",
+		Message: "task claimed by worker",
+		Metadata: marshalTaskMetadata(map[string]interface{}{
+			"worker_id": workerID,
+			"attempt":   task.Attempt,
+		}),
+	})
+
+	if s.isCanceled(ctx, task.ID) {
+		_ = s.repo.AppendLog(ctx, &model.TaskLog{
+			TaskID:   task.ID,
+			Level:    "warn",
+			Message:  "task canceled before worker execution",
+			Metadata: "{}",
+		})
+		return
+	}
+
+	if !s.setRunningProgress(ctx, task.ID, 5) {
+		return
+	}
+	_ = s.repo.AppendLog(ctx, &model.TaskLog{
+		TaskID:  task.ID,
+		Level:   "info",
+		Message: "task execution started",
+		Metadata: marshalTaskMetadata(map[string]interface{}{
+			"operation": payload.Operation,
+			"progress":  5,
+			"worker_id": workerID,
+		}),
+	})
+
+	if err := s.executeTaskOperation(ctx, task.ID, payload); err != nil {
+		s.failClaimedTask(ctx, task, workerID, err, map[string]interface{}{
+			"operation": payload.Operation,
+		})
+		return
+	}
+
+	if s.isCanceled(ctx, task.ID) {
+		_ = s.repo.AppendLog(ctx, &model.TaskLog{
+			TaskID:   task.ID,
+			Level:    "warn",
+			Message:  "task canceled after operation",
+			Metadata: "{}",
+		})
+		return
+	}
+
+	_ = s.repo.CompleteTask(ctx, task.ID, workerID, `{}`)
+	_ = s.repo.AppendLog(ctx, &model.TaskLog{
+		TaskID:  task.ID,
+		Level:   "info",
+		Message: "task completed",
+		Metadata: marshalTaskMetadata(map[string]interface{}{
+			"operation": payload.Operation,
+			"status":    TaskStatusSuccess,
+			"progress":  100,
+			"worker_id": workerID,
+		}),
+	})
+}
+
+func (s *taskService) startTaskHeartbeat(
+	ctx context.Context,
+	taskID int64,
+	workerID string,
+	leaseDuration time.Duration,
+) context.CancelFunc {
+	heartbeatCtx, cancel := context.WithCancel(ctx)
+	interval := taskHeartbeatInterval(leaseDuration)
+
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-heartbeatCtx.Done():
+				return
+			case <-ticker.C:
+				_ = s.repo.HeartbeatTask(heartbeatCtx, taskID, workerID, leaseDuration)
+			}
+		}
+	}()
+
+	return cancel
+}
+
+func (s *taskService) executeTaskOperation(
+	ctx context.Context,
+	taskID int64,
+	payload taskPayload,
+) error {
+	switch payload.Operation {
+	case taskOperationDockerRestart:
+		if !s.setRunningProgress(ctx, taskID, 30) {
+			return errors.New("task canceled before docker restart")
+		}
+		_ = s.repo.AppendLog(ctx, &model.TaskLog{
+			TaskID:  taskID,
+			Level:   "info",
+			Message: "restarting docker container",
+			Metadata: marshalTaskMetadata(map[string]interface{}{
+				"container_id": payload.ContainerID,
+				"progress":     30,
+			}),
+		})
+		result, err := s.dockerService.RestartContainer(ctx, payload.ContainerID)
+		if err != nil {
+			return err
+		}
+		if !s.setRunningProgress(ctx, taskID, 85) {
+			return errors.New("task canceled after docker restart")
+		}
+		_ = s.repo.AppendLog(ctx, &model.TaskLog{
+			TaskID:  taskID,
+			Level:   "info",
+			Message: "docker container restarted",
+			Metadata: marshalTaskMetadata(map[string]interface{}{
+				"container_id": result.ID,
+				"state":        result.State,
+				"progress":     85,
+			}),
+		})
+		return nil
+	case taskOperationServiceRestart:
+		if !s.setRunningProgress(ctx, taskID, 30) {
+			return errors.New("task canceled before service restart")
+		}
+		_ = s.repo.AppendLog(ctx, &model.TaskLog{
+			TaskID:  taskID,
+			Level:   "info",
+			Message: "restarting system service",
+			Metadata: marshalTaskMetadata(map[string]interface{}{
+				"service_name": payload.ServiceName,
+				"progress":     30,
+			}),
+		})
+		result, err := s.serviceManager.RestartService(ctx, payload.ServiceName)
+		if err != nil {
+			return err
+		}
+		if !s.setRunningProgress(ctx, taskID, 85) {
+			return errors.New("task canceled after service restart")
+		}
+		_ = s.repo.AppendLog(ctx, &model.TaskLog{
+			TaskID:  taskID,
+			Level:   "info",
+			Message: "system service restarted",
+			Metadata: marshalTaskMetadata(map[string]interface{}{
+				"service_name": result.Name,
+				"status":       result.Status,
+				"progress":     85,
+			}),
+		})
+		return nil
+	default:
+		return errors.New("unsupported task operation")
+	}
+}
+
+func (s *taskService) failClaimedTask(
+	ctx context.Context,
+	task model.Task,
+	workerID string,
+	err error,
+	metadata map[string]interface{},
+) {
+	now := time.Now()
+	nextRunAt := nextTaskRetryAt(now, task.Attempt, task.MaxAttempts)
+	fields := map[string]interface{}{
+		"attempt":      task.Attempt,
+		"error":        err.Error(),
+		"max_attempts": task.MaxAttempts,
+		"worker_id":    workerID,
+	}
+	message := "task failed"
+	if nextRunAt != nil {
+		fields["next_run_at"] = nextRunAt.Format(time.RFC3339)
+		message = "task failed; retry scheduled"
+	}
+	for key, value := range metadata {
+		fields[key] = value
+	}
+
+	_ = s.repo.FailTask(ctx, task.ID, workerID, err.Error(), nextRunAt)
+	_ = s.repo.AppendLog(ctx, &model.TaskLog{
+		TaskID:   task.ID,
+		Level:    "error",
+		Message:  message,
+		Metadata: marshalTaskMetadata(fields),
+	})
+}
+
+func taskHeartbeatInterval(leaseDuration time.Duration) time.Duration {
+	if leaseDuration <= 0 {
+		return 10 * time.Second
+	}
+	interval := leaseDuration / 3
+	if interval <= 0 {
+		return leaseDuration
+	}
+	if interval < 50*time.Millisecond {
+		return 50 * time.Millisecond
+	}
+	return interval
+}
+
+func nextTaskRetryAt(now time.Time, attempt int, maxAttempts int) *time.Time {
+	if maxAttempts <= 0 || attempt >= maxAttempts {
+		return nil
+	}
+	next := now.Add(taskRetryBackoff(attempt))
+	return &next
+}
+
+func taskRetryBackoff(attempt int) time.Duration {
+	if attempt <= 0 {
+		attempt = 1
+	}
+	if attempt > 6 {
+		attempt = 6
+	}
+	delay := time.Second << (attempt - 1)
+	if delay > 30*time.Second {
+		return 30 * time.Second
+	}
+	return delay
+}
+
+func normalizeTaskWorkerOptions(options TaskWorkerOptions) TaskWorkerOptions {
+	options.WorkerID = strings.TrimSpace(options.WorkerID)
+	if options.WorkerID == "" {
+		hostname, _ := os.Hostname()
+		hostname = strings.TrimSpace(hostname)
+		if hostname == "" {
+			hostname = "snowpanel-backend"
+		}
+		options.WorkerID = fmt.Sprintf("%s-%d", hostname, os.Getpid())
+	}
+	if options.Concurrency <= 0 {
+		options.Concurrency = 1
+	}
+	if options.LeaseDuration <= 0 {
+		options.LeaseDuration = 30 * time.Second
+	}
+	if options.PollInterval <= 0 {
+		options.PollInterval = 2 * time.Second
+	}
+	return options
 }
 
 func mapTaskSummary(task model.Task) dto.TaskSummary {

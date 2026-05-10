@@ -80,7 +80,24 @@ func main() {
 	serviceManager := service.NewServiceManagerService(agentClient)
 	dockerService := service.NewDockerService(agentClient)
 	cronService := service.NewCronService(agentClient)
-	taskService := service.NewTaskService(taskRepo, dockerService, serviceManager)
+	taskService := service.NewTaskServiceWithOptions(
+		taskRepo,
+		dockerService,
+		serviceManager,
+		service.TaskServiceOptions{
+			AsyncExecution: !cfg.TaskWorker.Enabled,
+			MaxAttempts:    cfg.TaskWorker.MaxAttempts,
+		},
+	)
+	if cfg.TaskWorker.Enabled {
+		go taskService.RunWorker(context.Background(), service.TaskWorkerOptions{
+			WorkerID:      cfg.TaskWorker.WorkerID,
+			Concurrency:   cfg.TaskWorker.Concurrency,
+			LeaseDuration: cfg.TaskWorker.LeaseDuration,
+			PollInterval:  cfg.TaskWorker.PollInterval,
+		})
+		zapLogger.Info("durable task worker enabled")
+	}
 	var loginAttempts security.LoginAttemptGuard = security.NewLoginAttemptLimiter(security.LoginAttemptLimiterOptions{
 		MaxFailures:   cfg.Auth.LoginMaxFailures,
 		FailureWindow: cfg.Auth.LoginFailureWindow,

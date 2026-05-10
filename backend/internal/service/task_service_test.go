@@ -18,6 +18,7 @@ type fakeTaskRepo struct {
 	mu         sync.Mutex
 	nextTaskID int64
 	nextLogID  int64
+	heartbeats int
 	tasks      map[int64]*model.Task
 	logs       map[int64][]model.TaskLog
 }
@@ -51,27 +52,114 @@ func (r *fakeTaskRepo) Create(_ context.Context, task *model.Task) error {
 }
 
 func (r *fakeTaskRepo) ClaimNextTask(
-	context.Context,
-	string,
-	time.Duration,
+	_ context.Context,
+	workerID string,
+	leaseDuration time.Duration,
 ) (*model.Task, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	now := time.Now()
+	for _, task := range r.tasks {
+		if task.Status != TaskStatusPending {
+			continue
+		}
+		if task.NextRunAt != nil && task.NextRunAt.After(now) {
+			continue
+		}
+		if task.MaxAttempts > 0 && task.Attempt >= task.MaxAttempts {
+			continue
+		}
+		task.Status = TaskStatusRunning
+		task.Attempt++
+		task.LockedBy = &workerID
+		lockedUntil := now.Add(leaseDuration)
+		task.LockedUntil = &lockedUntil
+		if task.StartedAt == nil {
+			startedAt := now
+			task.StartedAt = &startedAt
+		}
+		task.UpdatedAt = now
+		cloned := *task
+		return &cloned, nil
+	}
 	return nil, nil
 }
 
-func (r *fakeTaskRepo) HeartbeatTask(context.Context, int64, string, time.Duration) error {
+func (r *fakeTaskRepo) HeartbeatTask(_ context.Context, taskID int64, workerID string, leaseDuration time.Duration) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	task, ok := r.tasks[taskID]
+	if !ok || task.LockedBy == nil || *task.LockedBy != workerID || task.Status != TaskStatusRunning {
+		return nil
+	}
+	lockedUntil := time.Now().Add(leaseDuration)
+	task.LockedUntil = &lockedUntil
+	r.heartbeats++
 	return nil
 }
 
-func (r *fakeTaskRepo) CompleteTask(context.Context, int64, string, string) error {
+func (r *fakeTaskRepo) CompleteTask(_ context.Context, taskID int64, workerID string, result string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	task, ok := r.tasks[taskID]
+	if !ok || task.LockedBy == nil || *task.LockedBy != workerID || task.Status != TaskStatusRunning {
+		return nil
+	}
+	now := time.Now()
+	task.Status = TaskStatusSuccess
+	task.Progress = 100
+	task.Result = result
+	task.ErrorMsg = ""
+	task.LockedBy = nil
+	task.LockedUntil = nil
+	task.FinishedAt = &now
+	task.UpdatedAt = now
 	return nil
 }
 
-func (r *fakeTaskRepo) FailTask(context.Context, int64, string, string, *time.Time) error {
+func (r *fakeTaskRepo) FailTask(_ context.Context, taskID int64, workerID string, errorMessage string, nextRunAt *time.Time) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	task, ok := r.tasks[taskID]
+	if !ok || task.LockedBy == nil || *task.LockedBy != workerID || task.Status != TaskStatusRunning {
+		return nil
+	}
+	now := time.Now()
+	if nextRunAt == nil {
+		task.Status = TaskStatusFailed
+		task.Progress = 100
+		task.FinishedAt = &now
+	} else {
+		task.Status = TaskStatusPending
+		task.NextRunAt = nextRunAt
+	}
+	task.ErrorMsg = errorMessage
+	task.LockedBy = nil
+	task.LockedUntil = nil
+	task.UpdatedAt = now
 	return nil
 }
 
-func (r *fakeTaskRepo) ReleaseStaleTasks(context.Context, time.Time) (int64, error) {
-	return 0, nil
+func (r *fakeTaskRepo) ReleaseStaleTasks(_ context.Context, now time.Time) (int64, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	var released int64
+	for _, task := range r.tasks {
+		if task.Status == TaskStatusRunning && task.LockedUntil != nil && task.LockedUntil.Before(now) {
+			task.Status = TaskStatusPending
+			task.LockedBy = nil
+			task.LockedUntil = nil
+			task.NextRunAt = &now
+			task.UpdatedAt = now
+			released++
+		}
+	}
+	return released, nil
 }
 
 func (r *fakeTaskRepo) UpdateStatus(
@@ -178,6 +266,13 @@ func (r *fakeTaskRepo) ListLogs(_ context.Context, taskID int64, limit int) ([]m
 	return items, nil
 }
 
+func (r *fakeTaskRepo) heartbeatCount() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	return r.heartbeats
+}
+
 type fakeTaskDockerService struct {
 	restartFn func(context.Context, string) (dto.DockerContainerActionResult, error)
 }
@@ -268,6 +363,199 @@ func TestCreateDockerRestartTaskRunsToSuccess(t *testing.T) {
 	}
 	if !hasRestartLog {
 		t.Fatalf("expected docker restart log in task logs")
+	}
+}
+
+func TestCreateDockerRestartTaskCanQueueWithoutImmediateExecution(t *testing.T) {
+	repo := newFakeTaskRepo()
+	restartCalled := false
+	service := NewTaskServiceWithOptions(
+		repo,
+		fakeTaskDockerService{
+			restartFn: func(_ context.Context, id string) (dto.DockerContainerActionResult, error) {
+				restartCalled = true
+				return dto.DockerContainerActionResult{ID: id, State: "running"}, nil
+			},
+		},
+		nil,
+		TaskServiceOptions{
+			AsyncExecution: false,
+			MaxAttempts:    3,
+		},
+	)
+
+	result, err := service.CreateDockerRestartTask(
+		context.Background(),
+		dto.CreateDockerRestartTaskRequest{ContainerID: "web"},
+		nil,
+		"tester",
+	)
+	if err != nil {
+		t.Fatalf("expected create task success, got %v", err)
+	}
+
+	time.Sleep(50 * time.Millisecond)
+	task, err := repo.GetByID(context.Background(), result.ID)
+	if err != nil {
+		t.Fatalf("failed to load task: %v", err)
+	}
+	if task == nil || task.Status != TaskStatusPending {
+		t.Fatalf("expected task to remain pending, got %+v", task)
+	}
+	if task.MaxAttempts != 3 {
+		t.Fatalf("expected max_attempts=3, got %d", task.MaxAttempts)
+	}
+	if restartCalled {
+		t.Fatal("did not expect queued task to execute immediately")
+	}
+}
+
+func TestRunWorkerClaimsAndExecutesQueuedTask(t *testing.T) {
+	repo := newFakeTaskRepo()
+	service := NewTaskServiceWithOptions(
+		repo,
+		fakeTaskDockerService{
+			restartFn: func(_ context.Context, id string) (dto.DockerContainerActionResult, error) {
+				return dto.DockerContainerActionResult{ID: id, State: "running"}, nil
+			},
+		},
+		nil,
+		TaskServiceOptions{
+			AsyncExecution: false,
+			MaxAttempts:    3,
+		},
+	)
+
+	result, err := service.CreateDockerRestartTask(
+		context.Background(),
+		dto.CreateDockerRestartTaskRequest{ContainerID: "web"},
+		nil,
+		"tester",
+	)
+	if err != nil {
+		t.Fatalf("expected create task success, got %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go service.RunWorker(ctx, TaskWorkerOptions{
+		WorkerID:      "worker-1",
+		Concurrency:   1,
+		LeaseDuration: time.Second,
+		PollInterval:  20 * time.Millisecond,
+	})
+
+	waitForTaskStatus(t, repo, result.ID, TaskStatusSuccess, 2*time.Second)
+	task, err := repo.GetByID(context.Background(), result.ID)
+	if err != nil {
+		t.Fatalf("failed to load task: %v", err)
+	}
+	if task == nil {
+		t.Fatal("expected task to exist")
+	}
+	if task.Attempt != 1 {
+		t.Fatalf("expected attempt=1, got %d", task.Attempt)
+	}
+	if task.LockedBy != nil || task.LockedUntil != nil {
+		t.Fatalf("expected completed task lock to be cleared, got %+v", task)
+	}
+}
+
+func TestRunWorkerRetriesFailedTask(t *testing.T) {
+	repo := newFakeTaskRepo()
+	var mu sync.Mutex
+	restartCalls := 0
+	service := NewTaskServiceWithOptions(
+		repo,
+		fakeTaskDockerService{
+			restartFn: func(_ context.Context, id string) (dto.DockerContainerActionResult, error) {
+				mu.Lock()
+				defer mu.Unlock()
+				restartCalls++
+				if restartCalls == 1 {
+					return dto.DockerContainerActionResult{}, errors.New("temporary restart failure")
+				}
+				return dto.DockerContainerActionResult{ID: id, State: "running"}, nil
+			},
+		},
+		nil,
+		TaskServiceOptions{
+			AsyncExecution: false,
+			MaxAttempts:    2,
+		},
+	)
+
+	result, err := service.CreateDockerRestartTask(
+		context.Background(),
+		dto.CreateDockerRestartTaskRequest{ContainerID: "web"},
+		nil,
+		"tester",
+	)
+	if err != nil {
+		t.Fatalf("expected create task success, got %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go service.RunWorker(ctx, TaskWorkerOptions{
+		WorkerID:      "worker-1",
+		Concurrency:   1,
+		LeaseDuration: time.Second,
+		PollInterval:  20 * time.Millisecond,
+	})
+
+	waitForTaskStatus(t, repo, result.ID, TaskStatusSuccess, 3*time.Second)
+	task, err := repo.GetByID(context.Background(), result.ID)
+	if err != nil {
+		t.Fatalf("failed to load task: %v", err)
+	}
+	if task == nil {
+		t.Fatal("expected task to exist")
+	}
+	if task.Attempt != 2 {
+		t.Fatalf("expected attempt=2 after retry, got %d", task.Attempt)
+	}
+}
+
+func TestRunWorkerHeartbeatsLongRunningTask(t *testing.T) {
+	repo := newFakeTaskRepo()
+	service := NewTaskServiceWithOptions(
+		repo,
+		fakeTaskDockerService{
+			restartFn: func(_ context.Context, id string) (dto.DockerContainerActionResult, error) {
+				time.Sleep(250 * time.Millisecond)
+				return dto.DockerContainerActionResult{ID: id, State: "running"}, nil
+			},
+		},
+		nil,
+		TaskServiceOptions{
+			AsyncExecution: false,
+			MaxAttempts:    2,
+		},
+	)
+
+	result, err := service.CreateDockerRestartTask(
+		context.Background(),
+		dto.CreateDockerRestartTaskRequest{ContainerID: "web"},
+		nil,
+		"tester",
+	)
+	if err != nil {
+		t.Fatalf("expected create task success, got %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go service.RunWorker(ctx, TaskWorkerOptions{
+		WorkerID:      "worker-1",
+		Concurrency:   1,
+		LeaseDuration: 150 * time.Millisecond,
+		PollInterval:  20 * time.Millisecond,
+	})
+
+	waitForTaskStatus(t, repo, result.ID, TaskStatusSuccess, 2*time.Second)
+	if repo.heartbeatCount() == 0 {
+		t.Fatal("expected at least one heartbeat for long-running task")
 	}
 }
 

@@ -13,6 +13,7 @@ import (
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/apperror"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/dto"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/middleware"
+	"github.com/snowfallx-bot/SnowPanel/backend/internal/service"
 )
 
 type taskHandlerServiceStub struct {
@@ -78,6 +79,8 @@ func (s *taskHandlerServiceStub) ListTasks(
 func (s *taskHandlerServiceStub) GetTaskDetail(context.Context, int64) (dto.TaskDetail, error) {
 	return s.detailResult, s.detailErr
 }
+
+func (s *taskHandlerServiceStub) RunWorker(context.Context, service.TaskWorkerOptions) {}
 
 type taskAuditRecorder struct {
 	records []dto.RecordAuditInput
