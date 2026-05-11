@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -22,6 +25,9 @@ import (
 )
 
 func main() {
+	rootCtx, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stopSignals()
+
 	cfg := config.Load()
 	if err := cfg.Validate(); err != nil {
 		log.Fatalf("invalid runtime config: %v", err)
@@ -36,7 +42,7 @@ func main() {
 	}()
 
 	tracingEnabled := cfg.Tracing.Enabled
-	tracingShutdown, err := observability.InitTracing(context.Background(), cfg.Tracing, cfg.AppEnv)
+	tracingShutdown, err := observability.InitTracing(rootCtx, cfg.Tracing, cfg.AppEnv)
 	if err != nil {
 		tracingEnabled = false
 		zapLogger.Warn("otel tracing disabled", logger.Err(err))
@@ -63,12 +69,12 @@ func main() {
 	if err != nil {
 		zapLogger.Fatal("invalid settings encryption config", logger.Err(err))
 	}
-	if err := validateEncryptedSettingsStartup(context.Background(), systemSettingRepo, settingsEncryptor); err != nil {
+	if err := validateEncryptedSettingsStartup(rootCtx, systemSettingRepo, settingsEncryptor); err != nil {
 		zapLogger.Fatal("invalid encrypted settings config", logger.Err(err))
 	}
 	auditService := service.NewAuditService(auditRepo)
 	authService := service.NewAuthService(userRepo, cfg.Auth)
-	if err := authService.EnsureDefaultAdmin(context.Background()); err != nil {
+	if err := authService.EnsureDefaultAdmin(rootCtx); err != nil {
 		zapLogger.Fatal("failed to ensure default admin", logger.Err(err))
 	}
 
@@ -93,7 +99,7 @@ func main() {
 		},
 	)
 	if cfg.TaskWorker.Enabled {
-		go taskService.RunWorker(context.Background(), service.TaskWorkerOptions{
+		go taskService.RunWorker(rootCtx, service.TaskWorkerOptions{
 			WorkerID:      cfg.TaskWorker.WorkerID,
 			Concurrency:   cfg.TaskWorker.Concurrency,
 			LeaseDuration: cfg.TaskWorker.LeaseDuration,
@@ -165,12 +171,25 @@ func main() {
 	}
 
 	log.Printf("backend listening on %s", server.Addr)
-	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Fatalf("backend stopped unexpectedly: %v", err)
+	serverErr := make(chan error, 1)
+	go func() {
+		serverErr <- server.ListenAndServe()
+	}()
+
+	select {
+	case err := <-serverErr:
+		if err != nil && err != http.ErrServerClosed {
+			log.Fatalf("backend stopped unexpectedly: %v", err)
+		}
+	case <-rootCtx.Done():
+		zapLogger.Info("backend shutdown requested")
 	}
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		zapLogger.Warn("failed to shutdown http server", logger.Err(err))
+	}
 	_ = database.Close(shutdownCtx, db)
 }
 

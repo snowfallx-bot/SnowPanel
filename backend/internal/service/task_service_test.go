@@ -563,6 +563,37 @@ func TestRunWorkerClaimsAndExecutesQueuedTask(t *testing.T) {
 	}
 }
 
+func TestRunWorkerStopsWhenContextIsCanceled(t *testing.T) {
+	service := NewTaskServiceWithOptions(
+		newFakeTaskRepo(),
+		fakeTaskDockerService{},
+		nil,
+		TaskServiceOptions{
+			AsyncExecution: false,
+			MaxAttempts:    3,
+		},
+	)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		service.RunWorker(ctx, TaskWorkerOptions{
+			WorkerID:      "worker-1",
+			Concurrency:   1,
+			LeaseDuration: time.Second,
+			PollInterval:  20 * time.Millisecond,
+		})
+	}()
+
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected worker to stop after context cancellation")
+	}
+}
+
 func TestRunWorkerClaimsSingleTaskOnlyOnce(t *testing.T) {
 	repo := newFakeTaskRepo()
 	started := make(chan struct{})
