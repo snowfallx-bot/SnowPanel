@@ -125,6 +125,15 @@ func (s *fileAuditRecorder) List(
 	return dto.ListAuditLogsResult{}, errors.New("not implemented")
 }
 
+func (s *fileAuditRecorder) Export(
+	context.Context,
+	dto.ListAuditLogsQuery,
+	string,
+	io.Writer,
+) error {
+	return errors.New("not implemented")
+}
+
 func TestFileHandlerDownloadFileSuccess(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

@@ -136,6 +136,17 @@
 - systemd 部署模板已增加基础 sandboxing，并记录 Docker/systemd 兼容性取舍。
 - 部署与安全文档已加入宿主机 agent 生产检查表。
 
+### P3-6 Audit Retention, Export, and Forensics
+
+本地 P3-6 审计取证能力正在推进：
+
+- audit 记录已包含 `request_id` 与 `trace_id`，便于从 backend log 与 trace 回查审计记录。
+- audit log filter 已覆盖时间范围、user id、username、module、action、target、success、result code、request id、trace id。
+- 审计导出接口已新增：`GET /api/v1/audit/logs/export?format=csv|jsonl`。
+- `audit.export` 权限已加入种子数据，并默认分配给 `super_admin`。
+- 导出按分页读取审计记录，最多导出 100000 行，并复用已脱敏的 audit 字段。
+- backend tests 已覆盖 filter 传递、CSV export、JSONL export、request/trace id 持久化。
+
 ## 后续加固（Post-P3-0）
 
 1. 按团队值班制度把最终告警目的地接入到真实 on-call 通道

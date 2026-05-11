@@ -61,12 +61,18 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     success BOOLEAN NOT NULL DEFAULT FALSE,
     result_code VARCHAR(32) NOT NULL DEFAULT '',
     result_message TEXT NOT NULL DEFAULT '',
+    request_id VARCHAR(128) NOT NULL DEFAULT '',
+    trace_id VARCHAR(64) NOT NULL DEFAULT '',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON audit_logs (user_id);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs (created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_module_action ON audit_logs (module, action);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_request_id ON audit_logs (request_id);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_trace_id ON audit_logs (trace_id);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_target ON audit_logs (target_type, target_id);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_result_code ON audit_logs (result_code);
 
 CREATE TABLE IF NOT EXISTS system_settings (
     id BIGSERIAL PRIMARY KEY,

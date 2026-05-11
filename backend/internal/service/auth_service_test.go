@@ -133,6 +133,7 @@ func (r *fakeUserRepo) EnsureRBACDefaults(context.Context) error {
 		"cron.read",
 		"cron.manage",
 		"audit.read",
+		"audit.export",
 		"tasks.read",
 		"tasks.manage",
 	}

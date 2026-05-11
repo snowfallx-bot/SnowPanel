@@ -5,6 +5,7 @@ import (
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/dto"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/middleware"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/service"
+	"go.opentelemetry.io/otel/trace"
 )
 
 func recordAudit(c *gin.Context, auditService service.AuditService, input dto.RecordAuditInput) {
@@ -24,6 +25,19 @@ func recordAudit(c *gin.Context, auditService service.AuditService, input dto.Re
 	}
 	if input.IP == "" {
 		input.IP = c.ClientIP()
+	}
+	if input.RequestID == "" {
+		if requestID, ok := c.Get(middleware.RequestIDKey); ok {
+			if value, ok := requestID.(string); ok {
+				input.RequestID = value
+			}
+		}
+	}
+	if input.TraceID == "" {
+		spanContext := trace.SpanContextFromContext(c.Request.Context())
+		if spanContext.IsValid() {
+			input.TraceID = spanContext.TraceID().String()
+		}
 	}
 	auditService.Record(c.Request.Context(), input)
 }

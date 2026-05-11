@@ -76,6 +76,8 @@ type AuditLog struct {
 	Success        bool      `json:"success" gorm:"column:success;not null"`
 	ResultCode     string    `json:"result_code" gorm:"column:result_code;size:32;not null"`
 	ResultMessage  string    `json:"result_message" gorm:"column:result_message;not null"`
+	RequestID      string    `json:"request_id" gorm:"column:request_id;size:128;not null;default:''"`
+	TraceID        string    `json:"trace_id" gorm:"column:trace_id;size:64;not null;default:''"`
 	CreatedAt      time.Time `json:"created_at" gorm:"column:created_at;autoCreateTime"`
 }
 

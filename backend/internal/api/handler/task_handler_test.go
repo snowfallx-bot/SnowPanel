@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -95,6 +96,15 @@ func (s *taskAuditRecorder) List(
 	dto.ListAuditLogsQuery,
 ) (dto.ListAuditLogsResult, error) {
 	return dto.ListAuditLogsResult{}, errors.New("not implemented")
+}
+
+func (s *taskAuditRecorder) Export(
+	context.Context,
+	dto.ListAuditLogsQuery,
+	string,
+	io.Writer,
+) error {
+	return errors.New("not implemented")
 }
 
 func TestTaskHandlerListTasksPassesFilters(t *testing.T) {

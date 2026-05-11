@@ -136,6 +136,17 @@ Local P3-5 least-privilege hardening is in progress:
 - Systemd deployment templates now include additional sandboxing and document tradeoffs for Docker/systemd compatibility.
 - Deployment and security docs include a host-agent production checklist.
 
+### P3-6 Audit Retention, Export, and Forensics
+
+Local P3-6 audit forensics work is in progress:
+
+- Audit records now carry `request_id` and `trace_id` for correlation with backend logs and traces.
+- Audit log filters now cover time range, user id, username, module, action, target, success, result code, request id, and trace id.
+- Audit export is available at `GET /api/v1/audit/logs/export?format=csv|jsonl`.
+- `audit.export` permission is seeded and assigned to `super_admin` by default.
+- Export reads audit rows in pages, caps output at 100000 rows, and uses the already-redacted audit fields.
+- Backend tests cover filter propagation, CSV export, JSONL export, and request/trace id persistence.
+
 ## Follow-up Hardening (Post-P3-0)
 
 1. Wire final alert destinations to real on-call channels under team policy

@@ -11,6 +11,8 @@ export interface AuditLog {
   success: boolean;
   result_code: string;
   result_message: string;
+  request_id: string;
+  trace_id: string;
   created_at: string;
 }
 

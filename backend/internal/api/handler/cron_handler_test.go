@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -78,6 +79,15 @@ func (s *fakeAuditService) List(
 	dto.ListAuditLogsQuery,
 ) (dto.ListAuditLogsResult, error) {
 	return dto.ListAuditLogsResult{}, errors.New("not implemented")
+}
+
+func (s *fakeAuditService) Export(
+	context.Context,
+	dto.ListAuditLogsQuery,
+	string,
+	io.Writer,
+) error {
+	return errors.New("not implemented")
 }
 
 func TestCronHandlerCreateTaskRecordsAuditOnSuccess(t *testing.T) {

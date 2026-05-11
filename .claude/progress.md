@@ -110,6 +110,16 @@ P3-5 Host-Agent Least Privilege
 - deployment/security/systemd docs 已补充生产检查表、feature gate、Docker socket 风险、metrics 暴露、备份前置提醒与 systemd hardening tradeoff
 - local core-agent gate 已通过：cargo fmt --all -- --check、cargo test
 - local full gate 已通过：make lint、make test
+
+P3-6 Audit Retention, Export, and Forensics
+- audit_logs 已新增 request_id / trace_id 字段与索引，用于从 HTTP log / trace 回查审计记录
+- audit list filter 已扩展：time range、user_id、username、module、action、target_type、target_id、success、result_code、request_id、trace_id
+- audit export endpoint 已新增：GET /api/v1/audit/logs/export?format=csv|jsonl
+- audit.export 权限已新增，并默认分配给 super_admin
+- audit export 已按分页读取，最多导出 100000 行，导出内容使用已脱敏的 audit 字段
+- service tests 已覆盖 filter 传递、CSV export、JSONL export 与 request/trace id 记录
+- local backend gate 已通过：cd backend && go test ./...
+- local full gate 已通过：make lint、make test
 ```
 
 ### 明确暂不优先

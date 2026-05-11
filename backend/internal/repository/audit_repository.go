@@ -2,16 +2,27 @@ package repository
 
 import (
 	"context"
+	"time"
 
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/model"
 	"gorm.io/gorm"
 )
 
 type AuditListFilter struct {
-	Page   int
-	Size   int
-	Module string
-	Action string
+	Page       int
+	Size       int
+	StartTime  *time.Time
+	EndTime    *time.Time
+	UserID     *int64
+	Username   string
+	Module     string
+	Action     string
+	TargetType string
+	TargetID   string
+	Success    *bool
+	ResultCode string
+	RequestID  string
+	TraceID    string
 }
 
 type AuditRepository interface {
@@ -47,13 +58,7 @@ func (r *auditRepository) List(
 		size = 100
 	}
 
-	query := r.db.WithContext(ctx).Model(&model.AuditLog{})
-	if filter.Module != "" {
-		query = query.Where("module = ?", filter.Module)
-	}
-	if filter.Action != "" {
-		query = query.Where("action = ?", filter.Action)
-	}
+	query := applyAuditListFilter(r.db.WithContext(ctx).Model(&model.AuditLog{}), filter)
 
 	var total int64
 	if err := query.Count(&total).Error; err != nil {
@@ -70,4 +75,44 @@ func (r *auditRepository) List(
 	}
 
 	return items, total, nil
+}
+
+func applyAuditListFilter(query *gorm.DB, filter AuditListFilter) *gorm.DB {
+	if filter.StartTime != nil {
+		query = query.Where("created_at >= ?", *filter.StartTime)
+	}
+	if filter.EndTime != nil {
+		query = query.Where("created_at <= ?", *filter.EndTime)
+	}
+	if filter.UserID != nil {
+		query = query.Where("user_id = ?", *filter.UserID)
+	}
+	if filter.Username != "" {
+		query = query.Where("username = ?", filter.Username)
+	}
+	if filter.Module != "" {
+		query = query.Where("module = ?", filter.Module)
+	}
+	if filter.Action != "" {
+		query = query.Where("action = ?", filter.Action)
+	}
+	if filter.TargetType != "" {
+		query = query.Where("target_type = ?", filter.TargetType)
+	}
+	if filter.TargetID != "" {
+		query = query.Where("target_id = ?", filter.TargetID)
+	}
+	if filter.Success != nil {
+		query = query.Where("success = ?", *filter.Success)
+	}
+	if filter.ResultCode != "" {
+		query = query.Where("result_code = ?", filter.ResultCode)
+	}
+	if filter.RequestID != "" {
+		query = query.Where("request_id = ?", filter.RequestID)
+	}
+	if filter.TraceID != "" {
+		query = query.Where("trace_id = ?", filter.TraceID)
+	}
+	return query
 }
