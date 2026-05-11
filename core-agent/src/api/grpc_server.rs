@@ -1092,14 +1092,23 @@ fn to_proto_cron_task(task: crate::cron::service::CronTaskEntity) -> CronTask {
 
 #[cfg(test)]
 mod tests {
-    use super::{authenticate_request, FileOperatorService, FileServiceImpl};
+    use super::{
+        authenticate_request, CronServiceImpl, DockerServiceImpl, FileOperatorService,
+        FileServiceImpl, ServiceManagerServiceImpl,
+    };
+    use crate::api::proto::cron_service_server::CronService as CronGrpcService;
+    use crate::api::proto::docker_service_server::DockerService as DockerGrpcService;
     use crate::api::proto::file_service_server::FileService as FileGrpcService;
+    use crate::api::proto::service_manager_service_server::ServiceManagerService as ServiceGrpcService;
     use crate::api::proto::{
         CreateDirectoryRequest, DeleteFileRequest, ListFilesRequest, PathSafetyContext,
         ReadFileChunkRequest, ReadTextFileRequest, RenameFileRequest, WriteFileChunkRequest,
         WriteTextFileRequest,
     };
     use crate::config::{AgentAuthConfig, AgentAuthMode};
+    use crate::cron::service::CronService;
+    use crate::docker::service::DockerService;
+    use crate::process::systemd_service::SystemdServiceManager;
     use crate::security::path_validator::PathValidator;
     use std::fs;
     use std::path::{Path, PathBuf};
@@ -1401,5 +1410,59 @@ mod tests {
 
         assert_eq!(err.code(), tonic::Code::PermissionDenied);
         assert!(err.message().contains("file operations disabled"));
+    }
+
+    #[tokio::test]
+    async fn disabled_service_feature_gate_rejects_service_rpc() {
+        let service = ServiceManagerServiceImpl {
+            service_manager: Arc::new(SystemdServiceManager::new(Vec::new())),
+            enabled: false,
+        };
+
+        let err = service
+            .list_services(Request::new(crate::api::proto::ListServicesRequest {
+                keyword: String::new(),
+            }))
+            .await
+            .expect_err("disabled service ops should reject service RPC");
+
+        assert_eq!(err.code(), tonic::Code::PermissionDenied);
+        assert!(err.message().contains("service operations disabled"));
+    }
+
+    #[tokio::test]
+    async fn disabled_docker_feature_gate_rejects_docker_rpc() {
+        let service = DockerServiceImpl {
+            docker_service: Arc::new(DockerService::new().expect("docker service should build")),
+            enabled: false,
+        };
+
+        let err = service
+            .list_containers(Request::new(
+                crate::api::proto::ListDockerContainersRequest {},
+            ))
+            .await
+            .expect_err("disabled docker ops should reject docker RPC");
+
+        assert_eq!(err.code(), tonic::Code::PermissionDenied);
+        assert!(err.message().contains("docker operations disabled"));
+    }
+
+    #[tokio::test]
+    async fn disabled_cron_feature_gate_rejects_cron_rpc() {
+        let service = CronServiceImpl {
+            cron_service: Arc::new(CronService::new(vec!["backup".to_string()])),
+            enabled: false,
+        };
+
+        let err = service
+            .list_cron_tasks(Request::new(crate::api::proto::ListCronTasksRequest {
+                owner: String::new(),
+            }))
+            .await
+            .expect_err("disabled cron ops should reject cron RPC");
+
+        assert_eq!(err.code(), tonic::Code::PermissionDenied);
+        assert!(err.message().contains("cron operations disabled"));
     }
 }
