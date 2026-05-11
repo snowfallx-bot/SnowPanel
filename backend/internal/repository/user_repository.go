@@ -109,6 +109,7 @@ func (r *userRepository) EnsureRBACDefaults(ctx context.Context) error {
 			{Name: "cron.manage", Description: "Manage cron jobs"},
 			{Name: "audit.read", Description: "Read audit logs"},
 			{Name: "audit.export", Description: "Export audit logs"},
+			{Name: "audit.manage", Description: "Manage audit retention"},
 			{Name: "tasks.read", Description: "Read tasks"},
 			{Name: "tasks.manage", Description: "Manage tasks"},
 		}

@@ -2,6 +2,7 @@ package handler
 
 import (
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -66,6 +67,57 @@ func (h *AuditHandler) ExportLogs(c *gin.Context) {
 	}
 }
 
+func (h *AuditHandler) CleanupRetention(c *gin.Context) {
+	var req dto.AuditRetentionCleanupRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Fail(c, http.StatusBadRequest, apperror.ErrBadRequest.Code, "invalid request body")
+		return
+	}
+
+	result, err := h.auditService.CleanupRetention(c.Request.Context(), req)
+	if err != nil {
+		recordAudit(c, h.auditService, dto.RecordAuditInput{
+			Module:         "audit",
+			Action:         "retention_cleanup",
+			TargetType:     "audit_logs",
+			RequestSummary: auditCleanupSummary(req),
+			Success:        false,
+			ResultCode:     "failed",
+			ResultMessage:  err.Error(),
+		})
+		response.FromError(c, err)
+		return
+	}
+
+	recordAudit(c, h.auditService, dto.RecordAuditInput{
+		Module:         "audit",
+		Action:         "retention_cleanup",
+		TargetType:     "audit_logs",
+		RequestSummary: auditCleanupSummary(req),
+		Success:        true,
+		ResultCode:     "ok",
+		ResultMessage:  "audit retention cleanup completed",
+	})
+	response.OK(c, result)
+}
+
 func exportDisposition(format string) string {
 	return `attachment; filename="snowpanel-audit-` + time.Now().UTC().Format("20060102T150405Z") + `.` + format + `"`
+}
+
+func auditCleanupSummary(req dto.AuditRetentionCleanupRequest) string {
+	return `{"dry_run":` + boolString(req.DryRun) +
+		`,"retention_days":` + intString(req.RetentionDays) +
+		`,"archive_before_delete":` + boolString(req.ArchiveBeforeDelete) + `}`
+}
+
+func boolString(value bool) string {
+	if value {
+		return "true"
+	}
+	return "false"
+}
+
+func intString(value int) string {
+	return strconv.Itoa(value)
 }

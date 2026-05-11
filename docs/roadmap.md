@@ -145,7 +145,9 @@ Local P3-6 audit forensics work is in progress:
 - Audit export is available at `GET /api/v1/audit/logs/export?format=csv|jsonl`.
 - `audit.export` permission is seeded and assigned to `super_admin` by default.
 - Export reads audit rows in pages, caps output at 100000 rows, and uses the already-redacted audit fields.
-- Backend tests cover filter propagation, CSV export, JSONL export, and request/trace id persistence.
+- `AUDIT_RETENTION_DAYS` and `AUDIT_EXPORT_MAX_ROWS` configure cleanup cutoff and export size.
+- Audit retention cleanup is available through `POST /api/v1/audit/retention/cleanup`, requires `audit.manage`, and audits the cleanup attempt.
+- Backend tests cover filter propagation, CSV export, JSONL export, request/trace id persistence, retention dry-run, and delete behavior.
 
 ## Follow-up Hardening (Post-P3-0)
 

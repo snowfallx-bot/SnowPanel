@@ -90,6 +90,13 @@ func (s *fakeAuditService) Export(
 	return errors.New("not implemented")
 }
 
+func (s *fakeAuditService) CleanupRetention(
+	context.Context,
+	dto.AuditRetentionCleanupRequest,
+) (dto.AuditRetentionCleanupResult, error) {
+	return dto.AuditRetentionCleanupResult{}, errors.New("not implemented")
+}
+
 func TestCronHandlerCreateTaskRecordsAuditOnSuccess(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

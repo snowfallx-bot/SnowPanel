@@ -72,7 +72,10 @@ func main() {
 	if err := validateEncryptedSettingsStartup(rootCtx, systemSettingRepo, settingsEncryptor); err != nil {
 		zapLogger.Fatal("invalid encrypted settings config", logger.Err(err))
 	}
-	auditService := service.NewAuditService(auditRepo)
+	auditService := service.NewAuditServiceWithOptions(auditRepo, service.AuditServiceOptions{
+		RetentionDays: cfg.Audit.RetentionDays,
+		ExportMaxRows: cfg.Audit.ExportMaxRows,
+	})
 	authService := service.NewAuthService(userRepo, cfg.Auth)
 	if err := authService.EnsureDefaultAdmin(rootCtx); err != nil {
 		zapLogger.Fatal("failed to ensure default admin", logger.Err(err))

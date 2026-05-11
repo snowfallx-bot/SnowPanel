@@ -117,7 +117,10 @@ P3-6 Audit Retention, Export, and Forensics
 - audit export endpoint 已新增：GET /api/v1/audit/logs/export?format=csv|jsonl
 - audit.export 权限已新增，并默认分配给 super_admin
 - audit export 已按分页读取，最多导出 100000 行，导出内容使用已脱敏的 audit 字段
+- AUDIT_RETENTION_DAYS / AUDIT_EXPORT_MAX_ROWS 配置已新增，默认分别为 180 / 100000
+- audit retention cleanup endpoint 已新增：POST /api/v1/audit/retention/cleanup，要求 audit.manage，并记录 cleanup 审计
 - service tests 已覆盖 filter 传递、CSV export、JSONL export 与 request/trace id 记录
+- service tests 已覆盖 retention dry run 与实际 delete 路径
 - local backend gate 已通过：cd backend && go test ./...
 - local full gate 已通过：make lint、make test
 ```

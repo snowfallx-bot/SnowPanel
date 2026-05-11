@@ -57,3 +57,18 @@ type RecordAuditInput struct {
 	RequestID      string
 	TraceID        string
 }
+
+type AuditRetentionCleanupRequest struct {
+	DryRun              bool `json:"dry_run"`
+	RetentionDays       int  `json:"retention_days"`
+	ArchiveBeforeDelete bool `json:"archive_before_delete"`
+}
+
+type AuditRetentionCleanupResult struct {
+	DryRun              bool   `json:"dry_run"`
+	RetentionDays       int    `json:"retention_days"`
+	Cutoff              string `json:"cutoff"`
+	MatchedRows         int64  `json:"matched_rows"`
+	DeletedRows         int64  `json:"deleted_rows"`
+	ArchiveBeforeDelete bool   `json:"archive_before_delete"`
+}

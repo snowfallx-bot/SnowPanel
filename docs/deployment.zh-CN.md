@@ -104,6 +104,7 @@ PostgreSQL 首次初始化时，会加载以下 schema SQL：
 - core-agent 生产安全覆盖开关（`CORE_AGENT_ALLOW_UNSAFE_PRODUCTION_CONFIG`，默认 `false`）
 - core-agent 操作类别开关（`CORE_AGENT_ENABLE_FILE_OPS`、`CORE_AGENT_ENABLE_SERVICE_OPS`、`CORE_AGENT_ENABLE_DOCKER_OPS`、`CORE_AGENT_ENABLE_CRON_OPS`）
 - durable task worker 控制项（`TASK_WORKER_ENABLED`、`TASK_WORKER_CONCURRENCY`、`TASK_WORKER_LEASE_DURATION`、`TASK_WORKER_MAX_ATTEMPTS`）
+- audit retention/export 控制项（`AUDIT_RETENTION_DAYS`、`AUDIT_EXPORT_MAX_ROWS`）
 - core-agent 安全根目录与读写大小限制
 - core-agent 指标端点配置（`CORE_AGENT_METRICS_ENABLED`、`CORE_AGENT_METRICS_HOST`、`CORE_AGENT_METRICS_PORT`）
 - OTEL tracing 配置（`OTEL_TRACING_ENABLED`、`OTEL_EXPORTER_OTLP_ENDPOINT`、`OTEL_TRACES_SAMPLER_ARG`）
@@ -123,6 +124,8 @@ PostgreSQL 首次初始化时，会加载以下 schema SQL：
 - 通过 `CORE_AGENT_ENABLE_*_OPS=false` 关闭不需要的宿主机操作类别，降低影响范围。
 - 生产环境保持 `TASK_WORKER_ENABLED=true`，让 Docker/service restart 任务由带 lease 与 retry 的 DB-backed durable worker 执行。
 - `TASK_WORKER_ENABLED=false` 仅作为临时本地兼容或回滚模式；此时会退回 legacy in-process goroutine executor。
+- 根据运维策略设置 `AUDIT_RETENTION_DAYS`；默认值为 `180`。
+- 保持 `AUDIT_EXPORT_MAX_ROWS` 有界，避免审计导出造成不可预期的内存或网络压力；默认值为 `100000`。
 - 为 Postgres 数据卷配置持久化备份策略。
 - 在 backend/frontend 前加 HTTPS 反向代理。
 - 仅在可信网络暴露 core-agent（`50051`）。

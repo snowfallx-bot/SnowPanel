@@ -77,6 +77,8 @@ Language: **English** | [简体中文](security.zh-CN.md)
 - Audit records also include `request_id` and `trace_id` so an operator can correlate audit entries with backend access logs and distributed traces.
 - Audit logs can be filtered by time range, user, module/action, target, result, request id, and trace id.
 - Audit logs can be exported as CSV or JSONL through `GET /api/v1/audit/logs/export?format=csv|jsonl`; this requires `audit.export`.
+- Audit retention cleanup is available through `POST /api/v1/audit/retention/cleanup`; this requires `audit.manage` and records the cleanup attempt as an audit entry.
+- `AUDIT_RETENTION_DAYS` controls the default cleanup cutoff, and `AUDIT_EXPORT_MAX_ROWS` caps export size.
 - File/service/docker/cron/task operation paths are instrumented with audit writes.
 - Audit request summaries, audit result messages, and task log metadata are redacted before persistence for common sensitive keys such as password, token, secret, key, credential, authorization, and cookies.
 - Audit export uses the same persisted redacted fields and must not be used as a raw secrets export path.

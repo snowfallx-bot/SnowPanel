@@ -145,7 +145,9 @@
 - 审计导出接口已新增：`GET /api/v1/audit/logs/export?format=csv|jsonl`。
 - `audit.export` 权限已加入种子数据，并默认分配给 `super_admin`。
 - 导出按分页读取审计记录，最多导出 100000 行，并复用已脱敏的 audit 字段。
-- backend tests 已覆盖 filter 传递、CSV export、JSONL export、request/trace id 持久化。
+- `AUDIT_RETENTION_DAYS` 与 `AUDIT_EXPORT_MAX_ROWS` 已用于配置清理 cutoff 与导出规模。
+- audit retention cleanup 已通过 `POST /api/v1/audit/retention/cleanup` 暴露，要求 `audit.manage`，并会审计 cleanup 尝试本身。
+- backend tests 已覆盖 filter 传递、CSV export、JSONL export、request/trace id 持久化、retention dry-run 与实际 delete 行为。
 
 ## 后续加固（Post-P3-0）
 

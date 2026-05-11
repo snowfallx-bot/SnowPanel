@@ -131,6 +131,7 @@ func NewRouter(deps RouterDeps) *gin.Engine {
 			{
 				audit.GET("/logs", middleware.RequirePermission("audit.read"), auditHandler.ListLogs)
 				audit.GET("/logs/export", middleware.RequirePermission("audit.export"), auditHandler.ExportLogs)
+				audit.POST("/retention/cleanup", middleware.RequirePermission("audit.manage"), auditHandler.CleanupRetention)
 			}
 
 			tasks := protected.Group("/tasks")

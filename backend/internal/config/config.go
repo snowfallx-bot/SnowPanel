@@ -22,6 +22,7 @@ type Config struct {
 	Tracing      TracingConfig
 	AgentAuth    AgentAuthConfig
 	TaskWorker   TaskWorkerConfig
+	Audit        AuditConfig
 	AgentTarget  string
 	AgentTimeout time.Duration
 }
@@ -101,6 +102,11 @@ type TaskWorkerConfig struct {
 	MaxAttempts   int
 }
 
+type AuditConfig struct {
+	RetentionDays int
+	ExportMaxRows int
+}
+
 func Load() Config {
 	v := viper.New()
 	v.SetConfigName(".env")
@@ -145,6 +151,8 @@ func Load() Config {
 	v.SetDefault("TASK_WORKER_LEASE_DURATION", "30s")
 	v.SetDefault("TASK_WORKER_POLL_INTERVAL", "2s")
 	v.SetDefault("TASK_WORKER_MAX_ATTEMPTS", 3)
+	v.SetDefault("AUDIT_RETENTION_DAYS", 180)
+	v.SetDefault("AUDIT_EXPORT_MAX_ROWS", 100000)
 	v.SetDefault("OTEL_TRACING_ENABLED", false)
 	v.SetDefault("OTEL_SERVICE_NAME", "snowpanel-backend")
 	v.SetDefault("OTEL_SERVICE_VERSION", "")
@@ -254,6 +262,10 @@ func Load() Config {
 			PollInterval:  mustDuration(v.GetString("TASK_WORKER_POLL_INTERVAL"), 2*time.Second),
 			MaxAttempts:   v.GetInt("TASK_WORKER_MAX_ATTEMPTS"),
 		},
+		Audit: AuditConfig{
+			RetentionDays: v.GetInt("AUDIT_RETENTION_DAYS"),
+			ExportMaxRows: v.GetInt("AUDIT_EXPORT_MAX_ROWS"),
+		},
 	}
 }
 
@@ -298,6 +310,12 @@ func (c Config) Validate() error {
 	}
 	if c.TaskWorker.MaxAttempts < 1 {
 		return errors.New("TASK_WORKER_MAX_ATTEMPTS must be greater than 0")
+	}
+	if c.Audit.RetentionDays < 1 {
+		return errors.New("AUDIT_RETENTION_DAYS must be greater than 0")
+	}
+	if c.Audit.ExportMaxRows < 1 {
+		return errors.New("AUDIT_EXPORT_MAX_ROWS must be greater than 0")
 	}
 
 	switch c.AgentAuth.Mode {

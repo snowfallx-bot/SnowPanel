@@ -13,8 +13,11 @@ import (
 )
 
 type fakeAuditRepo struct {
-	items   []model.AuditLog
-	filters []repository.AuditListFilter
+	items         []model.AuditLog
+	filters       []repository.AuditListFilter
+	countBefore   int64
+	deleteBefore  int64
+	deletedCutoff *time.Time
 }
 
 func (r *fakeAuditRepo) Create(_ context.Context, item *model.AuditLog) error {
@@ -32,6 +35,15 @@ func (r *fakeAuditRepo) List(
 		return nil, int64(len(r.items)), nil
 	}
 	return r.items, int64(len(r.items)), nil
+}
+
+func (r *fakeAuditRepo) CountBefore(_ context.Context, _ time.Time) (int64, error) {
+	return r.countBefore, nil
+}
+
+func (r *fakeAuditRepo) DeleteBefore(_ context.Context, cutoff time.Time) (int64, error) {
+	r.deletedCutoff = &cutoff
+	return r.deleteBefore, nil
 }
 
 func TestAuditRecordRedactsSensitiveFields(t *testing.T) {
@@ -184,5 +196,49 @@ func TestAuditExportJSONL(t *testing.T) {
 		!strings.Contains(body, `"trace_id":"trace-jsonl"`) ||
 		!strings.HasSuffix(body, "\n") {
 		t.Fatalf("unexpected jsonl export body: %s", body)
+	}
+}
+
+func TestAuditRetentionCleanupDryRunDoesNotDelete(t *testing.T) {
+	repo := &fakeAuditRepo{countBefore: 12, deleteBefore: 12}
+	service := NewAuditServiceWithOptions(repo, AuditServiceOptions{
+		RetentionDays: 90,
+		ExportMaxRows: 10,
+	})
+
+	result, err := service.CleanupRetention(context.Background(), dto.AuditRetentionCleanupRequest{
+		DryRun: true,
+	})
+	if err != nil {
+		t.Fatalf("expected dry-run cleanup to succeed, got %v", err)
+	}
+
+	if !result.DryRun || result.RetentionDays != 90 || result.MatchedRows != 12 || result.DeletedRows != 0 {
+		t.Fatalf("unexpected dry-run result: %+v", result)
+	}
+	if repo.deletedCutoff != nil {
+		t.Fatalf("dry-run cleanup should not delete rows")
+	}
+}
+
+func TestAuditRetentionCleanupDeletesWhenDryRunFalse(t *testing.T) {
+	repo := &fakeAuditRepo{countBefore: 12, deleteBefore: 7}
+	service := NewAuditServiceWithOptions(repo, AuditServiceOptions{
+		RetentionDays: 180,
+		ExportMaxRows: 10,
+	})
+
+	result, err := service.CleanupRetention(context.Background(), dto.AuditRetentionCleanupRequest{
+		RetentionDays: 30,
+	})
+	if err != nil {
+		t.Fatalf("expected cleanup to succeed, got %v", err)
+	}
+
+	if result.DryRun || result.RetentionDays != 30 || result.MatchedRows != 12 || result.DeletedRows != 7 {
+		t.Fatalf("unexpected cleanup result: %+v", result)
+	}
+	if repo.deletedCutoff == nil {
+		t.Fatalf("expected cleanup to delete rows")
 	}
 }

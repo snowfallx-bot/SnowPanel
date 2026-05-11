@@ -20,15 +20,37 @@ type AuditService interface {
 	Record(ctx context.Context, input dto.RecordAuditInput)
 	List(ctx context.Context, query dto.ListAuditLogsQuery) (dto.ListAuditLogsResult, error)
 	Export(ctx context.Context, query dto.ListAuditLogsQuery, format string, writer io.Writer) error
+	CleanupRetention(ctx context.Context, req dto.AuditRetentionCleanupRequest) (dto.AuditRetentionCleanupResult, error)
 }
 
 type auditService struct {
-	repo repository.AuditRepository
+	repo          repository.AuditRepository
+	retentionDays int
+	exportMaxRows int
+}
+
+type AuditServiceOptions struct {
+	RetentionDays int
+	ExportMaxRows int
 }
 
 func NewAuditService(repo repository.AuditRepository) AuditService {
+	return NewAuditServiceWithOptions(repo, AuditServiceOptions{})
+}
+
+func NewAuditServiceWithOptions(repo repository.AuditRepository, options AuditServiceOptions) AuditService {
+	retentionDays := options.RetentionDays
+	if retentionDays <= 0 {
+		retentionDays = 180
+	}
+	exportMaxRows := options.ExportMaxRows
+	if exportMaxRows <= 0 {
+		exportMaxRows = 100000
+	}
 	return &auditService{
-		repo: repo,
+		repo:          repo,
+		retentionDays: retentionDays,
+		exportMaxRows: exportMaxRows,
 	}
 }
 
@@ -140,6 +162,53 @@ func (s *auditService) Export(
 	}
 }
 
+func (s *auditService) CleanupRetention(
+	ctx context.Context,
+	req dto.AuditRetentionCleanupRequest,
+) (dto.AuditRetentionCleanupResult, error) {
+	retentionDays := req.RetentionDays
+	if retentionDays <= 0 {
+		retentionDays = s.retentionDays
+	}
+	if retentionDays <= 0 {
+		retentionDays = 180
+	}
+
+	cutoff := time.Now().UTC().AddDate(0, 0, -retentionDays)
+	matchedRows, err := s.repo.CountBefore(ctx, cutoff)
+	if err != nil {
+		return dto.AuditRetentionCleanupResult{}, apperror.Wrap(
+			apperror.ErrInternal.Code,
+			apperror.ErrInternal.HTTPStatus,
+			apperror.ErrInternal.Message,
+			err,
+		)
+	}
+
+	result := dto.AuditRetentionCleanupResult{
+		DryRun:              req.DryRun,
+		RetentionDays:       retentionDays,
+		Cutoff:              cutoff.Format(time.RFC3339),
+		MatchedRows:         matchedRows,
+		ArchiveBeforeDelete: req.ArchiveBeforeDelete,
+	}
+	if req.DryRun {
+		return result, nil
+	}
+
+	deletedRows, err := s.repo.DeleteBefore(ctx, cutoff)
+	if err != nil {
+		return dto.AuditRetentionCleanupResult{}, apperror.Wrap(
+			apperror.ErrInternal.Code,
+			apperror.ErrInternal.HTTPStatus,
+			apperror.ErrInternal.Message,
+			err,
+		)
+	}
+	result.DeletedRows = deletedRows
+	return result, nil
+}
+
 func (s *auditService) exportCSV(ctx context.Context, filter repository.AuditListFilter, writer io.Writer) error {
 	csvWriter := csv.NewWriter(writer)
 	if err := csvWriter.Write([]string{
@@ -204,7 +273,6 @@ func (s *auditService) paginateAuditExport(
 	filter repository.AuditListFilter,
 	writeItem func(dto.AuditLog) error,
 ) error {
-	const maxRows = 100000
 	exported := 0
 	page := 1
 	for {
@@ -223,7 +291,7 @@ func (s *auditService) paginateAuditExport(
 			return nil
 		}
 		for _, item := range items {
-			if exported >= maxRows {
+			if exported >= s.exportMaxRows {
 				return nil
 			}
 			if err := writeItem(toAuditLogDTO(item)); err != nil {

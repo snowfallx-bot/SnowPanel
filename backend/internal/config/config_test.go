@@ -55,6 +55,10 @@ func TestValidateAllowsStrongProductionConfig(t *testing.T) {
 			PollInterval:  2,
 			MaxAttempts:   3,
 		},
+		Audit: AuditConfig{
+			RetentionDays: 180,
+			ExportMaxRows: 100000,
+		},
 	}
 
 	if err := cfg.Validate(); err != nil {
@@ -184,6 +188,57 @@ func TestValidateRejectsInvalidTaskWorkerConfig(t *testing.T) {
 			name: "zero max attempts",
 			mutate: func(cfg *Config) {
 				cfg.TaskWorker.MaxAttempts = 0
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := base
+			tc.mutate(&cfg)
+			if err := cfg.Validate(); err == nil {
+				t.Fatalf("expected validation error")
+			}
+		})
+	}
+}
+
+func TestValidateRejectsInvalidAuditConfig(t *testing.T) {
+	base := Config{
+		AppEnv: "production",
+		Auth: AuthConfig{
+			AppEnv:               "production",
+			JWTSecret:            "VeryStrongJWTSecret_For_Production_Use_1234567890!",
+			BootstrapAdmin:       false,
+			DefaultAdminUsername: "admin",
+			DefaultAdminEmail:    "admin@example.com",
+		},
+		TaskWorker: TaskWorkerConfig{
+			Concurrency:   2,
+			LeaseDuration: 30,
+			PollInterval:  2,
+			MaxAttempts:   3,
+		},
+		Audit: AuditConfig{
+			RetentionDays: 180,
+			ExportMaxRows: 100000,
+		},
+	}
+
+	cases := []struct {
+		name   string
+		mutate func(*Config)
+	}{
+		{
+			name: "zero retention days",
+			mutate: func(cfg *Config) {
+				cfg.Audit.RetentionDays = 0
+			},
+		},
+		{
+			name: "zero export max rows",
+			mutate: func(cfg *Config) {
+				cfg.Audit.ExportMaxRows = 0
 			},
 		},
 	}

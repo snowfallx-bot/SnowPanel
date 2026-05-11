@@ -76,6 +76,8 @@
 - 审计记录还包含 `request_id` 与 `trace_id`，便于从 backend access log 与分布式 trace 回查审计条目。
 - audit log 支持按时间范围、用户、module/action、target、结果、request id、trace id 过滤。
 - audit log 可通过 `GET /api/v1/audit/logs/export?format=csv|jsonl` 导出为 CSV 或 JSONL；该接口要求 `audit.export` 权限。
+- audit retention cleanup 可通过 `POST /api/v1/audit/retention/cleanup` 执行；该接口要求 `audit.manage`，并会将 cleanup 尝试本身写入审计。
+- `AUDIT_RETENTION_DAYS` 控制默认清理 cutoff，`AUDIT_EXPORT_MAX_ROWS` 限制导出规模。
 - 文件/服务/docker/cron/任务操作路径都已接入审计写入。
 - audit request summary、audit result message 与 task log metadata 在持久化前会针对 password、token、secret、key、credential、authorization、cookie 等常见敏感字段做脱敏。
 - audit export 使用已经持久化的脱敏字段，不应作为原始 secret 导出路径。

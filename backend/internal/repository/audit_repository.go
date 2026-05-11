@@ -28,6 +28,8 @@ type AuditListFilter struct {
 type AuditRepository interface {
 	Create(ctx context.Context, item *model.AuditLog) error
 	List(ctx context.Context, filter AuditListFilter) ([]model.AuditLog, int64, error)
+	CountBefore(ctx context.Context, cutoff time.Time) (int64, error)
+	DeleteBefore(ctx context.Context, cutoff time.Time) (int64, error)
 }
 
 type auditRepository struct {
@@ -75,6 +77,24 @@ func (r *auditRepository) List(
 	}
 
 	return items, total, nil
+}
+
+func (r *auditRepository) CountBefore(ctx context.Context, cutoff time.Time) (int64, error) {
+	var total int64
+	if err := r.db.WithContext(ctx).
+		Model(&model.AuditLog{}).
+		Where("created_at < ?", cutoff).
+		Count(&total).Error; err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
+func (r *auditRepository) DeleteBefore(ctx context.Context, cutoff time.Time) (int64, error) {
+	result := r.db.WithContext(ctx).
+		Where("created_at < ?", cutoff).
+		Delete(&model.AuditLog{})
+	return result.RowsAffected, result.Error
 }
 
 func applyAuditListFilter(query *gorm.DB, filter AuditListFilter) *gorm.DB {
