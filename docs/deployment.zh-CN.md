@@ -101,6 +101,8 @@ PostgreSQL 首次初始化时，会加载以下 schema SQL：
 - 登录防爆破模式与阈值（`LOGIN_ATTEMPT_STORE`、`LOGIN_ATTEMPT_REDIS_PREFIX`、`LOGIN_*`）
 - backend 到 core-agent 的认证模式（`BACKEND_AGENT_AUTH_MODE`、`BACKEND_AGENT_SHARED_TOKEN`）
 - core-agent 认证模式（`CORE_AGENT_AUTH_MODE`、`CORE_AGENT_SHARED_TOKEN`）
+- core-agent 生产安全覆盖开关（`CORE_AGENT_ALLOW_UNSAFE_PRODUCTION_CONFIG`，默认 `false`）
+- core-agent 操作类别开关（`CORE_AGENT_ENABLE_FILE_OPS`、`CORE_AGENT_ENABLE_SERVICE_OPS`、`CORE_AGENT_ENABLE_DOCKER_OPS`、`CORE_AGENT_ENABLE_CRON_OPS`）
 - durable task worker 控制项（`TASK_WORKER_ENABLED`、`TASK_WORKER_CONCURRENCY`、`TASK_WORKER_LEASE_DURATION`、`TASK_WORKER_MAX_ATTEMPTS`）
 - core-agent 安全根目录与读写大小限制
 - core-agent 指标端点配置（`CORE_AGENT_METRICS_ENABLED`、`CORE_AGENT_METRICS_HOST`、`CORE_AGENT_METRICS_PORT`）
@@ -117,6 +119,8 @@ PostgreSQL 首次初始化时，会加载以下 schema SQL：
 - 设置 `APP_ENV=production` 并显式提供强 `JWT_SECRET`。
 - 若启用管理员初始化（`BOOTSTRAP_ADMIN=true`），显式提供强 `DEFAULT_ADMIN_PASSWORD`。
 - 生产环境启用 backend 到 core-agent 的 token 认证，除非部署环境已经提供更强的私有 mTLS 边界。
+- 生产环境保持 `CORE_AGENT_ALLOW_UNSAFE_PRODUCTION_CONFIG=false`；当 agent 未启用认证、允许根目录包含 `/`、服务操作没有白名单，或 Cron 操作依赖默认命令时会 fail fast。
+- 通过 `CORE_AGENT_ENABLE_*_OPS=false` 关闭不需要的宿主机操作类别，降低影响范围。
 - 生产环境保持 `TASK_WORKER_ENABLED=true`，让 Docker/service restart 任务由带 lease 与 retry 的 DB-backed durable worker 执行。
 - `TASK_WORKER_ENABLED=false` 仅作为临时本地兼容或回滚模式；此时会退回 legacy in-process goroutine executor。
 - 为 Postgres 数据卷配置持久化备份策略。
@@ -125,3 +129,15 @@ PostgreSQL 首次初始化时，会加载以下 schema SQL：
 - 禁止将 core-agent gRPC（`50051`）暴露到公网。
 - 将 core-agent metrics 端点（宿主机模式默认 `127.0.0.1:9108`）限制在本地或可信采集网络。
 - 若宿主机 Agent 模式启用 tracing，请将 `OTEL_EXPORTER_OTLP_ENDPOINT` 指向宿主机可访问的 collector 地址（本仓库 compose 可观测性基线下可用 `127.0.0.1:4317`）。
+- 执行破坏性操作前，确认 Postgres、应用元数据以及受管根目录内的宿主机配置已有备份。
+
+## 宿主机 Agent 生产检查表
+
+- gRPC 尽量绑定到 loopback 或私网地址，并用防火墙限制 `50051`。
+- 启用 agent 认证（`CORE_AGENT_AUTH_MODE=token`），并保持 backend token 配置一致。
+- 收紧 `CORE_AGENT_ALLOWED_ROOTS`，生产环境不要使用 `/`。
+- `CORE_AGENT_SERVICE_WHITELIST` 只保留 SnowPanel 应管理的服务。
+- 显式设置 `CORE_AGENT_CRON_ALLOWED_COMMANDS`，不要依赖默认值。
+- 将 Docker socket 访问视为等价于宿主机 root 权限；不需要时关闭 Docker 操作。
+- metrics 仅暴露在本机或可信采集网络。
+- 文件写入/删除、服务重启、Docker 动作或 Cron 修改前确认备份可用。

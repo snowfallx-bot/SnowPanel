@@ -124,6 +124,18 @@ Local P3-4 durable worker wiring is in progress:
 - Service tests cover enqueue-only mode, idempotency duplicate handling, worker claim/execute, worker context cancellation, claim-only-once behavior, stale lease recovery, failed task retry, non-retryable validation failure, max-attempt exhaustion, queued/running cancellation, long-running heartbeat behavior, and task metric recording.
 - Local backend gate passed: `cd backend && go test ./...`.
 
+### P3-5 Host-Agent Least Privilege
+
+Local P3-5 least-privilege hardening is in progress:
+
+- Core-agent production config now rejects unsafe defaults unless `CORE_AGENT_ALLOW_UNSAFE_PRODUCTION_CONFIG=true` is explicitly set.
+- Production deny-by-default validation covers disabled auth, root allowed paths, empty service whitelist, and implicit cron command defaults.
+- Host operation categories can be disabled with `CORE_AGENT_ENABLE_FILE_OPS`, `CORE_AGENT_ENABLE_SERVICE_OPS`, `CORE_AGENT_ENABLE_DOCKER_OPS`, and `CORE_AGENT_ENABLE_CRON_OPS`.
+- gRPC operation handlers enforce the feature gates before file, service, Docker, or cron actions execute.
+- Core-agent startup emits warnings for broad roots, empty service whitelist, cron defaults, non-loopback metrics, unsafe override usage, and unauthenticated wildcard gRPC binding.
+- Systemd deployment templates now include additional sandboxing and document tradeoffs for Docker/systemd compatibility.
+- Deployment and security docs include a host-agent production checklist.
+
 ## Follow-up Hardening (Post-P3-0)
 
 1. Wire final alert destinations to real on-call channels under team policy

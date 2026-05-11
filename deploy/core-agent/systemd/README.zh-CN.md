@@ -35,6 +35,20 @@
 
 生产环境中 backend 连接宿主机 `core-agent` 时，保持 `CORE_AGENT_AUTH_MODE=token`，设置强 `CORE_AGENT_SHARED_TOKEN`，并在 backend 侧用相同值配置 `BACKEND_AGENT_SHARED_TOKEN`。
 
+生产环境下 `core-agent` 默认按 deny-by-default 校验启动配置，除非显式设置 `CORE_AGENT_ALLOW_UNSAFE_PRODUCTION_CONFIG=true`。生产配置应保持：
+
+- `CORE_AGENT_AUTH_MODE=token`
+- `CORE_AGENT_ALLOWED_ROOTS` 限制为具体目录，不能包含 `/`
+- 启用服务操作时，`CORE_AGENT_SERVICE_WHITELIST` 非空
+- 启用 Cron 操作时，显式配置 `CORE_AGENT_CRON_ALLOWED_COMMANDS`
+
+不需要的操作类别可以直接关闭：
+
+- `CORE_AGENT_ENABLE_FILE_OPS=false`
+- `CORE_AGENT_ENABLE_SERVICE_OPS=false`
+- `CORE_AGENT_ENABLE_DOCKER_OPS=false`
+- `CORE_AGENT_ENABLE_CRON_OPS=false`
+
 ## backend 容器 + 宿主机 agent 运行方式
 
 当 backend 在 Docker 中运行、`core-agent` 在宿主机运行时，使用：
@@ -58,3 +72,14 @@
 - 将 OTLP 导出目标限制在可信 collector / tracing backend 范围内。
 - 收紧 `CORE_AGENT_ALLOWED_ROOTS`、服务白名单、Cron 命令白名单。
 - 条件允许时将 `CORE_AGENT_HOST` 绑定到私网地址，而不是公网 `0.0.0.0`。
+- 启用具有破坏性的文件、服务、Docker 或 Cron 操作前，先备份宿主机配置与应用数据。
+
+## Systemd 加固
+
+模板已启用 `NoNewPrivileges=true`、`PrivateTmp=true`、`ProtectSystem=full`、`ProtectHome=read-only`、内核/control-group 保护、显式 `ReadWritePaths`，以及 `RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX`。
+
+取舍说明：
+
+- `ProtectSystem=strict` 更强，但在部分发行版上可能与 Docker socket 或 systemd 交互冲突。建议先使用 `full`，再按目标发行版验证更严格配置。
+- `ReadWritePaths` 需要与 `CORE_AGENT_ALLOWED_ROOTS` 对齐；启用 Docker 操作时还需要包含 `/run` 或 `/var/run` 等运行时 socket 路径。
+- 基础模板暂不限制 `CapabilityBoundingSet`，因为文件所有权与宿主机服务流程在不同发行版上差异较大。请在验证文件、Docker、systemd 操作后再加入主机专用的最小 capability 集合。

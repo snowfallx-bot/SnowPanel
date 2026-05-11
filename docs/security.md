@@ -41,6 +41,8 @@ Language: **English** | [简体中文](security.zh-CN.md)
 - Safe-root policy restricts path access to allowed roots.
 - Dangerous delete/write/mkdir targets (`/`, `/etc`, `/usr`, etc.) are blocked.
 - Read/write size limits are configurable via env.
+- In production, `core-agent` rejects `CORE_AGENT_ALLOWED_ROOTS=/` unless `CORE_AGENT_ALLOW_UNSAFE_PRODUCTION_CONFIG=true` is explicitly set.
+- File operations can be disabled with `CORE_AGENT_ENABLE_FILE_OPS=false`.
 
 ## Operational Safety
 
@@ -49,6 +51,10 @@ Language: **English** | [简体中文](security.zh-CN.md)
 - Cron operations use structured model + validation flow.
 - Cron command scheduling is restricted to allowlisted command templates
   (`CORE_AGENT_CRON_ALLOWED_COMMANDS`) and blocks shell metacharacters.
+- In production, service operations require a non-empty `CORE_AGENT_SERVICE_WHITELIST` when enabled.
+- In production, cron operations require an explicitly configured non-empty `CORE_AGENT_CRON_ALLOWED_COMMANDS` when enabled.
+- Host operation categories can be disabled independently with `CORE_AGENT_ENABLE_SERVICE_OPS=false`, `CORE_AGENT_ENABLE_DOCKER_OPS=false`, and `CORE_AGENT_ENABLE_CRON_OPS=false`.
+- Treat Docker socket access as host-root-equivalent; disable Docker operations on agents that do not need container control.
 
 ## Backend to Core-Agent Trust Boundary
 
@@ -62,6 +68,8 @@ Language: **English** | [简体中文](security.zh-CN.md)
 - Rotate by deploying a new shared token to core-agent and backend during the same maintenance window, then restart/reload both services.
 - `mtls` mode is reserved in config for a future certificate-based boundary; it intentionally fails fast until implemented.
 - Even with token mode, keep core-agent gRPC port `50051` restricted to trusted private networks. Do not expose core-agent gRPC to the public internet.
+- Production `core-agent` rejects `CORE_AGENT_AUTH_MODE=none` unless `CORE_AGENT_ALLOW_UNSAFE_PRODUCTION_CONFIG=true` is explicitly set.
+- Startup warnings are emitted for non-loopback metrics exposure and wildcard gRPC bind without authentication.
 
 ## Auditability
 

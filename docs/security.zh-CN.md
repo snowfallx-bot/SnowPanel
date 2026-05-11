@@ -41,6 +41,8 @@
 - 安全根目录策略将路径访问限制在允许范围内。
 - 阻止危险的删除/写入/建目录目标（`/`、`/etc`、`/usr` 等）。
 - 读写大小限制可通过环境变量配置。
+- 生产环境下，除非显式设置 `CORE_AGENT_ALLOW_UNSAFE_PRODUCTION_CONFIG=true`，否则 `core-agent` 会拒绝 `CORE_AGENT_ALLOWED_ROOTS=/`。
+- 可通过 `CORE_AGENT_ENABLE_FILE_OPS=false` 关闭文件操作。
 
 ## 运行安全
 
@@ -48,6 +50,10 @@
 - Docker 操作是显式动作（`start/stop/restart/list`），不透传 shell。
 - Cron 操作通过结构化模型与校验流程执行。
 - Cron 调度仅允许命令模板白名单（`CORE_AGENT_CRON_ALLOWED_COMMANDS`），并拒绝 shell 元字符。
+- 生产环境启用服务操作时，要求 `CORE_AGENT_SERVICE_WHITELIST` 非空。
+- 生产环境启用 Cron 操作时，要求显式配置非空 `CORE_AGENT_CRON_ALLOWED_COMMANDS`。
+- 可分别通过 `CORE_AGENT_ENABLE_SERVICE_OPS=false`、`CORE_AGENT_ENABLE_DOCKER_OPS=false`、`CORE_AGENT_ENABLE_CRON_OPS=false` 关闭宿主机操作类别。
+- Docker socket 访问应视为等价于宿主机 root 权限；不需要容器控制的 agent 应关闭 Docker 操作。
 
 ## Backend 到 Core-Agent 信任边界
 
@@ -61,6 +67,8 @@
 - 轮换 token 时，应在同一个维护窗口将新 shared token 同步部署到 core-agent 与 backend，然后重启或 reload 两端服务。
 - `mtls` 模式已预留配置位置，供未来证书认证边界使用；在实现前会 fail fast。
 - 即使启用 token 模式，也必须将 core-agent gRPC 端口 `50051` 限制在可信私网内，禁止暴露到公网。
+- 生产环境下，除非显式设置 `CORE_AGENT_ALLOW_UNSAFE_PRODUCTION_CONFIG=true`，否则 `core-agent` 会拒绝 `CORE_AGENT_AUTH_MODE=none`。
+- 启动时会对非 loopback metrics 暴露、未认证的 wildcard gRPC 监听输出警告。
 
 ## 可审计性
 

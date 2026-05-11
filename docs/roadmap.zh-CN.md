@@ -124,6 +124,18 @@
 - service tests 已覆盖 enqueue-only、idempotency duplicate、worker claim/execute、worker context cancel、claim-only-once、stale lease recovery、失败重试、non-retryable validation failure、max-attempt 耗尽、排队/运行中取消、长任务 heartbeat 与 task metric 记录。
 - 本地 backend 门禁已通过：`cd backend && go test ./...`。
 
+### P3-5 Host-Agent Least Privilege
+
+本地 P3-5 宿主机 agent 最小权限加固正在推进：
+
+- core-agent production 配置已默认拒绝不安全配置，除非显式设置 `CORE_AGENT_ALLOW_UNSAFE_PRODUCTION_CONFIG=true`。
+- production deny-by-default 校验覆盖未启用认证、allowed roots 包含 `/`、服务白名单为空、Cron 命令白名单依赖默认值。
+- 宿主机操作类别可通过 `CORE_AGENT_ENABLE_FILE_OPS`、`CORE_AGENT_ENABLE_SERVICE_OPS`、`CORE_AGENT_ENABLE_DOCKER_OPS`、`CORE_AGENT_ENABLE_CRON_OPS` 分别关闭。
+- gRPC 操作入口会在执行文件、服务、Docker、Cron 动作前检查 feature gate。
+- core-agent 启动会对过宽 roots、空 service whitelist、Cron 默认 allowlist、非 loopback metrics、unsafe override、未认证 wildcard gRPC 绑定输出警告。
+- systemd 部署模板已增加基础 sandboxing，并记录 Docker/systemd 兼容性取舍。
+- 部署与安全文档已加入宿主机 agent 生产检查表。
+
 ## 后续加固（Post-P3-0）
 
 1. 按团队值班制度把最终告警目的地接入到真实 on-call 通道

@@ -100,6 +100,16 @@ P3-4 Durable Task Worker
 - metrics tests 已覆盖 worker claims/completed 打点与 /metrics 暴露
 - local backend gate 已通过：cd backend && go test ./...
 - 远端 CI 仍需在 push 后作为最终确认
+
+P3-5 Host-Agent Least Privilege
+- core-agent production deny-by-default 校验已新增：生产环境拒绝 none auth、/ allowed root、空 service whitelist、未显式配置的 cron allowlist
+- CORE_AGENT_ALLOW_UNSAFE_PRODUCTION_CONFIG 已新增，仅显式开启时跳过 production deny-by-default 检查
+- CORE_AGENT_ENABLE_FILE_OPS / SERVICE_OPS / DOCKER_OPS / CRON_OPS 已新增，并在 gRPC 操作入口执行 category gate
+- startup warnings 已新增：unsafe override、过宽 allowed roots、空 service whitelist、默认 cron allowlist、非 loopback metrics、未认证 wildcard gRPC
+- systemd unit 已补充 ProtectSystem、ProtectHome、ReadWritePaths、RestrictAddressFamilies 等基础 hardening
+- deployment/security/systemd docs 已补充生产检查表、feature gate、Docker socket 风险、metrics 暴露、备份前置提醒与 systemd hardening tradeoff
+- local core-agent gate 已通过：cargo fmt --all -- --check、cargo test
+- local full gate 已通过：make lint、make test
 ```
 
 ### 明确暂不优先

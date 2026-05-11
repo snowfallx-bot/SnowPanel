@@ -35,7 +35,7 @@ use crate::api::proto::{
     UpdateCronTaskResponse, WriteFileChunkRequest, WriteFileChunkResponse, WriteTextFileRequest,
     WriteTextFileResponse,
 };
-use crate::config::{AgentAuthConfig, AgentAuthMode};
+use crate::config::{AgentAuthConfig, AgentAuthMode, OperationFeatureGates};
 use crate::cron::service::{CronError, CronService};
 use crate::docker::service::{DockerAction, DockerError, DockerService};
 use crate::file::service::FileService as FileOperatorService;
@@ -52,6 +52,7 @@ pub struct GrpcServer {
     docker_service: Arc<DockerService>,
     cron_service: Arc<CronService>,
     agent_auth: AgentAuthConfig,
+    feature_gates: OperationFeatureGates,
 }
 
 impl GrpcServer {
@@ -62,6 +63,7 @@ impl GrpcServer {
         service_whitelist: Vec<String>,
         cron_allowed_commands: Vec<String>,
         agent_auth: AgentAuthConfig,
+        feature_gates: OperationFeatureGates,
     ) -> Result<Self> {
         let roots = allowed_roots
             .into_iter()
@@ -81,6 +83,7 @@ impl GrpcServer {
             docker_service: Arc::new(docker_service),
             cron_service: Arc::new(CronService::new(cron_allowed_commands)),
             agent_auth,
+            feature_gates,
         })
     }
 
@@ -112,24 +115,28 @@ impl GrpcServer {
             .add_service(FileServiceServer::with_interceptor(
                 FileServiceImpl {
                     file_service: self.file_service.clone(),
+                    enabled: self.feature_gates.file_ops,
                 },
                 move |request| request_auth_logging_interceptor(request, &file_auth),
             ))
             .add_service(ServiceManagerServiceServer::with_interceptor(
                 ServiceManagerServiceImpl {
                     service_manager: self.service_manager.clone(),
+                    enabled: self.feature_gates.service_ops,
                 },
                 move |request| request_auth_logging_interceptor(request, &service_auth),
             ))
             .add_service(DockerServiceServer::with_interceptor(
                 DockerServiceImpl {
                     docker_service: self.docker_service.clone(),
+                    enabled: self.feature_gates.docker_ops,
                 },
                 move |request| request_auth_logging_interceptor(request, &docker_auth),
             ))
             .add_service(CronServiceServer::with_interceptor(
                 CronServiceImpl {
                     cron_service: self.cron_service.clone(),
+                    enabled: self.feature_gates.cron_ops,
                 },
                 move |request| request_auth_logging_interceptor(request, &cron_auth),
             ))
@@ -223,6 +230,7 @@ impl SystemService for SystemServiceImpl {
 #[derive(Clone)]
 struct FileServiceImpl {
     file_service: Arc<FileOperatorService>,
+    enabled: bool,
 }
 
 #[tonic::async_trait]
@@ -239,6 +247,7 @@ impl FileService for FileServiceImpl {
             "/snowpanel.agent.v1.FileService/ListFiles",
             span,
             async move {
+                ensure_feature_enabled(self.enabled, "file")?;
                 let payload = request.into_inner();
                 Ok(Response::new(
                     self.file_service.list_files(&payload.path, payload.safety),
@@ -260,6 +269,7 @@ impl FileService for FileServiceImpl {
             "/snowpanel.agent.v1.FileService/ReadTextFile",
             span,
             async move {
+                ensure_feature_enabled(self.enabled, "file")?;
                 let payload = request.into_inner();
                 Ok(Response::new(self.file_service.read_text_file(
                     &payload.path,
@@ -284,6 +294,7 @@ impl FileService for FileServiceImpl {
             "/snowpanel.agent.v1.FileService/ReadFileChunk",
             span,
             async move {
+                ensure_feature_enabled(self.enabled, "file")?;
                 let payload = request.into_inner();
                 Ok(Response::new(self.file_service.read_file_chunk(
                     &payload.path,
@@ -308,6 +319,7 @@ impl FileService for FileServiceImpl {
             "/snowpanel.agent.v1.FileService/WriteTextFile",
             span,
             async move {
+                ensure_feature_enabled(self.enabled, "file")?;
                 let payload = request.into_inner();
                 Ok(Response::new(self.file_service.write_text_file(
                     &payload.path,
@@ -334,6 +346,7 @@ impl FileService for FileServiceImpl {
             "/snowpanel.agent.v1.FileService/WriteFileChunk",
             span,
             async move {
+                ensure_feature_enabled(self.enabled, "file")?;
                 let payload = request.into_inner();
                 Ok(Response::new(self.file_service.write_file_chunk(
                     &payload.path,
@@ -360,6 +373,7 @@ impl FileService for FileServiceImpl {
             "/snowpanel.agent.v1.FileService/CreateDirectory",
             span,
             async move {
+                ensure_feature_enabled(self.enabled, "file")?;
                 let payload = request.into_inner();
                 Ok(Response::new(self.file_service.create_directory(
                     &payload.path,
@@ -383,6 +397,7 @@ impl FileService for FileServiceImpl {
             "/snowpanel.agent.v1.FileService/DeleteFile",
             span,
             async move {
+                ensure_feature_enabled(self.enabled, "file")?;
                 let payload = request.into_inner();
                 Ok(Response::new(self.file_service.delete_path(
                     &payload.path,
@@ -406,6 +421,7 @@ impl FileService for FileServiceImpl {
             "/snowpanel.agent.v1.FileService/RenameFile",
             span,
             async move {
+                ensure_feature_enabled(self.enabled, "file")?;
                 let payload = request.into_inner();
                 Ok(Response::new(self.file_service.rename_file(
                     &payload.source_path,
@@ -424,6 +440,16 @@ fn ok_error() -> Error {
         message: "ok".to_string(),
         detail: String::new(),
     }
+}
+
+fn ensure_feature_enabled(enabled: bool, feature: &str) -> Result<(), Status> {
+    if enabled {
+        return Ok(());
+    }
+
+    Err(Status::permission_denied(format!(
+        "{feature} operations disabled by core-agent feature gate"
+    )))
 }
 
 async fn observe_grpc_call<T, F>(
@@ -572,6 +598,7 @@ fn request_id_from_metadata(metadata: &MetadataMap) -> String {
 #[derive(Clone)]
 struct ServiceManagerServiceImpl {
     service_manager: Arc<SystemdServiceManager>,
+    enabled: bool,
 }
 
 #[tonic::async_trait]
@@ -588,6 +615,7 @@ impl ServiceManagerService for ServiceManagerServiceImpl {
             "/snowpanel.agent.v1.ServiceManagerService/ListServices",
             span,
             async move {
+                ensure_feature_enabled(self.enabled, "service")?;
                 let payload = request.into_inner();
                 let result = self.service_manager.list_services(&payload.keyword);
                 match result {
@@ -623,7 +651,10 @@ impl ServiceManagerService for ServiceManagerServiceImpl {
         observe_grpc_call(
             "/snowpanel.agent.v1.ServiceManagerService/StartService",
             span,
-            async move { self.handle_action(ServiceAction::Start, request.into_inner()) },
+            async move {
+                ensure_feature_enabled(self.enabled, "service")?;
+                self.handle_action(ServiceAction::Start, request.into_inner())
+            },
         )
         .await
     }
@@ -639,7 +670,10 @@ impl ServiceManagerService for ServiceManagerServiceImpl {
         observe_grpc_call(
             "/snowpanel.agent.v1.ServiceManagerService/StopService",
             span,
-            async move { self.handle_action(ServiceAction::Stop, request.into_inner()) },
+            async move {
+                ensure_feature_enabled(self.enabled, "service")?;
+                self.handle_action(ServiceAction::Stop, request.into_inner())
+            },
         )
         .await
     }
@@ -655,7 +689,10 @@ impl ServiceManagerService for ServiceManagerServiceImpl {
         observe_grpc_call(
             "/snowpanel.agent.v1.ServiceManagerService/RestartService",
             span,
-            async move { self.handle_action(ServiceAction::Restart, request.into_inner()) },
+            async move {
+                ensure_feature_enabled(self.enabled, "service")?;
+                self.handle_action(ServiceAction::Restart, request.into_inner())
+            },
         )
         .await
     }
@@ -694,6 +731,7 @@ fn to_error(err: ServiceError) -> Error {
 #[derive(Clone)]
 struct DockerServiceImpl {
     docker_service: Arc<DockerService>,
+    enabled: bool,
 }
 
 #[tonic::async_trait]
@@ -710,6 +748,7 @@ impl DockerGrpcService for DockerServiceImpl {
             "/snowpanel.agent.v1.DockerService/ListContainers",
             span,
             async move {
+                ensure_feature_enabled(self.enabled, "docker")?;
                 let result = self.docker_service.list_containers().await;
                 match result {
                     Ok(containers) => Ok(Response::new(ListDockerContainersResponse {
@@ -747,6 +786,7 @@ impl DockerGrpcService for DockerServiceImpl {
             "/snowpanel.agent.v1.DockerService/StartContainer",
             span,
             async move {
+                ensure_feature_enabled(self.enabled, "docker")?;
                 self.handle_action(DockerAction::Start, request.into_inner())
                     .await
             },
@@ -766,6 +806,7 @@ impl DockerGrpcService for DockerServiceImpl {
             "/snowpanel.agent.v1.DockerService/StopContainer",
             span,
             async move {
+                ensure_feature_enabled(self.enabled, "docker")?;
                 self.handle_action(DockerAction::Stop, request.into_inner())
                     .await
             },
@@ -785,6 +826,7 @@ impl DockerGrpcService for DockerServiceImpl {
             "/snowpanel.agent.v1.DockerService/RestartContainer",
             span,
             async move {
+                ensure_feature_enabled(self.enabled, "docker")?;
                 self.handle_action(DockerAction::Restart, request.into_inner())
                     .await
             },
@@ -804,6 +846,7 @@ impl DockerGrpcService for DockerServiceImpl {
             "/snowpanel.agent.v1.DockerService/ListImages",
             span,
             async move {
+                ensure_feature_enabled(self.enabled, "docker")?;
                 let result = self.docker_service.list_images().await;
                 match result {
                     Ok(images) => Ok(Response::new(ListDockerImagesResponse {
@@ -861,6 +904,7 @@ fn to_docker_error(err: DockerError) -> Error {
 #[derive(Clone)]
 struct CronServiceImpl {
     cron_service: Arc<CronService>,
+    enabled: bool,
 }
 
 #[tonic::async_trait]
@@ -877,6 +921,7 @@ impl CronGrpcService for CronServiceImpl {
             "/snowpanel.agent.v1.CronService/ListCronTasks",
             span,
             async move {
+                ensure_feature_enabled(self.enabled, "cron")?;
                 let result = self.cron_service.list_tasks();
                 match result {
                     Ok(tasks) => Ok(Response::new(ListCronTasksResponse {
@@ -908,6 +953,7 @@ impl CronGrpcService for CronServiceImpl {
             "/snowpanel.agent.v1.CronService/CreateCronTask",
             span,
             async move {
+                ensure_feature_enabled(self.enabled, "cron")?;
                 let payload = request.into_inner();
                 let result = self.cron_service.create_task(
                     &payload.expression,
@@ -942,6 +988,7 @@ impl CronGrpcService for CronServiceImpl {
             "/snowpanel.agent.v1.CronService/UpdateCronTask",
             span,
             async move {
+                ensure_feature_enabled(self.enabled, "cron")?;
                 let payload = request.into_inner();
                 let result = self.cron_service.update_task(
                     &payload.id,
@@ -977,6 +1024,7 @@ impl CronGrpcService for CronServiceImpl {
             "/snowpanel.agent.v1.CronService/DeleteCronTask",
             span,
             async move {
+                ensure_feature_enabled(self.enabled, "cron")?;
                 let payload = request.into_inner();
                 let result = self.cron_service.delete_task(&payload.id);
                 match result {
@@ -1006,6 +1054,7 @@ impl CronGrpcService for CronServiceImpl {
             "/snowpanel.agent.v1.CronService/SetCronTaskEnabled",
             span,
             async move {
+                ensure_feature_enabled(self.enabled, "cron")?;
                 let payload = request.into_inner();
                 let result = self.cron_service.set_enabled(&payload.id, payload.enabled);
                 match result {
@@ -1093,6 +1142,7 @@ mod tests {
                 16,
                 32,
             )),
+            enabled: true,
         }
     }
 
@@ -1328,5 +1378,28 @@ mod tests {
         assert_ok(deleted.error);
         assert_eq!(deleted.path, expected_delete_dir_path);
         assert!(!delete_dir.exists());
+    }
+
+    #[tokio::test]
+    async fn disabled_file_feature_gate_rejects_file_rpc() {
+        let service = FileServiceImpl {
+            file_service: Arc::new(FileOperatorService::new(
+                PathValidator::new(Vec::new()),
+                16,
+                32,
+            )),
+            enabled: false,
+        };
+
+        let err = service
+            .list_files(Request::new(ListFilesRequest {
+                path: "/tmp".to_string(),
+                safety: None,
+            }))
+            .await
+            .expect_err("disabled file ops should reject file RPC");
+
+        assert_eq!(err.code(), tonic::Code::PermissionDenied);
+        assert!(err.message().contains("file operations disabled"));
     }
 }

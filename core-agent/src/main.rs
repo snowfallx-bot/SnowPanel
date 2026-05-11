@@ -32,6 +32,12 @@ async fn main() -> Result<()> {
     let addr = cfg.address();
     let metrics_enabled = cfg.metrics_enabled;
     let metrics_addr = cfg.metrics_address();
+    for warning in cfg.startup_warnings() {
+        tracing::warn!(
+            warning = warning.as_str(),
+            "core-agent configuration warning"
+        );
+    }
 
     let server = api::grpc_server::GrpcServer::new(
         cfg.allowed_roots.clone(),
@@ -40,6 +46,7 @@ async fn main() -> Result<()> {
         cfg.service_whitelist.clone(),
         cfg.cron_allowed_commands.clone(),
         cfg.agent_auth.clone(),
+        cfg.feature_gates.clone(),
     )?;
 
     if metrics_enabled {

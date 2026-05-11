@@ -101,6 +101,8 @@ Key settings in `.env`:
 - login attempt limiter mode and thresholds (`LOGIN_ATTEMPT_STORE`, `LOGIN_ATTEMPT_REDIS_PREFIX`, `LOGIN_*`)
 - backend <-> core-agent auth mode (`BACKEND_AGENT_AUTH_MODE`, `BACKEND_AGENT_SHARED_TOKEN`)
 - core-agent auth mode (`CORE_AGENT_AUTH_MODE`, `CORE_AGENT_SHARED_TOKEN`)
+- core-agent production safety override (`CORE_AGENT_ALLOW_UNSAFE_PRODUCTION_CONFIG`, default `false`)
+- core-agent operation gates (`CORE_AGENT_ENABLE_FILE_OPS`, `CORE_AGENT_ENABLE_SERVICE_OPS`, `CORE_AGENT_ENABLE_DOCKER_OPS`, `CORE_AGENT_ENABLE_CRON_OPS`)
 - durable task worker controls (`TASK_WORKER_ENABLED`, `TASK_WORKER_CONCURRENCY`, `TASK_WORKER_LEASE_DURATION`, `TASK_WORKER_MAX_ATTEMPTS`)
 - core-agent safe-root and read/write limits
 - core-agent metrics endpoint config (`CORE_AGENT_METRICS_ENABLED`, `CORE_AGENT_METRICS_HOST`, `CORE_AGENT_METRICS_PORT`)
@@ -117,6 +119,8 @@ Key settings in `.env`:
 - Set `APP_ENV=production` and provide a strong explicit `JWT_SECRET`.
 - If bootstrap admin is enabled, provide a strong explicit `DEFAULT_ADMIN_PASSWORD`.
 - Enable backend <-> core-agent token auth in production unless the deployment has a stronger private mTLS boundary.
+- In production, leave `CORE_AGENT_ALLOW_UNSAFE_PRODUCTION_CONFIG=false`; the agent fails fast when auth is disabled, allowed roots include `/`, service operations have no whitelist, or cron operations rely on default commands.
+- Disable unused host-agent operation categories with `CORE_AGENT_ENABLE_*_OPS=false` to reduce blast radius.
 - Keep `TASK_WORKER_ENABLED=true` for production so Docker/service restart tasks are executed by the DB-backed durable worker with leases and retries.
 - Use `TASK_WORKER_ENABLED=false` only as a temporary local compatibility or rollback mode; it falls back to the legacy in-process goroutine executor.
 - Use persistent backup strategy for Postgres volumes.
@@ -125,3 +129,15 @@ Key settings in `.env`:
 - Never expose core-agent gRPC (`50051`) to the public internet.
 - Keep core-agent metrics endpoint (`CORE_AGENT_METRICS_HOST:CORE_AGENT_METRICS_PORT`, default `127.0.0.1:9108` in host mode) in loopback or trusted scrape networks.
 - If you enable host-agent tracing, point `OTEL_EXPORTER_OTLP_ENDPOINT` at the collector address reachable from host (for local compose observability baseline, `127.0.0.1:4317`).
+- Before destructive operations, verify backups exist for Postgres, app metadata, and any host configuration under managed roots.
+
+## Host-Agent Production Checklist
+
+- Bind gRPC to loopback or a private interface when possible; firewall port `50051`.
+- Enable agent auth (`CORE_AGENT_AUTH_MODE=token`) and keep backend token config in sync.
+- Keep `CORE_AGENT_ALLOWED_ROOTS` narrow and never use `/` in production.
+- Keep `CORE_AGENT_SERVICE_WHITELIST` to only services SnowPanel should manage.
+- Set `CORE_AGENT_CRON_ALLOWED_COMMANDS` explicitly; do not rely on defaults.
+- Treat Docker socket access as host-root-equivalent and disable Docker ops when not needed.
+- Keep metrics on loopback or a trusted scrape network.
+- Confirm backups before file writes/deletes, service restarts, Docker actions, or cron edits.

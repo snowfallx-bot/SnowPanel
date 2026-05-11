@@ -14,10 +14,13 @@ Restart=on-failure
 RestartSec=3s
 NoNewPrivileges=true
 PrivateTmp=true
-ProtectHome=true
+ProtectSystem=full
+ProtectHome=read-only
 ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectControlGroups=true
+ReadWritePaths=/tmp /var/tmp /home /run /var/run
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
 LimitNOFILE=65535
 
 [Install]
