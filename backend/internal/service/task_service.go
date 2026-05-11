@@ -79,6 +79,18 @@ type taskPayload struct {
 	ServiceName string `json:"service_name,omitempty"`
 }
 
+type nonRetryableTaskError struct {
+	err error
+}
+
+func (e nonRetryableTaskError) Error() string {
+	return e.err.Error()
+}
+
+func (e nonRetryableTaskError) Unwrap() error {
+	return e.err
+}
+
 func NewTaskService(
 	repo repository.TaskRepository,
 	dockerService DockerService,
@@ -693,7 +705,7 @@ func (s *taskService) runClaimedTask(
 
 	payload, err := unmarshalTaskPayload(task.Payload)
 	if err != nil {
-		s.failClaimedTask(ctx, task, workerID, err, map[string]interface{}{"payload": task.Payload})
+		s.failClaimedTask(ctx, task, workerID, nonRetryableTaskError{err: err}, map[string]interface{}{"payload": task.Payload})
 		return
 	}
 
@@ -858,7 +870,7 @@ func (s *taskService) executeTaskOperation(
 		})
 		return nil
 	default:
-		return errors.New("unsupported task operation")
+		return nonRetryableTaskError{err: errors.New("unsupported task operation")}
 	}
 }
 
@@ -880,11 +892,14 @@ func (s *taskService) failClaimedTask(
 	}
 
 	now := time.Now()
-	nextRunAt := nextTaskRetryAt(now, task.Attempt, task.MaxAttempts)
+	var nonRetryable nonRetryableTaskError
+	retryable := !errors.As(err, &nonRetryable) && isRetryableTaskError(err)
+	nextRunAt := nextTaskRetryAt(now, task.Attempt, task.MaxAttempts, retryable)
 	fields := map[string]interface{}{
 		"attempt":      task.Attempt,
 		"error":        err.Error(),
 		"max_attempts": task.MaxAttempts,
+		"retryable":    retryable,
 		"worker_id":    workerID,
 	}
 	message := "task failed"
@@ -934,12 +949,28 @@ func taskHeartbeatInterval(leaseDuration time.Duration) time.Duration {
 	return interval
 }
 
-func nextTaskRetryAt(now time.Time, attempt int, maxAttempts int) *time.Time {
-	if maxAttempts <= 0 || attempt >= maxAttempts {
+func nextTaskRetryAt(now time.Time, attempt int, maxAttempts int, retryable bool) *time.Time {
+	if !retryable || maxAttempts <= 0 || attempt >= maxAttempts {
 		return nil
 	}
 	next := now.Add(taskRetryBackoff(attempt))
 	return &next
+}
+
+func isRetryableTaskError(err error) bool {
+	if err == nil {
+		return false
+	}
+	appErr, ok := apperror.As(err)
+	if !ok {
+		return true
+	}
+	switch appErr.HTTPStatus {
+	case 400, 401, 403, 404, 413:
+		return false
+	default:
+		return true
+	}
 }
 
 func taskRetryBackoff(attempt int) time.Duration {

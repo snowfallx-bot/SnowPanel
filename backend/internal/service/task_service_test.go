@@ -11,6 +11,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
+	"github.com/snowfallx-bot/SnowPanel/backend/internal/apperror"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/dto"
 	appmetrics "github.com/snowfallx-bot/SnowPanel/backend/internal/metrics"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/model"
@@ -818,6 +819,111 @@ func TestRunWorkerStopsRetryingAtMaxAttempts(t *testing.T) {
 	}
 	if task.Attempt != 1 {
 		t.Fatalf("expected attempt=1, got %d", task.Attempt)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if restartCalls != 1 {
+		t.Fatalf("expected one restart attempt, got %d", restartCalls)
+	}
+}
+
+func TestRunWorkerDoesNotRetryInvalidPayload(t *testing.T) {
+	repo := newFakeTaskRepo()
+	if err := repo.Create(context.Background(), &model.Task{
+		Type:        TaskTypeDockerRestart,
+		Status:      TaskStatusPending,
+		Progress:    0,
+		Payload:     `{"operation":"docker.restart"}`,
+		Result:      `{}`,
+		MaxAttempts: 3,
+	}); err != nil {
+		t.Fatalf("failed to seed task: %v", err)
+	}
+	service := NewTaskServiceWithOptions(
+		repo,
+		fakeTaskDockerService{},
+		nil,
+		TaskServiceOptions{
+			AsyncExecution: false,
+			MaxAttempts:    3,
+		},
+	)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go service.RunWorker(ctx, TaskWorkerOptions{
+		WorkerID:      "worker-1",
+		Concurrency:   1,
+		LeaseDuration: time.Second,
+		PollInterval:  20 * time.Millisecond,
+	})
+
+	waitForTaskStatus(t, repo, 1, TaskStatusFailed, 2*time.Second)
+	task, err := repo.GetByID(context.Background(), 1)
+	if err != nil {
+		t.Fatalf("failed to load task: %v", err)
+	}
+	if task.Attempt != 1 {
+		t.Fatalf("expected invalid payload to fail after one attempt, got %d", task.Attempt)
+	}
+	if task.NextRunAt != nil {
+		t.Fatalf("did not expect retry to be scheduled for invalid payload, got %v", task.NextRunAt)
+	}
+}
+
+func TestRunWorkerDoesNotRetryValidationError(t *testing.T) {
+	repo := newFakeTaskRepo()
+	var mu sync.Mutex
+	restartCalls := 0
+	service := NewTaskServiceWithOptions(
+		repo,
+		fakeTaskDockerService{
+			restartFn: func(context.Context, string) (dto.DockerContainerActionResult, error) {
+				mu.Lock()
+				restartCalls++
+				mu.Unlock()
+				return dto.DockerContainerActionResult{}, apperror.Wrap(
+					apperror.ErrBadRequest.Code,
+					apperror.ErrBadRequest.HTTPStatus,
+					apperror.ErrBadRequest.Message,
+					errors.New("invalid container id"),
+				)
+			},
+		},
+		nil,
+		TaskServiceOptions{
+			AsyncExecution: false,
+			MaxAttempts:    3,
+		},
+	)
+
+	result, err := service.CreateDockerRestartTask(
+		context.Background(),
+		dto.CreateDockerRestartTaskRequest{ContainerID: "web"},
+		nil,
+		"tester",
+	)
+	if err != nil {
+		t.Fatalf("expected create task success, got %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go service.RunWorker(ctx, TaskWorkerOptions{
+		WorkerID:      "worker-1",
+		Concurrency:   1,
+		LeaseDuration: time.Second,
+		PollInterval:  20 * time.Millisecond,
+	})
+
+	waitForTaskStatus(t, repo, result.ID, TaskStatusFailed, 2*time.Second)
+	time.Sleep(80 * time.Millisecond)
+	task, err := repo.GetByID(context.Background(), result.ID)
+	if err != nil {
+		t.Fatalf("failed to load task: %v", err)
+	}
+	if task.Attempt != 1 {
+		t.Fatalf("expected validation error to fail after one attempt, got %d", task.Attempt)
 	}
 	mu.Lock()
 	defer mu.Unlock()
