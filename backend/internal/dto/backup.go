@@ -7,10 +7,34 @@ type CreateBackupMetadataRequest struct {
 	FilePath     string `json:"file_path,omitempty" binding:"omitempty,max=1024"`
 }
 
+type CreateBackupTaskRequest struct {
+	ResourceType   string `json:"resource_type" binding:"required,max=32"`
+	ResourceID     string `json:"resource_id" binding:"required,max=128"`
+	StorageType    string `json:"storage_type,omitempty" binding:"omitempty,max=32"`
+	FilePath       string `json:"file_path,omitempty" binding:"omitempty,max=1024"`
+	IdempotencyKey string `json:"idempotency_key,omitempty" binding:"omitempty,max=128"`
+}
+
 type VerifyBackupRequest struct {
 	SizeBytes int64  `json:"size_bytes" binding:"required,min=1"`
 	Checksum  string `json:"checksum" binding:"required,max=128"`
 	FilePath  string `json:"file_path,omitempty" binding:"omitempty,max=1024"`
+}
+
+type CreateBackupVerifyTaskRequest struct {
+	SizeBytes      int64  `json:"size_bytes" binding:"required,min=1"`
+	Checksum       string `json:"checksum" binding:"required,max=128"`
+	FilePath       string `json:"file_path,omitempty" binding:"omitempty,max=1024"`
+	IdempotencyKey string `json:"idempotency_key,omitempty" binding:"omitempty,max=128"`
+}
+
+type CreateBackupTaskResult struct {
+	Backup BackupSummary    `json:"backup"`
+	Task   CreateTaskResult `json:"task"`
+}
+
+type CreateBackupVerifyTaskResult struct {
+	Task CreateTaskResult `json:"task"`
 }
 
 type ListBackupsQuery struct {

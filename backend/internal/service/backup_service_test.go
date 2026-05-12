@@ -124,6 +124,26 @@ func TestBackupVerifyMismatchMarksFailed(t *testing.T) {
 	}
 }
 
+func TestBackupMarkStatusUpdatesExistingBackup(t *testing.T) {
+	repo := newFakeBackupRepo()
+	service := NewBackupService(repo)
+	result, err := service.CreateMetadata(context.Background(), dto.CreateBackupMetadataRequest{
+		ResourceType: BackupResourcePostgres,
+		ResourceID:   "primary",
+	}, nil)
+	if err != nil {
+		t.Fatalf("CreateMetadata returned error: %v", err)
+	}
+
+	updated, err := service.MarkStatus(context.Background(), result.ID, BackupStatusRunning)
+	if err != nil {
+		t.Fatalf("MarkStatus returned error: %v", err)
+	}
+	if updated.Status != BackupStatusRunning {
+		t.Fatalf("expected running status, got %q", updated.Status)
+	}
+}
+
 func TestBackupListNormalizesFilters(t *testing.T) {
 	repo := newFakeBackupRepo()
 	now := time.Now()

@@ -101,6 +101,7 @@ func main() {
 			AsyncExecution: !cfg.TaskWorker.Enabled,
 			MaxAttempts:    cfg.TaskWorker.MaxAttempts,
 			Metrics:        metricsSet,
+			BackupService:  backupService,
 		},
 	)
 	if cfg.TaskWorker.Enabled {

@@ -51,6 +51,14 @@ func (s *backupHandlerServiceStub) Verify(
 	return s.verifyResult, s.verifyErr
 }
 
+func (s *backupHandlerServiceStub) MarkStatus(
+	context.Context,
+	int64,
+	string,
+) (dto.BackupSummary, error) {
+	return dto.BackupSummary{}, errors.New("not implemented")
+}
+
 func (s *backupHandlerServiceStub) List(
 	_ context.Context,
 	query dto.ListBackupsQuery,
@@ -101,7 +109,7 @@ func TestBackupHandlerListPassesFilters(t *testing.T) {
 			Items: []dto.BackupSummary{{ID: 8, Status: "success"}},
 		},
 	}
-	handler := NewBackupHandler(backupSvc, nil)
+	handler := NewBackupHandler(backupSvc, nil, nil)
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
@@ -142,7 +150,7 @@ func TestBackupHandlerCreateRecordsAudit(t *testing.T) {
 		},
 	}
 	auditSvc := &backupAuditRecorder{}
-	handler := NewBackupHandler(backupSvc, auditSvc)
+	handler := NewBackupHandler(backupSvc, nil, auditSvc)
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
@@ -199,7 +207,7 @@ func TestBackupHandlerVerifyFailureRecordsAudit(t *testing.T) {
 		),
 	}
 	auditSvc := &backupAuditRecorder{}
-	handler := NewBackupHandler(backupSvc, auditSvc)
+	handler := NewBackupHandler(backupSvc, nil, auditSvc)
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)

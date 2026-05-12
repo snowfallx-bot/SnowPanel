@@ -71,7 +71,7 @@ func NewRouter(deps RouterDeps) *gin.Engine {
 	cronHandler := handler.NewCronHandler(deps.CronService, deps.AuditService)
 	auditHandler := handler.NewAuditHandler(deps.AuditService)
 	taskHandler := handler.NewTaskHandler(deps.TaskService, deps.AuditService)
-	backupHandler := handler.NewBackupHandler(deps.BackupService, deps.AuditService)
+	backupHandler := handler.NewBackupHandler(deps.BackupService, deps.TaskService, deps.AuditService)
 
 	router.GET("/health", healthHandler.Health)
 	router.GET("/ready", healthHandler.Readiness)
@@ -150,7 +150,9 @@ func NewRouter(deps RouterDeps) *gin.Engine {
 			{
 				backups.GET("", middleware.RequirePermission("backup.read"), backupHandler.ListBackups)
 				backups.POST("", middleware.RequirePermission("backup.manage"), backupHandler.CreateBackup)
+				backups.POST("/tasks/create", middleware.RequirePermission("backup.manage"), backupHandler.CreateBackupTask)
 				backups.POST("/:id/verify", middleware.RequirePermission("backup.manage"), backupHandler.VerifyBackup)
+				backups.POST("/:id/verify-task", middleware.RequirePermission("backup.manage"), backupHandler.VerifyBackupTask)
 			}
 		}
 	}

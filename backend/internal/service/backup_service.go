@@ -32,6 +32,7 @@ const (
 type BackupService interface {
 	CreateMetadata(ctx context.Context, req dto.CreateBackupMetadataRequest, createdBy *int64) (dto.BackupSummary, error)
 	Verify(ctx context.Context, id int64, req dto.VerifyBackupRequest) (dto.BackupSummary, error)
+	MarkStatus(ctx context.Context, id int64, status string) (dto.BackupSummary, error)
 	List(ctx context.Context, query dto.ListBackupsQuery) (dto.ListBackupsResult, error)
 }
 
@@ -128,6 +129,34 @@ func (s *backupService) Verify(
 	if filePath != "" {
 		backup.FilePath = filePath
 	}
+	backup.UpdatedAt = time.Now()
+	return mapBackupSummary(*backup), nil
+}
+
+func (s *backupService) MarkStatus(ctx context.Context, id int64, status string) (dto.BackupSummary, error) {
+	if id <= 0 {
+		return dto.BackupSummary{}, badBackupRequest(errors.New("backup id must be positive"))
+	}
+	normalized, err := normalizeBackupStatusFilter(status)
+	if err != nil || normalized == "" {
+		if err == nil {
+			err = errors.New("backup status is required")
+		}
+		return dto.BackupSummary{}, badBackupRequest(err)
+	}
+
+	backup, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return dto.BackupSummary{}, wrapBackupInternal(err)
+	}
+	if backup == nil {
+		return dto.BackupSummary{}, apperror.ErrBackupNotFound
+	}
+	if err := s.repo.UpdateStatus(ctx, id, normalized); err != nil {
+		return dto.BackupSummary{}, wrapBackupInternal(err)
+	}
+
+	backup.Status = normalized
 	backup.UpdatedAt = time.Now()
 	return mapBackupSummary(*backup), nil
 }

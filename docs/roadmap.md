@@ -163,6 +163,9 @@ Local P3-7 backup foundation work has started:
 - `backup.read` and `backup.manage` permissions are seeded for `super_admin`.
 - Backup metadata APIs are available at `GET /api/v1/backups`, `POST /api/v1/backups`, and `POST /api/v1/backups/:id/verify`.
 - Backup create and verify attempts are audited.
+- `backup_create` and `backup_verify` task types are wired into the durable task worker baseline.
+- Backup task APIs are available at `POST /api/v1/backups/tasks/create` and `POST /api/v1/backups/:id/verify-task`.
+- The current worker baseline drives backup metadata status and checksum/size verification; real Postgres dump generation remains a follow-up before claiming full backup automation.
 
 ## Follow-up Hardening (Post-P3-0)
 

@@ -1134,6 +1134,127 @@ func TestRunWorkerRecordsTaskMetrics(t *testing.T) {
 	}
 }
 
+func TestRunWorkerCompletesBackupCreateTask(t *testing.T) {
+	taskRepo := newFakeTaskRepo()
+	backupRepo := newFakeBackupRepo()
+	backupSvc := NewBackupService(backupRepo)
+	taskSvc := NewTaskServiceWithOptions(
+		taskRepo,
+		nil,
+		nil,
+		TaskServiceOptions{
+			AsyncExecution: false,
+			MaxAttempts:    2,
+			BackupService:  backupSvc,
+		},
+	)
+
+	result, err := taskSvc.CreateBackupTask(
+		context.Background(),
+		dto.CreateBackupTaskRequest{
+			ResourceType: BackupResourcePostgres,
+			ResourceID:   "primary",
+			StorageType:  BackupStorageLocal,
+		},
+		nil,
+		"tester",
+	)
+	if err != nil {
+		t.Fatalf("expected backup task create success, got %v", err)
+	}
+	if result.Task.Type != TaskTypeBackupCreate {
+		t.Fatalf("unexpected task type: %s", result.Task.Type)
+	}
+	backup, err := backupRepo.GetByID(context.Background(), result.Backup.ID)
+	if err != nil {
+		t.Fatalf("failed to get backup: %v", err)
+	}
+	if backup == nil || backup.Status != BackupStatusPending {
+		t.Fatalf("expected pending backup metadata, got %+v", backup)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go taskSvc.RunWorker(ctx, TaskWorkerOptions{
+		WorkerID:      "worker-1",
+		Concurrency:   1,
+		LeaseDuration: time.Second,
+		PollInterval:  20 * time.Millisecond,
+	})
+
+	waitForTaskStatus(t, taskRepo, result.Task.ID, TaskStatusSuccess, 2*time.Second)
+	backup, err = backupRepo.GetByID(context.Background(), result.Backup.ID)
+	if err != nil {
+		t.Fatalf("failed to get backup: %v", err)
+	}
+	if backup.Status != BackupStatusSuccess {
+		t.Fatalf("expected backup status success, got %+v", backup)
+	}
+}
+
+func TestRunWorkerVerifiesBackupTask(t *testing.T) {
+	taskRepo := newFakeTaskRepo()
+	backupRepo := newFakeBackupRepo()
+	backupSvc := NewBackupService(backupRepo)
+	backup, err := backupSvc.CreateMetadata(context.Background(), dto.CreateBackupMetadataRequest{
+		ResourceType: BackupResourcePostgres,
+		ResourceID:   "primary",
+		StorageType:  BackupStorageLocal,
+	}, nil)
+	if err != nil {
+		t.Fatalf("expected backup metadata create success, got %v", err)
+	}
+
+	taskSvc := NewTaskServiceWithOptions(
+		taskRepo,
+		nil,
+		nil,
+		TaskServiceOptions{
+			AsyncExecution: false,
+			MaxAttempts:    2,
+			BackupService:  backupSvc,
+		},
+	)
+	result, err := taskSvc.CreateBackupVerifyTask(
+		context.Background(),
+		backup.ID,
+		dto.CreateBackupVerifyTaskRequest{
+			SizeBytes: 4096,
+			Checksum:  testChecksumA,
+			FilePath:  "backups/postgres.dump.sql",
+		},
+		nil,
+		"tester",
+	)
+	if err != nil {
+		t.Fatalf("expected backup verify task create success, got %v", err)
+	}
+	if result.Task.Type != TaskTypeBackupVerify {
+		t.Fatalf("unexpected task type: %s", result.Task.Type)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go taskSvc.RunWorker(ctx, TaskWorkerOptions{
+		WorkerID:      "worker-1",
+		Concurrency:   1,
+		LeaseDuration: time.Second,
+		PollInterval:  20 * time.Millisecond,
+	})
+
+	waitForTaskStatus(t, taskRepo, result.Task.ID, TaskStatusSuccess, 2*time.Second)
+	verified, err := backupRepo.GetByID(context.Background(), backup.ID)
+	if err != nil {
+		t.Fatalf("failed to get backup: %v", err)
+	}
+	if verified.Status != BackupStatusSuccess {
+		t.Fatalf("expected verified backup success, got %+v", verified)
+	}
+	if verified.Checksum != "sha256:"+testChecksumA || verified.SizeBytes != 4096 {
+		t.Fatalf("expected checksum and size to be recorded, got %+v", verified)
+	}
+}
+
 func TestCancelTaskMarksPendingTaskCanceled(t *testing.T) {
 	repo := newFakeTaskRepo()
 	if err := repo.Create(context.Background(), &model.Task{

@@ -27,9 +27,13 @@ const (
 
 	TaskTypeDockerRestart  = "docker_restart"
 	TaskTypeServiceRestart = "service_restart"
+	TaskTypeBackupCreate   = "backup_create"
+	TaskTypeBackupVerify   = "backup_verify"
 
 	taskOperationDockerRestart  = "docker.restart"
 	taskOperationServiceRestart = "service.restart"
+	taskOperationBackupCreate   = "backup.create"
+	taskOperationBackupVerify   = "backup.verify"
 )
 
 type TaskService interface {
@@ -45,6 +49,19 @@ type TaskService interface {
 		triggeredBy *int64,
 		username string,
 	) (dto.CreateTaskResult, error)
+	CreateBackupTask(
+		ctx context.Context,
+		req dto.CreateBackupTaskRequest,
+		triggeredBy *int64,
+		username string,
+	) (dto.CreateBackupTaskResult, error)
+	CreateBackupVerifyTask(
+		ctx context.Context,
+		backupID int64,
+		req dto.CreateBackupVerifyTaskRequest,
+		triggeredBy *int64,
+		username string,
+	) (dto.CreateBackupVerifyTaskResult, error)
 	CancelTask(ctx context.Context, id int64, username string) error
 	RetryTask(ctx context.Context, id int64, triggeredBy *int64, username string) (dto.CreateTaskResult, error)
 	ListTasks(ctx context.Context, query dto.ListTasksQuery) (dto.ListTasksResult, error)
@@ -56,6 +73,7 @@ type taskService struct {
 	repo           repository.TaskRepository
 	dockerService  DockerService
 	serviceManager ServiceManagerService
+	backupService  BackupService
 	options        TaskServiceOptions
 	metrics        *appmetrics.Set
 }
@@ -64,6 +82,7 @@ type TaskServiceOptions struct {
 	AsyncExecution bool
 	MaxAttempts    int
 	Metrics        *appmetrics.Set
+	BackupService  BackupService
 }
 
 type TaskWorkerOptions struct {
@@ -74,9 +93,16 @@ type TaskWorkerOptions struct {
 }
 
 type taskPayload struct {
-	Operation   string `json:"operation"`
-	ContainerID string `json:"container_id,omitempty"`
-	ServiceName string `json:"service_name,omitempty"`
+	Operation    string `json:"operation"`
+	ContainerID  string `json:"container_id,omitempty"`
+	ServiceName  string `json:"service_name,omitempty"`
+	BackupID     int64  `json:"backup_id,omitempty"`
+	ResourceType string `json:"resource_type,omitempty"`
+	ResourceID   string `json:"resource_id,omitempty"`
+	StorageType  string `json:"storage_type,omitempty"`
+	FilePath     string `json:"file_path,omitempty"`
+	SizeBytes    int64  `json:"size_bytes,omitempty"`
+	Checksum     string `json:"checksum,omitempty"`
 }
 
 type nonRetryableTaskError struct {
@@ -115,6 +141,7 @@ func NewTaskServiceWithOptions(
 		repo:           repo,
 		dockerService:  dockerService,
 		serviceManager: serviceManager,
+		backupService:  options.BackupService,
 		options:        options,
 		metrics:        options.Metrics,
 	}
@@ -212,6 +239,115 @@ func (s *taskService) CreateServiceRestartTask(
 		username,
 		idempotencyKey,
 	)
+}
+
+func (s *taskService) CreateBackupTask(
+	ctx context.Context,
+	req dto.CreateBackupTaskRequest,
+	triggeredBy *int64,
+	username string,
+) (dto.CreateBackupTaskResult, error) {
+	if s.backupService == nil {
+		return dto.CreateBackupTaskResult{}, apperror.Wrap(
+			apperror.ErrInternal.Code,
+			apperror.ErrInternal.HTTPStatus,
+			apperror.ErrInternal.Message,
+			errors.New("backup service is not configured"),
+		)
+	}
+	idempotencyKey, err := normalizeTaskIdempotencyKey(req.IdempotencyKey)
+	if err != nil {
+		return dto.CreateBackupTaskResult{}, apperror.Wrap(
+			apperror.ErrBadRequest.Code,
+			apperror.ErrBadRequest.HTTPStatus,
+			apperror.ErrBadRequest.Message,
+			err,
+		)
+	}
+
+	backup, err := s.backupService.CreateMetadata(ctx, dto.CreateBackupMetadataRequest{
+		ResourceType: req.ResourceType,
+		ResourceID:   req.ResourceID,
+		StorageType:  req.StorageType,
+		FilePath:     req.FilePath,
+	}, triggeredBy)
+	if err != nil {
+		return dto.CreateBackupTaskResult{}, err
+	}
+
+	task, err := s.createAndRunTask(
+		ctx,
+		TaskTypeBackupCreate,
+		taskPayload{
+			Operation:    taskOperationBackupCreate,
+			BackupID:     backup.ID,
+			ResourceType: backup.ResourceType,
+			ResourceID:   backup.ResourceID,
+			StorageType:  backup.StorageType,
+			FilePath:     backup.FilePath,
+		},
+		triggeredBy,
+		username,
+		idempotencyKey,
+	)
+	if err != nil {
+		_, _ = s.backupService.MarkStatus(ctx, backup.ID, BackupStatusFailed)
+		return dto.CreateBackupTaskResult{}, err
+	}
+	return dto.CreateBackupTaskResult{Backup: backup, Task: task}, nil
+}
+
+func (s *taskService) CreateBackupVerifyTask(
+	ctx context.Context,
+	backupID int64,
+	req dto.CreateBackupVerifyTaskRequest,
+	triggeredBy *int64,
+	username string,
+) (dto.CreateBackupVerifyTaskResult, error) {
+	if backupID <= 0 {
+		return dto.CreateBackupVerifyTaskResult{}, apperror.Wrap(
+			apperror.ErrBadRequest.Code,
+			apperror.ErrBadRequest.HTTPStatus,
+			apperror.ErrBadRequest.Message,
+			errors.New("backup id must be positive"),
+		)
+	}
+	if s.backupService == nil {
+		return dto.CreateBackupVerifyTaskResult{}, apperror.Wrap(
+			apperror.ErrInternal.Code,
+			apperror.ErrInternal.HTTPStatus,
+			apperror.ErrInternal.Message,
+			errors.New("backup service is not configured"),
+		)
+	}
+	idempotencyKey, err := normalizeTaskIdempotencyKey(req.IdempotencyKey)
+	if err != nil {
+		return dto.CreateBackupVerifyTaskResult{}, apperror.Wrap(
+			apperror.ErrBadRequest.Code,
+			apperror.ErrBadRequest.HTTPStatus,
+			apperror.ErrBadRequest.Message,
+			err,
+		)
+	}
+
+	task, err := s.createAndRunTask(
+		ctx,
+		TaskTypeBackupVerify,
+		taskPayload{
+			Operation: taskOperationBackupVerify,
+			BackupID:  backupID,
+			SizeBytes: req.SizeBytes,
+			Checksum:  req.Checksum,
+			FilePath:  req.FilePath,
+		},
+		triggeredBy,
+		username,
+		idempotencyKey,
+	)
+	if err != nil {
+		return dto.CreateBackupVerifyTaskResult{}, err
+	}
+	return dto.CreateBackupVerifyTaskResult{Task: task}, nil
 }
 
 func (s *taskService) CancelTask(ctx context.Context, id int64, username string) error {
@@ -607,6 +743,22 @@ func (s *taskService) runTask(taskID int64, payload taskPayload) {
 				"progress":     85,
 			}),
 		})
+	case taskOperationBackupCreate:
+		if err := s.executeBackupCreate(ctx, taskID, payload, ""); err != nil {
+			s.markTaskFailed(ctx, taskID, err, map[string]interface{}{
+				"operation": payload.Operation,
+				"backup_id": payload.BackupID,
+			})
+			return
+		}
+	case taskOperationBackupVerify:
+		if err := s.executeBackupVerify(ctx, taskID, payload, ""); err != nil {
+			s.markTaskFailed(ctx, taskID, err, map[string]interface{}{
+				"operation": payload.Operation,
+				"backup_id": payload.BackupID,
+			})
+			return
+		}
 	default:
 		s.markTaskFailed(ctx, taskID, errors.New("unsupported task operation"), map[string]interface{}{
 			"operation": payload.Operation,
@@ -743,7 +895,7 @@ func (s *taskService) runClaimedTask(
 		}),
 	})
 
-	if err := s.executeTaskOperation(ctx, task.ID, payload); err != nil {
+	if err := s.executeTaskOperation(ctx, task.ID, payload, workerID); err != nil {
 		s.failClaimedTask(ctx, task, workerID, err, map[string]interface{}{
 			"operation": payload.Operation,
 		})
@@ -805,6 +957,7 @@ func (s *taskService) executeTaskOperation(
 	ctx context.Context,
 	taskID int64,
 	payload taskPayload,
+	workerID string,
 ) error {
 	switch payload.Operation {
 	case taskOperationDockerRestart:
@@ -869,9 +1022,99 @@ func (s *taskService) executeTaskOperation(
 			}),
 		})
 		return nil
+	case taskOperationBackupCreate:
+		return s.executeBackupCreate(ctx, taskID, payload, workerID)
+	case taskOperationBackupVerify:
+		return s.executeBackupVerify(ctx, taskID, payload, workerID)
 	default:
 		return nonRetryableTaskError{err: errors.New("unsupported task operation")}
 	}
+}
+
+func (s *taskService) executeBackupCreate(
+	ctx context.Context,
+	taskID int64,
+	payload taskPayload,
+	workerID string,
+) error {
+	if s.backupService == nil {
+		return nonRetryableTaskError{err: errors.New("backup service is not configured")}
+	}
+	if !s.setRunningProgress(ctx, taskID, 30) {
+		return errors.New("task canceled before backup metadata preparation")
+	}
+	_, err := s.backupService.MarkStatus(ctx, payload.BackupID, BackupStatusRunning)
+	if err != nil {
+		return err
+	}
+	_ = s.repo.AppendLog(ctx, &model.TaskLog{
+		TaskID:  taskID,
+		Level:   "info",
+		Message: "backup metadata marked running",
+		Metadata: marshalTaskMetadata(map[string]interface{}{
+			"backup_id":     payload.BackupID,
+			"resource_type": payload.ResourceType,
+			"resource_id":   payload.ResourceID,
+			"progress":      30,
+			"worker_id":     workerID,
+		}),
+	})
+	if !s.setRunningProgress(ctx, taskID, 85) {
+		return errors.New("task canceled after backup metadata preparation")
+	}
+	_, err = s.backupService.MarkStatus(ctx, payload.BackupID, BackupStatusSuccess)
+	if err != nil {
+		return err
+	}
+	_ = s.repo.AppendLog(ctx, &model.TaskLog{
+		TaskID:  taskID,
+		Level:   "info",
+		Message: "backup metadata prepared",
+		Metadata: marshalTaskMetadata(map[string]interface{}{
+			"backup_id": payload.BackupID,
+			"status":    BackupStatusSuccess,
+			"progress":  85,
+			"worker_id": workerID,
+		}),
+	})
+	return nil
+}
+
+func (s *taskService) executeBackupVerify(
+	ctx context.Context,
+	taskID int64,
+	payload taskPayload,
+	workerID string,
+) error {
+	if s.backupService == nil {
+		return nonRetryableTaskError{err: errors.New("backup service is not configured")}
+	}
+	if !s.setRunningProgress(ctx, taskID, 30) {
+		return errors.New("task canceled before backup verification")
+	}
+	_, err := s.backupService.Verify(ctx, payload.BackupID, dto.VerifyBackupRequest{
+		SizeBytes: payload.SizeBytes,
+		Checksum:  payload.Checksum,
+		FilePath:  payload.FilePath,
+	})
+	if err != nil {
+		return err
+	}
+	if !s.setRunningProgress(ctx, taskID, 85) {
+		return errors.New("task canceled after backup verification")
+	}
+	_ = s.repo.AppendLog(ctx, &model.TaskLog{
+		TaskID:  taskID,
+		Level:   "info",
+		Message: "backup metadata verified",
+		Metadata: marshalTaskMetadata(map[string]interface{}{
+			"backup_id": payload.BackupID,
+			"checksum":  payload.Checksum,
+			"progress":  85,
+			"worker_id": workerID,
+		}),
+	})
+	return nil
 }
 
 func (s *taskService) failClaimedTask(
@@ -1052,6 +1295,20 @@ func unmarshalTaskPayload(raw string) (taskPayload, error) {
 	case taskOperationServiceRestart:
 		if strings.TrimSpace(payload.ServiceName) == "" {
 			return taskPayload{}, errors.New("service_name is required in task payload")
+		}
+	case taskOperationBackupCreate:
+		if payload.BackupID <= 0 {
+			return taskPayload{}, errors.New("backup_id is required in task payload")
+		}
+	case taskOperationBackupVerify:
+		if payload.BackupID <= 0 {
+			return taskPayload{}, errors.New("backup_id is required in task payload")
+		}
+		if payload.SizeBytes <= 0 {
+			return taskPayload{}, errors.New("size_bytes is required in task payload")
+		}
+		if strings.TrimSpace(payload.Checksum) == "" {
+			return taskPayload{}, errors.New("checksum is required in task payload")
 		}
 	default:
 		return taskPayload{}, fmt.Errorf("unsupported operation '%s'", payload.Operation)

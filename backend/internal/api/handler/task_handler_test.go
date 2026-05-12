@@ -51,6 +51,25 @@ func (s *taskHandlerServiceStub) CreateServiceRestartTask(
 	return dto.CreateTaskResult{}, errors.New("not implemented")
 }
 
+func (s *taskHandlerServiceStub) CreateBackupTask(
+	context.Context,
+	dto.CreateBackupTaskRequest,
+	*int64,
+	string,
+) (dto.CreateBackupTaskResult, error) {
+	return dto.CreateBackupTaskResult{}, errors.New("not implemented")
+}
+
+func (s *taskHandlerServiceStub) CreateBackupVerifyTask(
+	context.Context,
+	int64,
+	dto.CreateBackupVerifyTaskRequest,
+	*int64,
+	string,
+) (dto.CreateBackupVerifyTaskResult, error) {
+	return dto.CreateBackupVerifyTaskResult{}, errors.New("not implemented")
+}
+
 func (s *taskHandlerServiceStub) CancelTask(_ context.Context, id int64, username string) error {
 	s.cancelID = id
 	s.cancelUser = username

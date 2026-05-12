@@ -163,6 +163,9 @@
 - `backup.read` 与 `backup.manage` 权限已加入种子数据，并默认分配给 `super_admin`。
 - Backup metadata API 已提供：`GET /api/v1/backups`、`POST /api/v1/backups`、`POST /api/v1/backups/:id/verify`。
 - Backup create 与 verify 尝试都会记录 audit。
+- `backup_create` 与 `backup_verify` task type 已接入 durable task worker baseline。
+- Backup task API 已提供：`POST /api/v1/backups/tasks/create` 与 `POST /api/v1/backups/:id/verify-task`。
+- 当前 worker baseline 负责驱动 backup metadata status 与 checksum/size verification；真实 Postgres dump generation 仍是后续项，完成前不宣称 full backup automation。
 
 ## 后续加固（Post-P3-0）
 

@@ -136,7 +136,11 @@ P3-7 Backup and Restore Foundation
 - backup.read / backup.manage 权限已新增，并默认分配给 super_admin
 - backup API 已新增：GET /api/v1/backups、POST /api/v1/backups、POST /api/v1/backups/:id/verify
 - backup create / verify 操作已记录 audit
+- TaskTypeBackupCreate / TaskTypeBackupVerify 已接入 durable task worker baseline
+- backup task API 已新增：POST /api/v1/backups/tasks/create、POST /api/v1/backups/:id/verify-task
+- backup create task 会创建 metadata 并通过 worker 标记 running/success；backup verify task 会通过 worker 执行 checksum/size verification
 - service tests 已覆盖 metadata creation、scope deny、verify success、checksum mismatch failed、list filter normalization
+- task service tests 已覆盖 backup create task 与 backup verify task worker execution
 - handler tests 已覆盖 list filter 传递、create audit、verify failure audit
 - local backend gate 已通过：cd backend && go test ./...
 - local full gate 已通过：make lint、make test
