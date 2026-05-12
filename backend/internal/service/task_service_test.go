@@ -1262,6 +1262,59 @@ func TestRunWorkerVerifiesBackupTask(t *testing.T) {
 	}
 }
 
+func TestCreateBackupVerifyTaskRejectsPartialManualVerification(t *testing.T) {
+	cases := []struct {
+		name string
+		req  dto.CreateBackupVerifyTaskRequest
+	}{
+		{
+			name: "checksum only",
+			req:  dto.CreateBackupVerifyTaskRequest{Checksum: testChecksumA},
+		},
+		{
+			name: "size only",
+			req:  dto.CreateBackupVerifyTaskRequest{SizeBytes: 4096},
+		},
+		{
+			name: "file path only",
+			req:  dto.CreateBackupVerifyTaskRequest{FilePath: "backups/postgres.dump.sql"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			taskRepo := newFakeTaskRepo()
+			backupRepo := newFakeBackupRepo()
+			backupSvc := NewBackupService(backupRepo)
+			taskSvc := NewTaskServiceWithOptions(
+				taskRepo,
+				nil,
+				nil,
+				TaskServiceOptions{
+					AsyncExecution: false,
+					MaxAttempts:    2,
+					BackupService:  backupSvc,
+				},
+			)
+
+			_, err := taskSvc.CreateBackupVerifyTask(
+				context.Background(),
+				1,
+				tc.req,
+				nil,
+				"tester",
+			)
+			appErr, ok := apperror.As(err)
+			if !ok || appErr.Code != apperror.ErrBadRequest.Code {
+				t.Fatalf("expected bad request, got %v", err)
+			}
+			if len(taskRepo.tasks) != 0 {
+				t.Fatalf("expected no task to be enqueued, got %d", len(taskRepo.tasks))
+			}
+		})
+	}
+}
+
 func TestRunWorkerVerifiesRecordedBackupArtifact(t *testing.T) {
 	taskRepo := newFakeTaskRepo()
 	backupRepo := newFakeBackupRepo()
