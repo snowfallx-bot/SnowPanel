@@ -61,6 +61,13 @@ func (s *backupHandlerServiceStub) Verify(
 	return s.verifyResult, s.verifyErr
 }
 
+func (s *backupHandlerServiceStub) VerifyArtifact(
+	context.Context,
+	int64,
+) (dto.BackupSummary, error) {
+	return dto.BackupSummary{}, errors.New("not implemented")
+}
+
 func (s *backupHandlerServiceStub) MarkStatus(
 	context.Context,
 	int64,

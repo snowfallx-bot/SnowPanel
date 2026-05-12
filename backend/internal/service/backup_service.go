@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -38,6 +39,7 @@ type BackupService interface {
 	CreateMetadata(ctx context.Context, req dto.CreateBackupMetadataRequest, createdBy *int64) (dto.BackupSummary, error)
 	CreateArtifact(ctx context.Context, id int64) (dto.BackupSummary, error)
 	Verify(ctx context.Context, id int64, req dto.VerifyBackupRequest) (dto.BackupSummary, error)
+	VerifyArtifact(ctx context.Context, id int64) (dto.BackupSummary, error)
 	MarkStatus(ctx context.Context, id int64, status string) (dto.BackupSummary, error)
 	List(ctx context.Context, query dto.ListBackupsQuery) (dto.ListBackupsResult, error)
 	CleanupRetention(ctx context.Context, req dto.BackupRetentionCleanupRequest) (dto.BackupRetentionCleanupResult, error)
@@ -247,6 +249,56 @@ func (s *backupService) Verify(
 	if filePath != "" {
 		backup.FilePath = filePath
 	}
+	backup.UpdatedAt = time.Now()
+	return mapBackupSummary(*backup), nil
+}
+
+func (s *backupService) VerifyArtifact(ctx context.Context, id int64) (dto.BackupSummary, error) {
+	if id <= 0 {
+		return dto.BackupSummary{}, badBackupRequest(errors.New("backup id must be positive"))
+	}
+
+	backup, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return dto.BackupSummary{}, wrapBackupInternal(err)
+	}
+	if backup == nil {
+		return dto.BackupSummary{}, apperror.ErrBackupNotFound
+	}
+	if backup.StorageType != BackupStorageLocal {
+		_ = s.repo.UpdateStatus(ctx, id, BackupStatusFailed)
+		return dto.BackupSummary{}, badBackupRequest(errors.New("only local backup storage can verify artifacts in P3"))
+	}
+	if strings.TrimSpace(backup.FilePath) == "" {
+		_ = s.repo.UpdateStatus(ctx, id, BackupStatusFailed)
+		return dto.BackupSummary{}, badBackupRequest(errors.New("backup file_path is required for artifact verification"))
+	}
+	if !backupPathWithinLocalDir(s.localDir, backup.FilePath) {
+		_ = s.repo.UpdateStatus(ctx, id, BackupStatusFailed)
+		return dto.BackupSummary{}, badBackupRequest(errors.New("backup artifact path must be inside BACKUP_LOCAL_DIR"))
+	}
+
+	sizeBytes, checksum, err := checksumLocalBackupFile(backup.FilePath)
+	if err != nil {
+		_ = s.repo.UpdateStatus(ctx, id, BackupStatusFailed)
+		return dto.BackupSummary{}, wrapBackupInternal(err)
+	}
+	if backup.Checksum != "" && backup.Checksum != checksum {
+		_ = s.repo.UpdateStatus(ctx, id, BackupStatusFailed)
+		return dto.BackupSummary{}, badBackupRequest(errors.New("backup checksum mismatch"))
+	}
+	if backup.SizeBytes > 0 && backup.SizeBytes != sizeBytes {
+		_ = s.repo.UpdateStatus(ctx, id, BackupStatusFailed)
+		return dto.BackupSummary{}, badBackupRequest(errors.New("backup size mismatch"))
+	}
+
+	if err := s.repo.UpdateVerification(ctx, id, BackupStatusSuccess, sizeBytes, checksum, backup.FilePath); err != nil {
+		return dto.BackupSummary{}, wrapBackupInternal(err)
+	}
+
+	backup.Status = BackupStatusSuccess
+	backup.SizeBytes = sizeBytes
+	backup.Checksum = checksum
 	backup.UpdatedAt = time.Now()
 	return mapBackupSummary(*backup), nil
 }
@@ -477,6 +529,45 @@ func safeBackupArtifactPath(localDir string, backup model.Backup, now time.Time)
 		return "", errors.New("backup artifact path escapes local directory")
 	}
 	return path, nil
+}
+
+func backupPathWithinLocalDir(localDir string, path string) bool {
+	localAbs, err := filepath.Abs(strings.TrimSpace(localDir))
+	if err != nil {
+		return false
+	}
+	pathAbs, err := filepath.Abs(strings.TrimSpace(path))
+	if err != nil {
+		return false
+	}
+	localReal, err := filepath.EvalSymlinks(localAbs)
+	if err == nil {
+		localAbs = localReal
+	}
+	pathReal, err := filepath.EvalSymlinks(pathAbs)
+	if err != nil {
+		return false
+	}
+	rel, err := filepath.Rel(localAbs, pathReal)
+	if err != nil {
+		return false
+	}
+	return rel != ".." && !strings.HasPrefix(rel, ".."+string(os.PathSeparator)) && !filepath.IsAbs(rel)
+}
+
+func checksumLocalBackupFile(path string) (int64, string, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return 0, "", err
+	}
+	defer file.Close()
+
+	hash := sha256.New()
+	sizeBytes, err := io.Copy(hash, file)
+	if err != nil {
+		return 0, "", err
+	}
+	return sizeBytes, "sha256:" + hex.EncodeToString(hash.Sum(nil)), nil
 }
 
 func sanitizeBackupFilenamePart(raw string) string {

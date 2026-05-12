@@ -22,8 +22,8 @@ type VerifyBackupRequest struct {
 }
 
 type CreateBackupVerifyTaskRequest struct {
-	SizeBytes      int64  `json:"size_bytes" binding:"required,min=1"`
-	Checksum       string `json:"checksum" binding:"required,max=128"`
+	SizeBytes      int64  `json:"size_bytes" binding:"omitempty,min=1"`
+	Checksum       string `json:"checksum" binding:"omitempty,max=128"`
 	FilePath       string `json:"file_path,omitempty" binding:"omitempty,max=1024"`
 	IdempotencyKey string `json:"idempotency_key,omitempty" binding:"omitempty,max=128"`
 }

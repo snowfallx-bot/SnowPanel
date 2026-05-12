@@ -147,6 +147,23 @@
 - `GET /audit/logs`（`audit.read`）
   - 查询参数：`page`、`size`，可选 `module`、`action`
 
+## 备份
+
+- `GET /backups`（`backup.read`）
+  - 查询参数：`page`、`size`，可选 `status`、`resource_type`、`resource_id`
+- `POST /backups`（`backup.manage`）
+  - 请求体：`{ "resource_type": "postgres|app_metadata|observability_config|core_agent_config", "resource_id": "...", "storage_type": "local", "file_path": "optional-existing-path" }`
+  - 仅创建 backup metadata
+- `POST /backups/tasks/create`（`backup.manage`）
+  - 请求体：`{ "resource_type": "...", "resource_id": "...", "storage_type": "local", "idempotency_key": "optional-client-key" }`
+  - 创建 backup create task，由 worker 在 `BACKUP_LOCAL_DIR` 下写入受控本地 JSON artifact
+- `POST /backups/:id/verify`（`backup.manage`）
+  - 请求体：`{ "size_bytes": 2048, "checksum": "sha256-or-hex", "file_path": "optional-path" }`
+  - 使用调用方提供的 size 与 checksum 验证 metadata
+- `POST /backups/:id/verify-task`（`backup.manage`）
+  - 请求体可为 `{}`，此时 worker 会从 `BACKUP_LOCAL_DIR` 下已记录的本地 artifact 重新计算 size 与 sha256
+  - 请求体也可包含 `size_bytes` 与 `checksum`，用于创建调用方提供 metadata 的验证任务
+
 ## 异步任务
 
 - `GET /tasks`（`tasks.read`）

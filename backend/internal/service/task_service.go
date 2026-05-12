@@ -329,6 +329,15 @@ func (s *taskService) CreateBackupVerifyTask(
 			err,
 		)
 	}
+	hasManualVerification := req.SizeBytes > 0 || strings.TrimSpace(req.Checksum) != "" || strings.TrimSpace(req.FilePath) != ""
+	if hasManualVerification && (req.SizeBytes <= 0 || strings.TrimSpace(req.Checksum) == "") {
+		return dto.CreateBackupVerifyTaskResult{}, apperror.Wrap(
+			apperror.ErrBadRequest.Code,
+			apperror.ErrBadRequest.HTTPStatus,
+			apperror.ErrBadRequest.Message,
+			errors.New("size_bytes and checksum are required when overriding artifact verification"),
+		)
+	}
 
 	task, err := s.createAndRunTask(
 		ctx,
@@ -1091,11 +1100,19 @@ func (s *taskService) executeBackupVerify(
 	if !s.setRunningProgress(ctx, taskID, 30) {
 		return errors.New("task canceled before backup verification")
 	}
-	_, err := s.backupService.Verify(ctx, payload.BackupID, dto.VerifyBackupRequest{
-		SizeBytes: payload.SizeBytes,
-		Checksum:  payload.Checksum,
-		FilePath:  payload.FilePath,
-	})
+	var (
+		backup dto.BackupSummary
+		err    error
+	)
+	if payload.SizeBytes > 0 || strings.TrimSpace(payload.Checksum) != "" || strings.TrimSpace(payload.FilePath) != "" {
+		backup, err = s.backupService.Verify(ctx, payload.BackupID, dto.VerifyBackupRequest{
+			SizeBytes: payload.SizeBytes,
+			Checksum:  payload.Checksum,
+			FilePath:  payload.FilePath,
+		})
+	} else {
+		backup, err = s.backupService.VerifyArtifact(ctx, payload.BackupID)
+	}
 	if err != nil {
 		return err
 	}
@@ -1107,10 +1124,12 @@ func (s *taskService) executeBackupVerify(
 		Level:   "info",
 		Message: "backup metadata verified",
 		Metadata: marshalTaskMetadata(map[string]interface{}{
-			"backup_id": payload.BackupID,
-			"checksum":  payload.Checksum,
-			"progress":  85,
-			"worker_id": workerID,
+			"backup_id":  backup.ID,
+			"file_path":  backup.FilePath,
+			"size_bytes": backup.SizeBytes,
+			"checksum":   backup.Checksum,
+			"progress":   85,
+			"worker_id":  workerID,
 		}),
 	})
 	return nil
@@ -1303,11 +1322,14 @@ func unmarshalTaskPayload(raw string) (taskPayload, error) {
 		if payload.BackupID <= 0 {
 			return taskPayload{}, errors.New("backup_id is required in task payload")
 		}
-		if payload.SizeBytes <= 0 {
-			return taskPayload{}, errors.New("size_bytes is required in task payload")
-		}
-		if strings.TrimSpace(payload.Checksum) == "" {
-			return taskPayload{}, errors.New("checksum is required in task payload")
+		hasManualVerification := payload.SizeBytes > 0 || strings.TrimSpace(payload.Checksum) != "" || strings.TrimSpace(payload.FilePath) != ""
+		if hasManualVerification {
+			if payload.SizeBytes <= 0 {
+				return taskPayload{}, errors.New("size_bytes is required when overriding backup verification")
+			}
+			if strings.TrimSpace(payload.Checksum) == "" {
+				return taskPayload{}, errors.New("checksum is required when overriding backup verification")
+			}
 		}
 	default:
 		return taskPayload{}, fmt.Errorf("unsupported operation '%s'", payload.Operation)

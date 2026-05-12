@@ -124,6 +124,7 @@ backup foundation 验证：
 - 确认 backup metadata rows 包含 checksum、size、status、storage type 与 resource 字段。
 - 确认本地 artifacts 位于 `BACKUP_LOCAL_DIR` 下，且不在公开 Web 根目录中。
 - 对恢复出的 backup artifact 重新计算 checksum，并与 metadata 比对。
+- 可用 `{}` 请求体调用 `POST /api/v1/backups/:id/verify-task`，让 worker 从已记录的本地 artifact 重新计算 size 与 sha256。
 - 恢复后创建一次新备份并完成 verify，然后再允许执行破坏性操作。
 
 ## 回滚

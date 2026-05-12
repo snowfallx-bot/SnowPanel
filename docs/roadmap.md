@@ -167,6 +167,7 @@ Local P3-7 backup foundation work has started:
 - Backup task APIs are available at `POST /api/v1/backups/tasks/create` and `POST /api/v1/backups/:id/verify-task`.
 - `BACKUP_LOCAL_DIR` configures the protected local artifact directory; default is `var/backups`.
 - The backup create worker now writes a controlled local JSON manifest artifact, records file path, size, and sha256 checksum, and marks metadata success.
+- The backup verify worker can now recompute size and sha256 from the recorded local artifact when called with an empty verify-task body, while still supporting caller-provided checksum/size verification.
 - Full Postgres `pg_dump` generation remains a follow-up before claiming full backup automation.
 - `BACKUP_RETENTION_DAYS` configures terminal backup metadata retention, and `POST /api/v1/backups/retention/cleanup` supports dry-run cleanup of old success/failed backup rows.
 

@@ -147,6 +147,23 @@ Security constraints:
 - `GET /audit/logs` (`audit.read`)
   - query: `page`, `size`, optional `module`, `action`
 
+## Backup
+
+- `GET /backups` (`backup.read`)
+  - query: `page`, `size`, optional `status`, `resource_type`, `resource_id`
+- `POST /backups` (`backup.manage`)
+  - body: `{ "resource_type": "postgres|app_metadata|observability_config|core_agent_config", "resource_id": "...", "storage_type": "local", "file_path": "optional-existing-path" }`
+  - creates backup metadata only
+- `POST /backups/tasks/create` (`backup.manage`)
+  - body: `{ "resource_type": "...", "resource_id": "...", "storage_type": "local", "idempotency_key": "optional-client-key" }`
+  - queues a backup create task that writes a controlled local JSON artifact under `BACKUP_LOCAL_DIR`
+- `POST /backups/:id/verify` (`backup.manage`)
+  - body: `{ "size_bytes": 2048, "checksum": "sha256-or-hex", "file_path": "optional-path" }`
+  - verifies metadata against caller-provided size and checksum
+- `POST /backups/:id/verify-task` (`backup.manage`)
+  - body: `{}` to recompute size and sha256 from the recorded local artifact under `BACKUP_LOCAL_DIR`
+  - body may include `size_bytes` and `checksum` to queue caller-provided metadata verification instead
+
 ## Async Tasks
 
 - `GET /tasks` (`tasks.read`)

@@ -1262,6 +1262,66 @@ func TestRunWorkerVerifiesBackupTask(t *testing.T) {
 	}
 }
 
+func TestRunWorkerVerifiesRecordedBackupArtifact(t *testing.T) {
+	taskRepo := newFakeTaskRepo()
+	backupRepo := newFakeBackupRepo()
+	backupSvc := NewBackupServiceWithOptions(backupRepo, BackupServiceOptions{LocalDir: t.TempDir()})
+	backup, err := backupSvc.CreateMetadata(context.Background(), dto.CreateBackupMetadataRequest{
+		ResourceType: BackupResourceAppMetadata,
+		ResourceID:   "primary",
+		StorageType:  BackupStorageLocal,
+	}, nil)
+	if err != nil {
+		t.Fatalf("expected backup metadata create success, got %v", err)
+	}
+	artifact, err := backupSvc.CreateArtifact(context.Background(), backup.ID)
+	if err != nil {
+		t.Fatalf("expected backup artifact create success, got %v", err)
+	}
+
+	taskSvc := NewTaskServiceWithOptions(
+		taskRepo,
+		nil,
+		nil,
+		TaskServiceOptions{
+			AsyncExecution: false,
+			MaxAttempts:    2,
+			BackupService:  backupSvc,
+		},
+	)
+	result, err := taskSvc.CreateBackupVerifyTask(
+		context.Background(),
+		backup.ID,
+		dto.CreateBackupVerifyTaskRequest{},
+		nil,
+		"tester",
+	)
+	if err != nil {
+		t.Fatalf("expected backup verify task create success, got %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go taskSvc.RunWorker(ctx, TaskWorkerOptions{
+		WorkerID:      "worker-1",
+		Concurrency:   1,
+		LeaseDuration: time.Second,
+		PollInterval:  20 * time.Millisecond,
+	})
+
+	waitForTaskStatus(t, taskRepo, result.Task.ID, TaskStatusSuccess, 2*time.Second)
+	verified, err := backupRepo.GetByID(context.Background(), backup.ID)
+	if err != nil {
+		t.Fatalf("failed to get backup: %v", err)
+	}
+	if verified.Status != BackupStatusSuccess ||
+		verified.Checksum != artifact.Checksum ||
+		verified.SizeBytes != artifact.SizeBytes ||
+		verified.FilePath != artifact.FilePath {
+		t.Fatalf("expected recorded artifact to be verified, got %+v want %+v", verified, artifact)
+	}
+}
+
 func TestRunWorkerMarksBackupVerifyMismatchFailed(t *testing.T) {
 	taskRepo := newFakeTaskRepo()
 	backupRepo := newFakeBackupRepo()

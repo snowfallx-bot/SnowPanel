@@ -108,6 +108,76 @@ func TestBackupCreateArtifactWritesLocalManifest(t *testing.T) {
 	}
 }
 
+func TestBackupVerifyArtifactRecomputesLocalFile(t *testing.T) {
+	repo := newFakeBackupRepo()
+	localDir := t.TempDir()
+	service := NewBackupServiceWithOptions(repo, BackupServiceOptions{LocalDir: localDir})
+	result, err := service.CreateMetadata(context.Background(), dto.CreateBackupMetadataRequest{
+		ResourceType: BackupResourceAppMetadata,
+		ResourceID:   "primary",
+		StorageType:  BackupStorageLocal,
+	}, nil)
+	if err != nil {
+		t.Fatalf("CreateMetadata returned error: %v", err)
+	}
+	created, err := service.CreateArtifact(context.Background(), result.ID)
+	if err != nil {
+		t.Fatalf("CreateArtifact returned error: %v", err)
+	}
+
+	repo.items[result.ID] = model.Backup{
+		ID:           result.ID,
+		ResourceType: BackupResourceAppMetadata,
+		ResourceID:   "primary",
+		StorageType:  BackupStorageLocal,
+		FilePath:     created.FilePath,
+		Status:       BackupStatusPending,
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
+	}
+
+	verified, err := service.VerifyArtifact(context.Background(), result.ID)
+	if err != nil {
+		t.Fatalf("VerifyArtifact returned error: %v", err)
+	}
+	if verified.Status != BackupStatusSuccess || verified.SizeBytes != created.SizeBytes || verified.Checksum != created.Checksum {
+		t.Fatalf("expected recomputed artifact metadata, got %+v want %+v", verified, created)
+	}
+}
+
+func TestBackupVerifyArtifactRejectsPathOutsideLocalDir(t *testing.T) {
+	repo := newFakeBackupRepo()
+	localDir := t.TempDir()
+	outsideFile := filepath.Join(t.TempDir(), "outside.json")
+	if err := os.WriteFile(outsideFile, []byte("{}\n"), 0600); err != nil {
+		t.Fatalf("failed to write outside file: %v", err)
+	}
+	now := time.Now()
+	repo.items[1] = model.Backup{
+		ID:           1,
+		ResourceType: BackupResourceAppMetadata,
+		ResourceID:   "primary",
+		StorageType:  BackupStorageLocal,
+		FilePath:     outsideFile,
+		Status:       BackupStatusSuccess,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}
+	service := NewBackupServiceWithOptions(repo, BackupServiceOptions{LocalDir: localDir})
+
+	_, err := service.VerifyArtifact(context.Background(), 1)
+	if err == nil {
+		t.Fatalf("expected path outside local dir to fail")
+	}
+	appErr, ok := apperror.As(err)
+	if !ok || appErr.Code != apperror.ErrBadRequest.Code {
+		t.Fatalf("expected bad request, got %v", err)
+	}
+	if repo.items[1].Status != BackupStatusFailed {
+		t.Fatalf("expected outside artifact path to mark failed, got %q", repo.items[1].Status)
+	}
+}
+
 func TestBackupMetadataCreateRejectsOutOfScopeResource(t *testing.T) {
 	service := NewBackupService(newFakeBackupRepo())
 
