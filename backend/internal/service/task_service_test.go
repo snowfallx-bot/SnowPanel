@@ -1255,6 +1255,74 @@ func TestRunWorkerVerifiesBackupTask(t *testing.T) {
 	}
 }
 
+func TestRunWorkerMarksBackupVerifyMismatchFailed(t *testing.T) {
+	taskRepo := newFakeTaskRepo()
+	backupRepo := newFakeBackupRepo()
+	now := time.Now()
+	backupRepo.items[1] = model.Backup{
+		ID:           1,
+		ResourceType: BackupResourcePostgres,
+		ResourceID:   "primary",
+		StorageType:  BackupStorageLocal,
+		FilePath:     "backups/postgres.dump.sql",
+		SizeBytes:    2048,
+		Checksum:     "sha256:" + testChecksumA,
+		Status:       BackupStatusSuccess,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}
+	backupSvc := NewBackupService(backupRepo)
+	taskSvc := NewTaskServiceWithOptions(
+		taskRepo,
+		nil,
+		nil,
+		TaskServiceOptions{
+			AsyncExecution: false,
+			MaxAttempts:    2,
+			BackupService:  backupSvc,
+		},
+	)
+
+	result, err := taskSvc.CreateBackupVerifyTask(
+		context.Background(),
+		1,
+		dto.CreateBackupVerifyTaskRequest{
+			SizeBytes: 2048,
+			Checksum:  testChecksumB,
+		},
+		nil,
+		"tester",
+	)
+	if err != nil {
+		t.Fatalf("expected backup verify task create success, got %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go taskSvc.RunWorker(ctx, TaskWorkerOptions{
+		WorkerID:      "worker-1",
+		Concurrency:   1,
+		LeaseDuration: time.Second,
+		PollInterval:  20 * time.Millisecond,
+	})
+
+	waitForTaskStatus(t, taskRepo, result.Task.ID, TaskStatusFailed, 2*time.Second)
+	backup, err := backupRepo.GetByID(context.Background(), 1)
+	if err != nil {
+		t.Fatalf("failed to get backup: %v", err)
+	}
+	if backup.Status != BackupStatusFailed {
+		t.Fatalf("expected backup status failed, got %+v", backup)
+	}
+	task, err := taskRepo.GetByID(context.Background(), result.Task.ID)
+	if err != nil {
+		t.Fatalf("failed to get task: %v", err)
+	}
+	if task.Attempt != 1 {
+		t.Fatalf("expected non-retryable mismatch to fail after one attempt, got %d", task.Attempt)
+	}
+}
+
 func TestCancelTaskMarksPendingTaskCanceled(t *testing.T) {
 	repo := newFakeTaskRepo()
 	if err := repo.Create(context.Background(), &model.Task{
