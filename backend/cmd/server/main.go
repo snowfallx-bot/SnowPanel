@@ -64,6 +64,7 @@ func main() {
 	userRepo := repository.NewUserRepository(db)
 	auditRepo := repository.NewAuditRepository(db)
 	taskRepo := repository.NewTaskRepository(db)
+	backupRepo := repository.NewBackupRepository(db)
 	systemSettingRepo := repository.NewSystemSettingRepository(db)
 	settingsEncryptor, err := newSettingsEncryptor(cfg.Security)
 	if err != nil {
@@ -90,6 +91,7 @@ func main() {
 	serviceManager := service.NewServiceManagerService(agentClient)
 	dockerService := service.NewDockerService(agentClient)
 	cronService := service.NewCronService(agentClient)
+	backupService := service.NewBackupService(backupRepo)
 	metricsSet := appmetrics.Default()
 	taskService := service.NewTaskServiceWithOptions(
 		taskRepo,
@@ -167,6 +169,7 @@ func main() {
 			CronService:      cronService,
 			AuditService:     auditService,
 			TaskService:      taskService,
+			BackupService:    backupService,
 			LoginAttempts:    loginAttempts,
 		}),
 		ReadTimeout:  cfg.Server.ReadTimeout,

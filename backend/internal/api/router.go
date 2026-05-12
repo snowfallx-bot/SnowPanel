@@ -32,6 +32,7 @@ type RouterDeps struct {
 	CronService      service.CronService
 	AuditService     service.AuditService
 	TaskService      service.TaskService
+	BackupService    service.BackupService
 	LoginAttempts    security.LoginAttemptGuard
 }
 
@@ -70,6 +71,7 @@ func NewRouter(deps RouterDeps) *gin.Engine {
 	cronHandler := handler.NewCronHandler(deps.CronService, deps.AuditService)
 	auditHandler := handler.NewAuditHandler(deps.AuditService)
 	taskHandler := handler.NewTaskHandler(deps.TaskService, deps.AuditService)
+	backupHandler := handler.NewBackupHandler(deps.BackupService, deps.AuditService)
 
 	router.GET("/health", healthHandler.Health)
 	router.GET("/ready", healthHandler.Readiness)
@@ -142,6 +144,13 @@ func NewRouter(deps RouterDeps) *gin.Engine {
 				tasks.POST("/services/restart", middleware.RequirePermission("tasks.manage"), taskHandler.CreateServiceRestartTask)
 				tasks.POST("/:id/cancel", middleware.RequirePermission("tasks.manage"), taskHandler.CancelTask)
 				tasks.POST("/:id/retry", middleware.RequirePermission("tasks.manage"), taskHandler.RetryTask)
+			}
+
+			backups := protected.Group("/backups")
+			{
+				backups.GET("", middleware.RequirePermission("backup.read"), backupHandler.ListBackups)
+				backups.POST("", middleware.RequirePermission("backup.manage"), backupHandler.CreateBackup)
+				backups.POST("/:id/verify", middleware.RequirePermission("backup.manage"), backupHandler.VerifyBackup)
 			}
 		}
 	}

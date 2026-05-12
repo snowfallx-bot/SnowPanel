@@ -137,6 +137,8 @@ func (r *fakeUserRepo) EnsureRBACDefaults(context.Context) error {
 		"audit.manage",
 		"tasks.read",
 		"tasks.manage",
+		"backup.read",
+		"backup.manage",
 	}
 	r.rolePermissions["operator"] = []string{
 		"dashboard.read",

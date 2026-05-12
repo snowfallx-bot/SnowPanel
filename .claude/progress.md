@@ -133,7 +133,11 @@ P3-7 Backup and Restore Foundation
 - docs/restore-drill.md / docs/restore-drill.zh-CN.md 已新增，覆盖 fresh machine restore、Postgres restore、secret rotation、health/ready、login、audit、backup verification 与 rollback
 - BackupRepository / BackupService 已新增 metadata create、list、verify 基线
 - backup metadata verify 已校验 sha256 checksum 与 size mismatch，并在不匹配时标记 failed
+- backup.read / backup.manage 权限已新增，并默认分配给 super_admin
+- backup API 已新增：GET /api/v1/backups、POST /api/v1/backups、POST /api/v1/backups/:id/verify
+- backup create / verify 操作已记录 audit
 - service tests 已覆盖 metadata creation、scope deny、verify success、checksum mismatch failed、list filter normalization
+- handler tests 已覆盖 list filter 传递、create audit、verify failure audit
 - local backend gate 已通过：cd backend && go test ./...
 ```
 

@@ -160,6 +160,9 @@ Local P3-7 backup foundation work has started:
 - `docs/restore-drill.md` documents fresh-machine restore, Postgres restore, secret rotation, service startup, health checks, login verification, audit verification, backup verification, and rollback.
 - Backend backup metadata repository/service now supports create, list, and verify baselines.
 - Backup verification validates sha256 checksum and size, and marks metadata failed on mismatch.
+- `backup.read` and `backup.manage` permissions are seeded for `super_admin`.
+- Backup metadata APIs are available at `GET /api/v1/backups`, `POST /api/v1/backups`, and `POST /api/v1/backups/:id/verify`.
+- Backup create and verify attempts are audited.
 
 ## Follow-up Hardening (Post-P3-0)
 

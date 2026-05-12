@@ -160,6 +160,9 @@
 - `docs/restore-drill.zh-CN.md` 已覆盖新机器恢复、Postgres 恢复、secret rotation、服务启动、健康检查、登录验证、审计验证、备份验证与回滚。
 - Backend backup metadata repository/service 已支持 create、list 与 verify 基线。
 - Backup verification 已校验 sha256 checksum 与 size，并在 mismatch 时把 metadata 标记为 failed。
+- `backup.read` 与 `backup.manage` 权限已加入种子数据，并默认分配给 `super_admin`。
+- Backup metadata API 已提供：`GET /api/v1/backups`、`POST /api/v1/backups`、`POST /api/v1/backups/:id/verify`。
+- Backup create 与 verify 尝试都会记录 audit。
 
 ## 后续加固（Post-P3-0）
 

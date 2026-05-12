@@ -112,6 +112,8 @@ func (r *userRepository) EnsureRBACDefaults(ctx context.Context) error {
 			{Name: "audit.manage", Description: "Manage audit retention"},
 			{Name: "tasks.read", Description: "Read tasks"},
 			{Name: "tasks.manage", Description: "Manage tasks"},
+			{Name: "backup.read", Description: "Read backup metadata"},
+			{Name: "backup.manage", Description: "Manage backups"},
 		}
 
 		permissions := make([]model.Permission, 0, len(permissionSeeds))
