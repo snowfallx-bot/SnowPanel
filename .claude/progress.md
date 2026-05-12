@@ -119,9 +119,12 @@ P3-6 Audit Retention, Export, and Forensics
 - audit export 已按分页读取，最多导出 100000 行，导出内容使用已脱敏的 audit 字段
 - AUDIT_RETENTION_DAYS / AUDIT_EXPORT_MAX_ROWS 配置已新增，默认分别为 180 / 100000
 - audit retention cleanup endpoint 已新增：POST /api/v1/audit/retention/cleanup，要求 audit.manage，并记录 cleanup 审计
+- audit UI 已扩展取证筛选、CSV/JSONL 导出、日志详情面板、request_id copy 与 task detail 链接
+- tasks UI 已支持 /tasks?task_id=<id> 直接打开任务详情
 - service tests 已覆盖 filter 传递、CSV export、JSONL export 与 request/trace id 记录
 - service tests 已覆盖 retention dry run 与实际 delete 路径
 - local backend gate 已通过：cd backend && go test ./...
+- local frontend gate 已通过：npm --prefix frontend run test、npm --prefix frontend run build
 - local full gate 已通过：make lint、make test
 ```
 

@@ -1,4 +1,5 @@
 import { FormEvent, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   cancelTask,
@@ -56,13 +57,17 @@ const taskTypeOptions = [
 
 export function TasksPage() {
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const user = useAuthStore((state) => state.user);
   const canManageTasks = (user?.permissions || []).includes("tasks.manage");
+  const initialTaskID = Number(searchParams.get("task_id"));
   const [page, setPage] = useState(1);
   const [size] = useState(20);
   const [statusFilter, setStatusFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
-  const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
+  const [selectedTaskId, setSelectedTaskId] = useState<number | null>(
+    Number.isFinite(initialTaskID) && initialTaskID > 0 ? initialTaskID : null
+  );
   const [feedback, setFeedback] = useState("");
   const [dockerContainerID, setDockerContainerID] = useState("");
   const [serviceName, setServiceName] = useState("");
@@ -119,11 +124,22 @@ export function TasksPage() {
     }
   }
 
+  function selectTask(taskID: number | null) {
+    setSelectedTaskId(taskID);
+    const nextParams = new URLSearchParams(searchParams);
+    if (taskID === null) {
+      nextParams.delete("task_id");
+    } else {
+      nextParams.set("task_id", String(taskID));
+    }
+    setSearchParams(nextParams, { replace: true });
+  }
+
   const createDockerRestartMutation = useMutation({
     mutationFn: createDockerRestartTask,
     onSuccess(result) {
       setFeedback(`Queued docker restart task #${result.id}`);
-      setSelectedTaskId(result.id);
+      selectTask(result.id);
       setDockerContainerID("");
       queryClient.invalidateQueries({ queryKey: tasksRootQueryKey });
       queryClient.invalidateQueries({ queryKey: taskDetailQueryKey(result.id) });
@@ -137,7 +153,7 @@ export function TasksPage() {
     mutationFn: createServiceRestartTask,
     onSuccess(result) {
       setFeedback(`Queued service restart task #${result.id}`);
-      setSelectedTaskId(result.id);
+      selectTask(result.id);
       setServiceName("");
       queryClient.invalidateQueries({ queryKey: tasksRootQueryKey });
       queryClient.invalidateQueries({ queryKey: taskDetailQueryKey(result.id) });
@@ -163,7 +179,7 @@ export function TasksPage() {
     mutationFn: retryTask,
     onSuccess(result) {
       setFeedback(`Retried task as #${result.id}`);
-      setSelectedTaskId(result.id);
+      selectTask(result.id);
       queryClient.invalidateQueries({ queryKey: tasksRootQueryKey });
       queryClient.invalidateQueries({ queryKey: taskDetailQueryKey(result.id) });
     },
@@ -327,7 +343,7 @@ export function TasksPage() {
                         <td className="px-4 py-3">
                           <div className="flex gap-2">
                             <Button
-                              onClick={() => setSelectedTaskId(item.id)}
+                              onClick={() => selectTask(item.id)}
                               size="sm"
                               variant={selectedTaskId === item.id ? "default" : "ghost"}
                             >

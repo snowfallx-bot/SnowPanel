@@ -21,3 +21,17 @@ export interface ListAuditLogsParams {
 export function listAuditLogs(params: ListAuditLogsParams) {
   return unwrap<ListAuditLogsResult>(http.get("/api/v1/audit/logs", { params }));
 }
+
+export type AuditExportFormat = "csv" | "jsonl";
+export type AuditExportParams = Omit<ListAuditLogsParams, "page" | "size">;
+
+export async function exportAuditLogs(params: AuditExportParams, format: AuditExportFormat) {
+  const { data } = await http.get<Blob>("/api/v1/audit/logs/export", {
+    params: {
+      ...params,
+      format
+    },
+    responseType: "blob"
+  });
+  return data;
+}
