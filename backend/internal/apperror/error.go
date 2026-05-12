@@ -59,5 +59,6 @@ var (
 	ErrUserDisabled          = New(2011, http.StatusForbidden, "user is disabled")
 	ErrLoginRateLimited      = New(2012, http.StatusTooManyRequests, "too many login attempts, try later")
 	ErrSystemSettingNotFound = New(2013, http.StatusNotFound, "system setting not found")
+	ErrBackupNotFound        = New(2014, http.StatusNotFound, "backup not found")
 	ErrAgentUnavailable      = New(3001, http.StatusServiceUnavailable, "core agent unavailable")
 )

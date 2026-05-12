@@ -158,6 +158,8 @@
 - 备份范围明确限制为 Postgres metadata、SnowPanel app metadata、observability config snapshot、core-agent config templates 与 backup metadata。
 - P3 明确不包含 raw secret export、任意 filesystem backup、Docker volume backup、remote object storage 与完整 host bare-metal recovery。
 - `docs/restore-drill.zh-CN.md` 已覆盖新机器恢复、Postgres 恢复、secret rotation、服务启动、健康检查、登录验证、审计验证、备份验证与回滚。
+- Backend backup metadata repository/service 已支持 create、list 与 verify 基线。
+- Backup verification 已校验 sha256 checksum 与 size，并在 mismatch 时把 metadata 标记为 failed。
 
 ## 后续加固（Post-P3-0）
 

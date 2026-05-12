@@ -158,6 +158,8 @@ Local P3-7 backup foundation work has started:
 - Backup scope is explicitly limited to Postgres metadata, SnowPanel app metadata, observability config snapshots, core-agent config templates, and backup metadata.
 - P3 excludes raw secret export, arbitrary filesystem backup, Docker volume backup, remote object storage, and full host bare-metal recovery.
 - `docs/restore-drill.md` documents fresh-machine restore, Postgres restore, secret rotation, service startup, health checks, login verification, audit verification, backup verification, and rollback.
+- Backend backup metadata repository/service now supports create, list, and verify baselines.
+- Backup verification validates sha256 checksum and size, and marks metadata failed on mismatch.
 
 ## Follow-up Hardening (Post-P3-0)
 
