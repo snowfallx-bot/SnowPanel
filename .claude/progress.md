@@ -147,6 +147,7 @@ P3-7 Backup and Restore Foundation
 - backup retention cleanup 已支持 `archive_before_delete=true`，删除前会把匹配的 metadata rows 以 JSONL archive 写入 `BACKUP_LOCAL_DIR`
 - service tests 已覆盖 metadata creation、scope deny、local artifact generation、local artifact recompute verification、verify success、checksum mismatch failed、list filter normalization
 - service tests 已覆盖 backup retention dry run、archive_before_delete JSONL archive 与 terminal-only delete 行为
+- service tests 已覆盖 restore drill command sanity，防止恢复手册缺失关键命令
 - task service tests 已覆盖 backup create artifact task、backup verify task worker execution、recorded artifact verification、verify mismatch 标记 backup/task failed
 - handler tests 已覆盖 list filter 传递、create audit、verify failure audit、retention cleanup success/failure audit
 - local backend gate 已通过：cd backend && go test ./...
