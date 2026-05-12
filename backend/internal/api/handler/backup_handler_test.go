@@ -299,3 +299,43 @@ func TestBackupHandlerCleanupRetentionRecordsAudit(t *testing.T) {
 		t.Fatalf("unexpected audit record: %+v", record)
 	}
 }
+
+func TestBackupHandlerCleanupRetentionFailureRecordsAudit(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	backupSvc := &backupHandlerServiceStub{
+		cleanupErr: apperror.Wrap(
+			apperror.ErrBadRequest.Code,
+			apperror.ErrBadRequest.HTTPStatus,
+			apperror.ErrBadRequest.Message,
+			errors.New("archive_before_delete is not supported"),
+		),
+	}
+	auditSvc := &backupAuditRecorder{}
+	handler := NewBackupHandler(backupSvc, nil, auditSvc)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(
+		http.MethodPost,
+		"/api/v1/backups/retention/cleanup",
+		strings.NewReader(`{"archive_before_delete":true}`),
+	)
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	handler.CleanupRetention(c)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", w.Code)
+	}
+	if !backupSvc.cleanupReq.ArchiveBeforeDelete {
+		t.Fatalf("expected archive_before_delete request to be propagated")
+	}
+	if len(auditSvc.records) != 1 {
+		t.Fatalf("expected one audit record, got %d", len(auditSvc.records))
+	}
+	record := auditSvc.records[0]
+	if record.Module != "backups" || record.Action != "retention_cleanup" || record.Success {
+		t.Fatalf("unexpected audit record: %+v", record)
+	}
+}

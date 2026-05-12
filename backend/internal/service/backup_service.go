@@ -384,6 +384,10 @@ func (s *backupService) CleanupRetention(
 	ctx context.Context,
 	req dto.BackupRetentionCleanupRequest,
 ) (dto.BackupRetentionCleanupResult, error) {
+	if req.ArchiveBeforeDelete {
+		return dto.BackupRetentionCleanupResult{}, badBackupRequest(errors.New("archive_before_delete is not supported for backup metadata cleanup yet"))
+	}
+
 	retentionDays := req.RetentionDays
 	if retentionDays <= 0 {
 		retentionDays = s.retentionDays

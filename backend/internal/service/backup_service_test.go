@@ -328,6 +328,21 @@ func TestBackupRetentionCleanupDryRunDoesNotDeletePendingOrRunning(t *testing.T)
 	}
 }
 
+func TestBackupRetentionCleanupRejectsArchiveBeforeDelete(t *testing.T) {
+	service := NewBackupService(newFakeBackupRepo())
+
+	_, err := service.CleanupRetention(context.Background(), dto.BackupRetentionCleanupRequest{
+		ArchiveBeforeDelete: true,
+	})
+	if err == nil {
+		t.Fatalf("expected archive_before_delete to fail")
+	}
+	appErr, ok := apperror.As(err)
+	if !ok || appErr.Code != apperror.ErrBadRequest.Code {
+		t.Fatalf("expected bad request, got %v", err)
+	}
+}
+
 func TestBackupRetentionCleanupDeletesTerminalRowsOnly(t *testing.T) {
 	repo := newFakeBackupRepo()
 	old := time.Now().AddDate(0, 0, -60)
