@@ -44,6 +44,13 @@ func (s *backupHandlerServiceStub) CreateMetadata(
 	return s.createResult, s.createErr
 }
 
+func (s *backupHandlerServiceStub) CreateArtifact(
+	context.Context,
+	int64,
+) (dto.BackupSummary, error) {
+	return dto.BackupSummary{}, errors.New("not implemented")
+}
+
 func (s *backupHandlerServiceStub) Verify(
 	_ context.Context,
 	id int64,

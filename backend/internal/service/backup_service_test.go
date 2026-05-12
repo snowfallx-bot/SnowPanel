@@ -2,6 +2,9 @@ package service
 
 import (
 	"context"
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -42,6 +45,66 @@ func TestBackupMetadataCreateDefaults(t *testing.T) {
 	}
 	if result.CreatedBy == nil || *result.CreatedBy != createdBy {
 		t.Fatalf("expected created_by to be preserved")
+	}
+}
+
+func TestBackupCreateArtifactWritesLocalManifest(t *testing.T) {
+	repo := newFakeBackupRepo()
+	localDir := t.TempDir()
+	service := NewBackupServiceWithOptions(repo, BackupServiceOptions{LocalDir: localDir})
+	result, err := service.CreateMetadata(context.Background(), dto.CreateBackupMetadataRequest{
+		ResourceType: BackupResourceAppMetadata,
+		ResourceID:   "primary/app",
+		StorageType:  BackupStorageLocal,
+	}, nil)
+	if err != nil {
+		t.Fatalf("CreateMetadata returned error: %v", err)
+	}
+
+	artifact, err := service.CreateArtifact(context.Background(), result.ID)
+	if err != nil {
+		t.Fatalf("CreateArtifact returned error: %v", err)
+	}
+
+	if artifact.Status != BackupStatusSuccess {
+		t.Fatalf("expected success status, got %q", artifact.Status)
+	}
+	if artifact.SizeBytes <= 0 {
+		t.Fatalf("expected size to be recorded, got %d", artifact.SizeBytes)
+	}
+	if !strings.HasPrefix(artifact.Checksum, "sha256:") || len(artifact.Checksum) != len("sha256:")+64 {
+		t.Fatalf("expected sha256 checksum, got %q", artifact.Checksum)
+	}
+	rel, err := filepath.Rel(localDir, artifact.FilePath)
+	if err != nil {
+		t.Fatalf("failed to compare artifact path: %v", err)
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) || filepath.IsAbs(rel) {
+		t.Fatalf("artifact path escaped local dir: %s", artifact.FilePath)
+	}
+
+	content, err := os.ReadFile(artifact.FilePath)
+	if err != nil {
+		t.Fatalf("failed to read artifact: %v", err)
+	}
+	if int64(len(content)) != artifact.SizeBytes {
+		t.Fatalf("expected artifact size %d, got %d", artifact.SizeBytes, len(content))
+	}
+	if strings.Contains(strings.ToLower(string(content)), "secret") ||
+		strings.Contains(strings.ToLower(string(content)), "password") {
+		t.Fatalf("artifact manifest should not contain secret-looking fields: %s", string(content))
+	}
+	var manifest backupArtifactManifest
+	if err := json.Unmarshal(content, &manifest); err != nil {
+		t.Fatalf("failed to parse artifact manifest: %v", err)
+	}
+	if manifest.BackupID != result.ID || manifest.ResourceType != BackupResourceAppMetadata {
+		t.Fatalf("unexpected manifest: %+v", manifest)
+	}
+
+	stored := repo.items[result.ID]
+	if stored.FilePath != artifact.FilePath || stored.Checksum != artifact.Checksum || stored.SizeBytes != artifact.SizeBytes {
+		t.Fatalf("repository verification was not updated: stored=%+v artifact=%+v", stored, artifact)
 	}
 }
 

@@ -2,9 +2,14 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 	"unicode"
@@ -31,6 +36,7 @@ const (
 
 type BackupService interface {
 	CreateMetadata(ctx context.Context, req dto.CreateBackupMetadataRequest, createdBy *int64) (dto.BackupSummary, error)
+	CreateArtifact(ctx context.Context, id int64) (dto.BackupSummary, error)
 	Verify(ctx context.Context, id int64, req dto.VerifyBackupRequest) (dto.BackupSummary, error)
 	MarkStatus(ctx context.Context, id int64, status string) (dto.BackupSummary, error)
 	List(ctx context.Context, query dto.ListBackupsQuery) (dto.ListBackupsResult, error)
@@ -40,6 +46,7 @@ type BackupService interface {
 type backupService struct {
 	repo          repository.BackupRepository
 	retentionDays int
+	localDir      string
 }
 
 func NewBackupService(repo repository.BackupRepository) BackupService {
@@ -48,6 +55,7 @@ func NewBackupService(repo repository.BackupRepository) BackupService {
 
 type BackupServiceOptions struct {
 	RetentionDays int
+	LocalDir      string
 }
 
 func NewBackupServiceWithOptions(repo repository.BackupRepository, options BackupServiceOptions) BackupService {
@@ -55,9 +63,14 @@ func NewBackupServiceWithOptions(repo repository.BackupRepository, options Backu
 	if retentionDays <= 0 {
 		retentionDays = 30
 	}
+	localDir := strings.TrimSpace(options.LocalDir)
+	if localDir == "" {
+		localDir = "var/backups"
+	}
 	return &backupService{
 		repo:          repo,
 		retentionDays: retentionDays,
+		localDir:      localDir,
 	}
 }
 
@@ -96,6 +109,94 @@ func (s *backupService) CreateMetadata(
 	if err := s.repo.Create(ctx, backup); err != nil {
 		return dto.BackupSummary{}, wrapBackupInternal(err)
 	}
+	return mapBackupSummary(*backup), nil
+}
+
+type backupArtifactManifest struct {
+	Version      int      `json:"version"`
+	Kind         string   `json:"kind"`
+	BackupID     int64    `json:"backup_id"`
+	ResourceType string   `json:"resource_type"`
+	ResourceID   string   `json:"resource_id"`
+	StorageType  string   `json:"storage_type"`
+	CreatedAt    string   `json:"created_at"`
+	Scope        []string `json:"scope"`
+	Note         string   `json:"note,omitempty"`
+}
+
+func (s *backupService) CreateArtifact(ctx context.Context, id int64) (dto.BackupSummary, error) {
+	if id <= 0 {
+		return dto.BackupSummary{}, badBackupRequest(errors.New("backup id must be positive"))
+	}
+
+	backup, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return dto.BackupSummary{}, wrapBackupInternal(err)
+	}
+	if backup == nil {
+		return dto.BackupSummary{}, apperror.ErrBackupNotFound
+	}
+	if backup.StorageType != BackupStorageLocal {
+		_ = s.repo.UpdateStatus(ctx, id, BackupStatusFailed)
+		return dto.BackupSummary{}, badBackupRequest(errors.New("only local backup storage can create artifacts in P3"))
+	}
+
+	if err := s.repo.UpdateStatus(ctx, id, BackupStatusRunning); err != nil {
+		return dto.BackupSummary{}, wrapBackupInternal(err)
+	}
+
+	now := time.Now().UTC()
+	path, err := safeBackupArtifactPath(s.localDir, *backup, now)
+	if err != nil {
+		_ = s.repo.UpdateStatus(ctx, id, BackupStatusFailed)
+		return dto.BackupSummary{}, wrapBackupInternal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		_ = s.repo.UpdateStatus(ctx, id, BackupStatusFailed)
+		return dto.BackupSummary{}, wrapBackupInternal(err)
+	}
+
+	manifest := backupArtifactManifest{
+		Version:      1,
+		Kind:         "snowpanel.backup.artifact",
+		BackupID:     backup.ID,
+		ResourceType: backup.ResourceType,
+		ResourceID:   backup.ResourceID,
+		StorageType:  backup.StorageType,
+		CreatedAt:    now.Format(time.RFC3339),
+		Scope:        backupArtifactScope(backup.ResourceType),
+		Note:         backupArtifactNote(backup.ResourceType),
+	}
+	content, err := json.MarshalIndent(manifest, "", "  ")
+	if err != nil {
+		_ = s.repo.UpdateStatus(ctx, id, BackupStatusFailed)
+		return dto.BackupSummary{}, wrapBackupInternal(err)
+	}
+	content = append(content, '\n')
+
+	tempPath := path + ".tmp"
+	if err := os.WriteFile(tempPath, content, 0600); err != nil {
+		_ = s.repo.UpdateStatus(ctx, id, BackupStatusFailed)
+		return dto.BackupSummary{}, wrapBackupInternal(err)
+	}
+	if err := os.Rename(tempPath, path); err != nil {
+		_ = os.Remove(tempPath)
+		_ = s.repo.UpdateStatus(ctx, id, BackupStatusFailed)
+		return dto.BackupSummary{}, wrapBackupInternal(err)
+	}
+
+	sum := sha256.Sum256(content)
+	checksum := "sha256:" + hex.EncodeToString(sum[:])
+	if err := s.repo.UpdateVerification(ctx, id, BackupStatusSuccess, int64(len(content)), checksum, path); err != nil {
+		_ = s.repo.UpdateStatus(ctx, id, BackupStatusFailed)
+		return dto.BackupSummary{}, wrapBackupInternal(err)
+	}
+
+	backup.Status = BackupStatusSuccess
+	backup.SizeBytes = int64(len(content))
+	backup.Checksum = checksum
+	backup.FilePath = path
+	backup.UpdatedAt = time.Now()
 	return mapBackupSummary(*backup), nil
 }
 
@@ -327,6 +428,84 @@ func normalizeBackupChecksum(raw string) (string, error) {
 		}
 	}
 	return "sha256:" + value, nil
+}
+
+func backupArtifactScope(resourceType string) []string {
+	switch resourceType {
+	case BackupResourcePostgres:
+		return []string{"postgres.metadata"}
+	case BackupResourceAppMetadata:
+		return []string{"application.metadata"}
+	case BackupResourceObservability:
+		return []string{"observability.config"}
+	case BackupResourceCoreAgentTemplate:
+		return []string{"core_agent.config"}
+	default:
+		return []string{"unknown"}
+	}
+}
+
+func backupArtifactNote(resourceType string) string {
+	if resourceType == BackupResourcePostgres {
+		return "This P3 artifact is a controlled manifest. Full pg_dump generation remains a follow-up."
+	}
+	return ""
+}
+
+func safeBackupArtifactPath(localDir string, backup model.Backup, now time.Time) (string, error) {
+	localDir = strings.TrimSpace(localDir)
+	if localDir == "" {
+		return "", errors.New("backup local directory is required")
+	}
+	localAbs, err := filepath.Abs(localDir)
+	if err != nil {
+		return "", err
+	}
+	fileName := fmt.Sprintf(
+		"snowpanel-%s-%s-%d-%d.json",
+		sanitizeBackupFilenamePart(backup.ResourceType),
+		sanitizeBackupFilenamePart(backup.ResourceID),
+		backup.ID,
+		now.Unix(),
+	)
+	path := filepath.Join(localAbs, fileName)
+	rel, err := filepath.Rel(localAbs, path)
+	if err != nil {
+		return "", err
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) || filepath.IsAbs(rel) {
+		return "", errors.New("backup artifact path escapes local directory")
+	}
+	return path, nil
+}
+
+func sanitizeBackupFilenamePart(raw string) string {
+	value := strings.ToLower(strings.TrimSpace(raw))
+	var builder strings.Builder
+	lastDash := false
+	for _, char := range value {
+		ok := (char >= 'a' && char <= 'z') || (char >= '0' && char <= '9')
+		if ok {
+			builder.WriteRune(char)
+			lastDash = false
+			continue
+		}
+		if !lastDash {
+			builder.WriteByte('-')
+			lastDash = true
+		}
+	}
+	result := strings.Trim(builder.String(), "-")
+	if result == "" {
+		return "backup"
+	}
+	if len(result) > 64 {
+		result = strings.Trim(result[:64], "-")
+	}
+	if result == "" {
+		return "backup"
+	}
+	return result
 }
 
 func mapBackupSummary(backup model.Backup) dto.BackupSummary {

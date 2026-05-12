@@ -110,6 +110,7 @@ type AuditConfig struct {
 
 type BackupConfig struct {
 	RetentionDays int
+	LocalDir      string
 }
 
 func Load() Config {
@@ -159,6 +160,7 @@ func Load() Config {
 	v.SetDefault("AUDIT_RETENTION_DAYS", 180)
 	v.SetDefault("AUDIT_EXPORT_MAX_ROWS", 100000)
 	v.SetDefault("BACKUP_RETENTION_DAYS", 30)
+	v.SetDefault("BACKUP_LOCAL_DIR", "var/backups")
 	v.SetDefault("OTEL_TRACING_ENABLED", false)
 	v.SetDefault("OTEL_SERVICE_NAME", "snowpanel-backend")
 	v.SetDefault("OTEL_SERVICE_VERSION", "")
@@ -274,6 +276,7 @@ func Load() Config {
 		},
 		Backup: BackupConfig{
 			RetentionDays: v.GetInt("BACKUP_RETENTION_DAYS"),
+			LocalDir:      strings.TrimSpace(v.GetString("BACKUP_LOCAL_DIR")),
 		},
 	}
 }
@@ -328,6 +331,9 @@ func (c Config) Validate() error {
 	}
 	if c.Backup.RetentionDays < 1 {
 		return errors.New("BACKUP_RETENTION_DAYS must be greater than 0")
+	}
+	if strings.TrimSpace(c.Backup.LocalDir) == "" {
+		return errors.New("BACKUP_LOCAL_DIR cannot be empty")
 	}
 
 	switch c.AgentAuth.Mode {

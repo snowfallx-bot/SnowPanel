@@ -105,7 +105,7 @@ Key settings in `.env`:
 - core-agent operation gates (`CORE_AGENT_ENABLE_FILE_OPS`, `CORE_AGENT_ENABLE_SERVICE_OPS`, `CORE_AGENT_ENABLE_DOCKER_OPS`, `CORE_AGENT_ENABLE_CRON_OPS`)
 - durable task worker controls (`TASK_WORKER_ENABLED`, `TASK_WORKER_CONCURRENCY`, `TASK_WORKER_LEASE_DURATION`, `TASK_WORKER_MAX_ATTEMPTS`)
 - audit retention/export controls (`AUDIT_RETENTION_DAYS`, `AUDIT_EXPORT_MAX_ROWS`)
-- backup retention controls (`BACKUP_RETENTION_DAYS`)
+- backup controls (`BACKUP_RETENTION_DAYS`, `BACKUP_LOCAL_DIR`)
 - core-agent safe-root and read/write limits
 - core-agent metrics endpoint config (`CORE_AGENT_METRICS_ENABLED`, `CORE_AGENT_METRICS_HOST`, `CORE_AGENT_METRICS_PORT`)
 - OTEL tracing config (`OTEL_TRACING_ENABLED`, `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_TRACES_SAMPLER_ARG`)
@@ -128,6 +128,8 @@ Key settings in `.env`:
 - Set `AUDIT_RETENTION_DAYS` to the retention period required by your operational policy; default is `180`.
 - Keep `AUDIT_EXPORT_MAX_ROWS` bounded for predictable audit export memory/network usage; default is `100000`.
 - Set `BACKUP_RETENTION_DAYS` to the terminal backup metadata retention period; default is `30`. Cleanup only removes old `success`/`failed` backup metadata rows.
+- Set `BACKUP_LOCAL_DIR` to a persistent, protected directory for local backup artifacts; default is `var/backups`.
+- Keep local backup artifacts outside the public web root. The backend creates the directory with owner-only permissions and writes artifact files with owner-only permissions.
 - Use persistent backup strategy for Postgres volumes.
 - Place backend/frontend behind HTTPS reverse proxy.
 - Restrict core-agent (`50051`) exposure to trusted network only.

@@ -122,6 +122,7 @@ Run a non-destructive task check:
 For backup foundation validation:
 
 - Verify backup metadata rows have checksum, size, status, storage type, and resource fields.
+- Confirm local artifacts are stored under `BACKUP_LOCAL_DIR` and not under a public web root.
 - Recompute checksum for a restored backup artifact and compare it to metadata.
 - Create a fresh backup after restore and verify it before allowing destructive operations.
 

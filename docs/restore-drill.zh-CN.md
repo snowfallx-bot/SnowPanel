@@ -122,6 +122,7 @@ curl -f http://127.0.0.1:8080/ready
 backup foundation 验证：
 
 - 确认 backup metadata rows 包含 checksum、size、status、storage type 与 resource 字段。
+- 确认本地 artifacts 位于 `BACKUP_LOCAL_DIR` 下，且不在公开 Web 根目录中。
 - 对恢复出的 backup artifact 重新计算 checksum，并与 metadata 比对。
 - 恢复后创建一次新备份并完成 verify，然后再允许执行破坏性操作。
 

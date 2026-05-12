@@ -93,6 +93,7 @@ func main() {
 	cronService := service.NewCronService(agentClient)
 	backupService := service.NewBackupServiceWithOptions(backupRepo, service.BackupServiceOptions{
 		RetentionDays: cfg.Backup.RetentionDays,
+		LocalDir:      cfg.Backup.LocalDir,
 	})
 	metricsSet := appmetrics.Default()
 	taskService := service.NewTaskServiceWithOptions(

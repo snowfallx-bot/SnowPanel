@@ -105,7 +105,7 @@ PostgreSQL 首次初始化时，会加载以下 schema SQL：
 - core-agent 操作类别开关（`CORE_AGENT_ENABLE_FILE_OPS`、`CORE_AGENT_ENABLE_SERVICE_OPS`、`CORE_AGENT_ENABLE_DOCKER_OPS`、`CORE_AGENT_ENABLE_CRON_OPS`）
 - durable task worker 控制项（`TASK_WORKER_ENABLED`、`TASK_WORKER_CONCURRENCY`、`TASK_WORKER_LEASE_DURATION`、`TASK_WORKER_MAX_ATTEMPTS`）
 - audit retention/export 控制项（`AUDIT_RETENTION_DAYS`、`AUDIT_EXPORT_MAX_ROWS`）
-- backup retention 控制项（`BACKUP_RETENTION_DAYS`）
+- backup 控制项（`BACKUP_RETENTION_DAYS`、`BACKUP_LOCAL_DIR`）
 - core-agent 安全根目录与读写大小限制
 - core-agent 指标端点配置（`CORE_AGENT_METRICS_ENABLED`、`CORE_AGENT_METRICS_HOST`、`CORE_AGENT_METRICS_PORT`）
 - OTEL tracing 配置（`OTEL_TRACING_ENABLED`、`OTEL_EXPORTER_OTLP_ENDPOINT`、`OTEL_TRACES_SAMPLER_ARG`）
@@ -128,6 +128,8 @@ PostgreSQL 首次初始化时，会加载以下 schema SQL：
 - 根据运维策略设置 `AUDIT_RETENTION_DAYS`；默认值为 `180`。
 - 保持 `AUDIT_EXPORT_MAX_ROWS` 有界，避免审计导出造成不可预期的内存或网络压力；默认值为 `100000`。
 - 根据运维策略设置 `BACKUP_RETENTION_DAYS`；默认值为 `30`。清理只会删除旧的 `success`/`failed` backup metadata rows。
+- 设置 `BACKUP_LOCAL_DIR` 为持久化且受保护的本地 backup artifact 目录；默认值为 `var/backups`。
+- 本地 backup artifact 不应放在公开 Web 根目录下。backend 会以仅 owner 可访问的权限创建目录，并以仅 owner 可读写的权限写入 artifact 文件。
 - 为 Postgres 数据卷配置持久化备份策略。
 - 在 backend/frontend 前加 HTTPS 反向代理。
 - 仅在可信网络暴露 core-agent（`50051`）。

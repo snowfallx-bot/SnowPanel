@@ -1041,16 +1041,12 @@ func (s *taskService) executeBackupCreate(
 		return nonRetryableTaskError{err: errors.New("backup service is not configured")}
 	}
 	if !s.setRunningProgress(ctx, taskID, 30) {
-		return errors.New("task canceled before backup metadata preparation")
-	}
-	_, err := s.backupService.MarkStatus(ctx, payload.BackupID, BackupStatusRunning)
-	if err != nil {
-		return err
+		return errors.New("task canceled before backup artifact creation")
 	}
 	_ = s.repo.AppendLog(ctx, &model.TaskLog{
 		TaskID:  taskID,
 		Level:   "info",
-		Message: "backup metadata marked running",
+		Message: "creating backup artifact",
 		Metadata: marshalTaskMetadata(map[string]interface{}{
 			"backup_id":     payload.BackupID,
 			"resource_type": payload.ResourceType,
@@ -1059,22 +1055,25 @@ func (s *taskService) executeBackupCreate(
 			"worker_id":     workerID,
 		}),
 	})
-	if !s.setRunningProgress(ctx, taskID, 85) {
-		return errors.New("task canceled after backup metadata preparation")
-	}
-	_, err = s.backupService.MarkStatus(ctx, payload.BackupID, BackupStatusSuccess)
+	backup, err := s.backupService.CreateArtifact(ctx, payload.BackupID)
 	if err != nil {
 		return err
+	}
+	if !s.setRunningProgress(ctx, taskID, 85) {
+		return errors.New("task canceled after backup artifact creation")
 	}
 	_ = s.repo.AppendLog(ctx, &model.TaskLog{
 		TaskID:  taskID,
 		Level:   "info",
-		Message: "backup metadata prepared",
+		Message: "backup artifact created",
 		Metadata: marshalTaskMetadata(map[string]interface{}{
-			"backup_id": payload.BackupID,
-			"status":    BackupStatusSuccess,
-			"progress":  85,
-			"worker_id": workerID,
+			"backup_id":  backup.ID,
+			"file_path":  backup.FilePath,
+			"size_bytes": backup.SizeBytes,
+			"checksum":   backup.Checksum,
+			"status":     BackupStatusSuccess,
+			"progress":   85,
+			"worker_id":  workerID,
 		}),
 	})
 	return nil

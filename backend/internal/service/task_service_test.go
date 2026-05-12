@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"os"
 	"slices"
 	"strings"
 	"sync"
@@ -1137,7 +1138,7 @@ func TestRunWorkerRecordsTaskMetrics(t *testing.T) {
 func TestRunWorkerCompletesBackupCreateTask(t *testing.T) {
 	taskRepo := newFakeTaskRepo()
 	backupRepo := newFakeBackupRepo()
-	backupSvc := NewBackupService(backupRepo)
+	backupSvc := NewBackupServiceWithOptions(backupRepo, BackupServiceOptions{LocalDir: t.TempDir()})
 	taskSvc := NewTaskServiceWithOptions(
 		taskRepo,
 		nil,
@@ -1189,6 +1190,12 @@ func TestRunWorkerCompletesBackupCreateTask(t *testing.T) {
 	}
 	if backup.Status != BackupStatusSuccess {
 		t.Fatalf("expected backup status success, got %+v", backup)
+	}
+	if backup.FilePath == "" || backup.SizeBytes <= 0 || !strings.HasPrefix(backup.Checksum, "sha256:") {
+		t.Fatalf("expected backup artifact metadata, got %+v", backup)
+	}
+	if _, err := os.Stat(backup.FilePath); err != nil {
+		t.Fatalf("expected backup artifact file to exist: %v", err)
 	}
 }
 

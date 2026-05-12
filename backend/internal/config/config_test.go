@@ -61,6 +61,7 @@ func TestValidateAllowsStrongProductionConfig(t *testing.T) {
 		},
 		Backup: BackupConfig{
 			RetentionDays: 30,
+			LocalDir:      "var/backups",
 		},
 	}
 
@@ -91,11 +92,43 @@ func TestValidateRejectsInvalidBackupConfig(t *testing.T) {
 		},
 		Backup: BackupConfig{
 			RetentionDays: 0,
+			LocalDir:      "var/backups",
 		},
 	}
 
 	if err := cfg.Validate(); err == nil {
 		t.Fatalf("expected validation error for invalid backup retention")
+	}
+}
+
+func TestValidateRejectsEmptyBackupLocalDir(t *testing.T) {
+	cfg := Config{
+		AppEnv: "production",
+		Auth: AuthConfig{
+			AppEnv:               "production",
+			JWTSecret:            "VeryStrongJWTSecret_For_Production_Use_1234567890!",
+			BootstrapAdmin:       false,
+			DefaultAdminUsername: "admin",
+			DefaultAdminEmail:    "admin@example.com",
+		},
+		TaskWorker: TaskWorkerConfig{
+			Concurrency:   2,
+			LeaseDuration: 30,
+			PollInterval:  2,
+			MaxAttempts:   3,
+		},
+		Audit: AuditConfig{
+			RetentionDays: 180,
+			ExportMaxRows: 100000,
+		},
+		Backup: BackupConfig{
+			RetentionDays: 30,
+			LocalDir:      "",
+		},
+	}
+
+	if err := cfg.Validate(); err == nil {
+		t.Fatalf("expected validation error for empty backup local dir")
 	}
 }
 
