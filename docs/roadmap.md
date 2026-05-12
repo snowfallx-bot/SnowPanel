@@ -151,6 +151,14 @@ Local P3-6 audit forensics work is in progress:
 - The tasks UI can open a task detail directly from `/tasks?task_id=<id>`.
 - Backend tests cover filter propagation, CSV export, JSONL export, request/trace id persistence, retention dry-run, and delete behavior.
 
+### P3-7 Backup and Restore Foundation
+
+Local P3-7 backup foundation work has started:
+
+- Backup scope is explicitly limited to Postgres metadata, SnowPanel app metadata, observability config snapshots, core-agent config templates, and backup metadata.
+- P3 excludes raw secret export, arbitrary filesystem backup, Docker volume backup, remote object storage, and full host bare-metal recovery.
+- `docs/restore-drill.md` documents fresh-machine restore, Postgres restore, secret rotation, service startup, health checks, login verification, audit verification, backup verification, and rollback.
+
 ## Follow-up Hardening (Post-P3-0)
 
 1. Wire final alert destinations to real on-call channels under team policy

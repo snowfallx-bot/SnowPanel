@@ -126,6 +126,11 @@ P3-6 Audit Retention, Export, and Forensics
 - local backend gate 已通过：cd backend && go test ./...
 - local frontend gate 已通过：npm --prefix frontend run test、npm --prefix frontend run build
 - local full gate 已通过：make lint、make test
+
+P3-7 Backup and Restore Foundation
+- backup scope 已明确限制为 Postgres metadata、SnowPanel app metadata、observability config snapshot、core-agent config templates 与 backup metadata
+- P3 backup 明确排除 raw secret export、任意 filesystem backup、Docker volume backup、remote object storage 与完整 host bare-metal recovery
+- docs/restore-drill.md / docs/restore-drill.zh-CN.md 已新增，覆盖 fresh machine restore、Postgres restore、secret rotation、health/ready、login、audit、backup verification 与 rollback
 ```
 
 ### 明确暂不优先

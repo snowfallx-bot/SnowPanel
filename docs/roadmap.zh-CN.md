@@ -151,6 +151,14 @@
 - tasks UI 已支持通过 `/tasks?task_id=<id>` 直接打开任务详情。
 - backend tests 已覆盖 filter 传递、CSV export、JSONL export、request/trace id 持久化、retention dry-run 与实际 delete 行为。
 
+### P3-7 Backup and Restore Foundation
+
+本地 P3-7 backup foundation 已开始推进：
+
+- 备份范围明确限制为 Postgres metadata、SnowPanel app metadata、observability config snapshot、core-agent config templates 与 backup metadata。
+- P3 明确不包含 raw secret export、任意 filesystem backup、Docker volume backup、remote object storage 与完整 host bare-metal recovery。
+- `docs/restore-drill.zh-CN.md` 已覆盖新机器恢复、Postgres 恢复、secret rotation、服务启动、健康检查、登录验证、审计验证、备份验证与回滚。
+
 ## 后续加固（Post-P3-0）
 
 1. 按团队值班制度把最终告警目的地接入到真实 on-call 通道
