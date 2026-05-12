@@ -168,7 +168,7 @@
 - `BACKUP_LOCAL_DIR` 已用于配置受保护的本地 artifact 目录，默认值为 `var/backups`。
 - backup create worker 现在会生成受控本地 JSON manifest artifact，记录 file path、size 与 sha256 checksum，并将 metadata 标记为 success。
 - backup verify worker 现在支持在 verify-task 请求体为空时，从已记录的本地 artifact 重新计算 size 与 sha256；同时仍支持调用方传入 checksum/size 的验证路径。
-- backup retention cleanup 会拒绝 `archive_before_delete=true`，直到 metadata archiving 真正实现，避免给 operator 虚假的归档保证。
+- backup retention cleanup 支持 `archive_before_delete=true`，会在删除前将匹配的 metadata rows 以 JSONL archive 写入 `BACKUP_LOCAL_DIR`。
 - 真实 Postgres `pg_dump` generation 仍是后续项，完成前不宣称 full backup automation。
 - `BACKUP_RETENTION_DAYS` 已用于配置 terminal backup metadata retention，`POST /api/v1/backups/retention/cleanup` 支持对旧 success/failed backup rows 执行 dry-run cleanup。
 

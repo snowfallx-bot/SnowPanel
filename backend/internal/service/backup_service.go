@@ -384,10 +384,6 @@ func (s *backupService) CleanupRetention(
 	ctx context.Context,
 	req dto.BackupRetentionCleanupRequest,
 ) (dto.BackupRetentionCleanupResult, error) {
-	if req.ArchiveBeforeDelete {
-		return dto.BackupRetentionCleanupResult{}, badBackupRequest(errors.New("archive_before_delete is not supported for backup metadata cleanup yet"))
-	}
-
 	retentionDays := req.RetentionDays
 	if retentionDays <= 0 {
 		retentionDays = s.retentionDays
@@ -413,12 +409,72 @@ func (s *backupService) CleanupRetention(
 		return result, nil
 	}
 
+	if req.ArchiveBeforeDelete && matchedRows > 0 {
+		items, err := s.repo.ListDeletableBefore(ctx, cutoff)
+		if err != nil {
+			return dto.BackupRetentionCleanupResult{}, wrapBackupInternal(err)
+		}
+		archivePath, err := s.writeRetentionArchive(items, cutoff)
+		if err != nil {
+			return dto.BackupRetentionCleanupResult{}, wrapBackupInternal(err)
+		}
+		result.ArchivePath = archivePath
+	}
+
 	deletedRows, err := s.repo.DeleteDeletableBefore(ctx, cutoff)
 	if err != nil {
 		return dto.BackupRetentionCleanupResult{}, wrapBackupInternal(err)
 	}
 	result.DeletedRows = deletedRows
 	return result, nil
+}
+
+func (s *backupService) writeRetentionArchive(items []model.Backup, cutoff time.Time) (string, error) {
+	if len(items) == 0 {
+		return "", nil
+	}
+	localAbs, err := filepath.Abs(strings.TrimSpace(s.localDir))
+	if err != nil {
+		return "", err
+	}
+	if err := os.MkdirAll(localAbs, 0700); err != nil {
+		return "", err
+	}
+	fileName := fmt.Sprintf("snowpanel-backup-metadata-archive-%d.jsonl", time.Now().UTC().UnixNano())
+	path := filepath.Join(localAbs, fileName)
+	rel, err := filepath.Rel(localAbs, path)
+	if err != nil {
+		return "", err
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) || filepath.IsAbs(rel) {
+		return "", errors.New("backup retention archive path escapes local directory")
+	}
+
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	for _, item := range items {
+		line := struct {
+			ArchivedAt string            `json:"archived_at"`
+			Cutoff     string            `json:"cutoff"`
+			Backup     dto.BackupSummary `json:"backup"`
+		}{
+			ArchivedAt: time.Now().UTC().Format(time.RFC3339),
+			Cutoff:     cutoff.Format(time.RFC3339),
+			Backup:     mapBackupSummary(item),
+		}
+		bytes, err := json.Marshal(line)
+		if err != nil {
+			return "", err
+		}
+		if _, err := file.Write(append(bytes, '\n')); err != nil {
+			return "", err
+		}
+	}
+	return path, nil
 }
 
 func normalizeBackupResourceType(raw string) (string, error) {

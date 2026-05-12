@@ -50,6 +50,7 @@ type BackupRetentionCleanupResult struct {
 	MatchedRows         int64  `json:"matched_rows"`
 	DeletedRows         int64  `json:"deleted_rows"`
 	ArchiveBeforeDelete bool   `json:"archive_before_delete"`
+	ArchivePath         string `json:"archive_path,omitempty"`
 }
 
 type ListBackupsQuery struct {

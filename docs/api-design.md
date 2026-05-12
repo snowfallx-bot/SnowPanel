@@ -164,9 +164,9 @@ Security constraints:
   - body: `{}` to recompute size and sha256 from the recorded local artifact under `BACKUP_LOCAL_DIR`
   - body may include `size_bytes` and `checksum` to queue caller-provided metadata verification instead
 - `POST /backups/retention/cleanup` (`backup.manage`)
-  - body: `{ "dry_run": true, "retention_days": 30 }`
+  - body: `{ "dry_run": true, "retention_days": 30, "archive_before_delete": false }`
   - removes only old terminal `success`/`failed` backup metadata rows when `dry_run=false`
-  - `archive_before_delete=true` is rejected until backup metadata archiving is implemented
+  - `archive_before_delete=true` writes a JSONL metadata archive to `BACKUP_LOCAL_DIR` before deleting rows
 
 ## Async Tasks
 

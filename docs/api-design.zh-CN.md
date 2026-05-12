@@ -164,9 +164,9 @@
   - 请求体可为 `{}`，此时 worker 会从 `BACKUP_LOCAL_DIR` 下已记录的本地 artifact 重新计算 size 与 sha256
   - 请求体也可包含 `size_bytes` 与 `checksum`，用于创建调用方提供 metadata 的验证任务
 - `POST /backups/retention/cleanup`（`backup.manage`）
-  - 请求体：`{ "dry_run": true, "retention_days": 30 }`
+  - 请求体：`{ "dry_run": true, "retention_days": 30, "archive_before_delete": false }`
   - 当 `dry_run=false` 时，仅删除旧的 terminal `success`/`failed` backup metadata rows
-  - 在 backup metadata archiving 实现前，`archive_before_delete=true` 会被拒绝
+  - `archive_before_delete=true` 会在删除 rows 前，把 metadata 以 JSONL archive 写入 `BACKUP_LOCAL_DIR`
 
 ## 异步任务
 

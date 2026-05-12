@@ -24,6 +24,7 @@ type BackupRepository interface {
 	UpdateVerification(ctx context.Context, id int64, status string, sizeBytes int64, checksum string, filePath string) error
 	UpdateStatus(ctx context.Context, id int64, status string) error
 	CountDeletableBefore(ctx context.Context, cutoff time.Time) (int64, error)
+	ListDeletableBefore(ctx context.Context, cutoff time.Time) ([]model.Backup, error)
 	DeleteDeletableBefore(ctx context.Context, cutoff time.Time) (int64, error)
 }
 
@@ -126,6 +127,17 @@ func (r *backupRepository) CountDeletableBefore(ctx context.Context, cutoff time
 		return 0, err
 	}
 	return count, nil
+}
+
+func (r *backupRepository) ListDeletableBefore(ctx context.Context, cutoff time.Time) ([]model.Backup, error) {
+	var items []model.Backup
+	if err := r.db.WithContext(ctx).
+		Where("created_at < ? AND status IN ?", cutoff, []string{"success", "failed"}).
+		Order("created_at ASC, id ASC").
+		Find(&items).Error; err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 func (r *backupRepository) DeleteDeletableBefore(ctx context.Context, cutoff time.Time) (int64, error) {

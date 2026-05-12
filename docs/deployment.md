@@ -128,7 +128,7 @@ Key settings in `.env`:
 - Set `AUDIT_RETENTION_DAYS` to the retention period required by your operational policy; default is `180`.
 - Keep `AUDIT_EXPORT_MAX_ROWS` bounded for predictable audit export memory/network usage; default is `100000`.
 - Set `BACKUP_RETENTION_DAYS` to the terminal backup metadata retention period; default is `30`. Cleanup only removes old `success`/`failed` backup metadata rows.
-- Backup metadata cleanup rejects `archive_before_delete=true` until an explicit archive destination is implemented.
+- Backup metadata cleanup supports `archive_before_delete=true`; archives are written as JSONL files under `BACKUP_LOCAL_DIR` before rows are deleted.
 - Set `BACKUP_LOCAL_DIR` to a persistent, protected directory for local backup artifacts; default is `var/backups`.
 - Keep local backup artifacts outside the public web root. The backend creates the directory with owner-only permissions and writes artifact files with owner-only permissions.
 - Use persistent backup strategy for Postgres volumes.

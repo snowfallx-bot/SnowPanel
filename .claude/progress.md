@@ -144,9 +144,9 @@ P3-7 Backup and Restore Foundation
 - backup verify task 会通过 worker 执行 checksum/size verification；请求体为空时会从已记录的本地 artifact 重新计算 size / sha256
 - BACKUP_RETENTION_DAYS 配置已新增，默认 30
 - backup retention cleanup endpoint 已新增：POST /api/v1/backups/retention/cleanup，支持 dry_run，仅清理旧 success/failed backup metadata rows，并记录 audit
-- backup retention cleanup 已拒绝尚未实现的 `archive_before_delete=true`，避免静默忽略归档语义
+- backup retention cleanup 已支持 `archive_before_delete=true`，删除前会把匹配的 metadata rows 以 JSONL archive 写入 `BACKUP_LOCAL_DIR`
 - service tests 已覆盖 metadata creation、scope deny、local artifact generation、local artifact recompute verification、verify success、checksum mismatch failed、list filter normalization
-- service tests 已覆盖 backup retention dry run、archive_before_delete reject 与 terminal-only delete 行为
+- service tests 已覆盖 backup retention dry run、archive_before_delete JSONL archive 与 terminal-only delete 行为
 - task service tests 已覆盖 backup create artifact task、backup verify task worker execution、recorded artifact verification、verify mismatch 标记 backup/task failed
 - handler tests 已覆盖 list filter 传递、create audit、verify failure audit、retention cleanup success/failure audit
 - local backend gate 已通过：cd backend && go test ./...

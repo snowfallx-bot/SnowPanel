@@ -328,18 +328,60 @@ func TestBackupRetentionCleanupDryRunDoesNotDeletePendingOrRunning(t *testing.T)
 	}
 }
 
-func TestBackupRetentionCleanupRejectsArchiveBeforeDelete(t *testing.T) {
-	service := NewBackupService(newFakeBackupRepo())
+func TestBackupRetentionCleanupArchivesBeforeDelete(t *testing.T) {
+	repo := newFakeBackupRepo()
+	old := time.Now().AddDate(0, 0, -60)
+	recent := time.Now().AddDate(0, 0, -5)
+	repo.items[1] = model.Backup{
+		ID:           1,
+		ResourceType: BackupResourcePostgres,
+		ResourceID:   "primary",
+		StorageType:  BackupStorageLocal,
+		FilePath:     "var/backups/old.json",
+		SizeBytes:    128,
+		Checksum:     "sha256:" + testChecksumA,
+		Status:       BackupStatusSuccess,
+		CreatedAt:    old,
+		UpdatedAt:    old,
+	}
+	repo.items[2] = model.Backup{ID: 2, Status: BackupStatusRunning, CreatedAt: old, UpdatedAt: old}
+	repo.items[3] = model.Backup{ID: 3, Status: BackupStatusSuccess, CreatedAt: recent, UpdatedAt: recent}
+	service := NewBackupServiceWithOptions(repo, BackupServiceOptions{
+		RetentionDays: 30,
+		LocalDir:      t.TempDir(),
+	})
 
-	_, err := service.CleanupRetention(context.Background(), dto.BackupRetentionCleanupRequest{
+	result, err := service.CleanupRetention(context.Background(), dto.BackupRetentionCleanupRequest{
 		ArchiveBeforeDelete: true,
 	})
-	if err == nil {
-		t.Fatalf("expected archive_before_delete to fail")
+	if err != nil {
+		t.Fatalf("CleanupRetention returned error: %v", err)
 	}
-	appErr, ok := apperror.As(err)
-	if !ok || appErr.Code != apperror.ErrBadRequest.Code {
-		t.Fatalf("expected bad request, got %v", err)
+	if !result.ArchiveBeforeDelete || result.ArchivePath == "" || result.DeletedRows != 1 || result.MatchedRows != 1 {
+		t.Fatalf("unexpected cleanup result: %+v", result)
+	}
+	content, err := os.ReadFile(result.ArchivePath)
+	if err != nil {
+		t.Fatalf("failed to read archive: %v", err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(content)), "\n")
+	if len(lines) != 1 {
+		t.Fatalf("expected one archive line, got %d: %s", len(lines), string(content))
+	}
+	var archived struct {
+		Backup dto.BackupSummary `json:"backup"`
+	}
+	if err := json.Unmarshal([]byte(lines[0]), &archived); err != nil {
+		t.Fatalf("failed to parse archive line: %v", err)
+	}
+	if archived.Backup.ID != 1 || archived.Backup.Status != BackupStatusSuccess {
+		t.Fatalf("unexpected archived backup: %+v", archived.Backup)
+	}
+	if _, ok := repo.items[1]; ok {
+		t.Fatalf("expected archived backup row to be deleted")
+	}
+	if _, ok := repo.items[2]; !ok {
+		t.Fatalf("running backup should not be deleted")
 	}
 }
 
@@ -460,6 +502,16 @@ func (r *fakeBackupRepo) CountDeletableBefore(_ context.Context, cutoff time.Tim
 		}
 	}
 	return count, nil
+}
+
+func (r *fakeBackupRepo) ListDeletableBefore(_ context.Context, cutoff time.Time) ([]model.Backup, error) {
+	var items []model.Backup
+	for _, item := range r.items {
+		if backupIsDeletableBefore(item, cutoff) {
+			items = append(items, item)
+		}
+	}
+	return items, nil
 }
 
 func (r *fakeBackupRepo) DeleteDeletableBefore(_ context.Context, cutoff time.Time) (int64, error) {

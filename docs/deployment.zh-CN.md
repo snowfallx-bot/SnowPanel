@@ -128,7 +128,7 @@ PostgreSQL 首次初始化时，会加载以下 schema SQL：
 - 根据运维策略设置 `AUDIT_RETENTION_DAYS`；默认值为 `180`。
 - 保持 `AUDIT_EXPORT_MAX_ROWS` 有界，避免审计导出造成不可预期的内存或网络压力；默认值为 `100000`。
 - 根据运维策略设置 `BACKUP_RETENTION_DAYS`；默认值为 `30`。清理只会删除旧的 `success`/`failed` backup metadata rows。
-- 在显式 archive destination 实现前，backup metadata cleanup 会拒绝 `archive_before_delete=true`。
+- backup metadata cleanup 支持 `archive_before_delete=true`；删除 rows 前会把 metadata 以 JSONL archive 写入 `BACKUP_LOCAL_DIR`。
 - 设置 `BACKUP_LOCAL_DIR` 为持久化且受保护的本地 backup artifact 目录；默认值为 `var/backups`。
 - 本地 backup artifact 不应放在公开 Web 根目录下。backend 会以仅 owner 可访问的权限创建目录，并以仅 owner 可读写的权限写入 artifact 文件。
 - 为 Postgres 数据卷配置持久化备份策略。
