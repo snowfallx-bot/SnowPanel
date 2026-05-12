@@ -15,6 +15,7 @@ import (
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/apperror"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/dto"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/middleware"
+	"github.com/snowfallx-bot/SnowPanel/backend/internal/service"
 )
 
 type backupHandlerServiceStub struct {
@@ -122,6 +123,82 @@ func (s *backupAuditRecorder) CleanupRetention(
 ) (dto.AuditRetentionCleanupResult, error) {
 	return dto.AuditRetentionCleanupResult{}, errors.New("not implemented")
 }
+
+type backupTaskServiceStub struct {
+	verifyTaskID     int64
+	verifyTaskReq    dto.CreateBackupVerifyTaskRequest
+	verifyTaskUserID *int64
+	verifyTaskUser   string
+	verifyTaskResult dto.CreateBackupVerifyTaskResult
+	verifyTaskErr    error
+}
+
+func (s *backupTaskServiceStub) CreateDockerRestartTask(
+	context.Context,
+	dto.CreateDockerRestartTaskRequest,
+	*int64,
+	string,
+) (dto.CreateTaskResult, error) {
+	return dto.CreateTaskResult{}, errors.New("not implemented")
+}
+
+func (s *backupTaskServiceStub) CreateServiceRestartTask(
+	context.Context,
+	dto.CreateServiceRestartTaskRequest,
+	*int64,
+	string,
+) (dto.CreateTaskResult, error) {
+	return dto.CreateTaskResult{}, errors.New("not implemented")
+}
+
+func (s *backupTaskServiceStub) CreateBackupTask(
+	context.Context,
+	dto.CreateBackupTaskRequest,
+	*int64,
+	string,
+) (dto.CreateBackupTaskResult, error) {
+	return dto.CreateBackupTaskResult{}, errors.New("not implemented")
+}
+
+func (s *backupTaskServiceStub) CreateBackupVerifyTask(
+	_ context.Context,
+	backupID int64,
+	req dto.CreateBackupVerifyTaskRequest,
+	triggeredBy *int64,
+	username string,
+) (dto.CreateBackupVerifyTaskResult, error) {
+	s.verifyTaskID = backupID
+	s.verifyTaskReq = req
+	s.verifyTaskUserID = triggeredBy
+	s.verifyTaskUser = username
+	return s.verifyTaskResult, s.verifyTaskErr
+}
+
+func (s *backupTaskServiceStub) CancelTask(context.Context, int64, string) error {
+	return errors.New("not implemented")
+}
+
+func (s *backupTaskServiceStub) RetryTask(
+	context.Context,
+	int64,
+	*int64,
+	string,
+) (dto.CreateTaskResult, error) {
+	return dto.CreateTaskResult{}, errors.New("not implemented")
+}
+
+func (s *backupTaskServiceStub) ListTasks(
+	context.Context,
+	dto.ListTasksQuery,
+) (dto.ListTasksResult, error) {
+	return dto.ListTasksResult{}, errors.New("not implemented")
+}
+
+func (s *backupTaskServiceStub) GetTaskDetail(context.Context, int64) (dto.TaskDetail, error) {
+	return dto.TaskDetail{}, errors.New("not implemented")
+}
+
+func (s *backupTaskServiceStub) RunWorker(context.Context, service.TaskWorkerOptions) {}
 
 func TestBackupHandlerListPassesFilters(t *testing.T) {
 	gin.SetMode(gin.TestMode)
@@ -257,6 +334,56 @@ func TestBackupHandlerVerifyFailureRecordsAudit(t *testing.T) {
 	}
 	record := auditSvc.records[0]
 	if record.Success || record.Module != "backups" || record.Action != "verify" || record.TargetID != "12" {
+		t.Fatalf("unexpected audit record: %+v", record)
+	}
+}
+
+func TestBackupHandlerVerifyTaskAllowsEmptyBody(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	taskSvc := &backupTaskServiceStub{
+		verifyTaskResult: dto.CreateBackupVerifyTaskResult{
+			Task: dto.CreateTaskResult{
+				ID:     44,
+				Type:   "backup_verify",
+				Status: "pending",
+			},
+		},
+	}
+	auditSvc := &backupAuditRecorder{}
+	handler := NewBackupHandler(nil, taskSvc, auditSvc)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(
+		http.MethodPost,
+		"/api/v1/backups/12/verify-task",
+		nil,
+	)
+	c.Params = gin.Params{{Key: "id", Value: "12"}}
+	userID := int64(7)
+	c.Set(middleware.CurrentUserIDKey, userID)
+	c.Set(middleware.CurrentUsernameKey, "operator")
+
+	handler.VerifyBackupTask(c)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	if taskSvc.verifyTaskID != 12 {
+		t.Fatalf("expected backup id 12, got %d", taskSvc.verifyTaskID)
+	}
+	if taskSvc.verifyTaskReq.SizeBytes != 0 || taskSvc.verifyTaskReq.Checksum != "" || taskSvc.verifyTaskReq.FilePath != "" {
+		t.Fatalf("expected empty verify task request, got %+v", taskSvc.verifyTaskReq)
+	}
+	if taskSvc.verifyTaskUserID == nil || *taskSvc.verifyTaskUserID != userID || taskSvc.verifyTaskUser != "operator" {
+		t.Fatalf("expected current user to be propagated, got id=%v user=%q", taskSvc.verifyTaskUserID, taskSvc.verifyTaskUser)
+	}
+	if len(auditSvc.records) != 1 {
+		t.Fatalf("expected one audit record, got %d", len(auditSvc.records))
+	}
+	record := auditSvc.records[0]
+	if record.Module != "backups" || record.Action != "verify_task" || !record.Success || record.TargetID != "12" {
 		t.Fatalf("unexpected audit record: %+v", record)
 	}
 }

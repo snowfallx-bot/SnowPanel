@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 
@@ -179,7 +181,7 @@ func (h *BackupHandler) VerifyBackupTask(c *gin.Context) {
 	}
 
 	var req dto.CreateBackupVerifyTaskRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := c.ShouldBindJSON(&req); err != nil && !errors.Is(err, io.EOF) {
 		response.Fail(c, http.StatusBadRequest, apperror.ErrBadRequest.Code, "invalid request body")
 		return
 	}
