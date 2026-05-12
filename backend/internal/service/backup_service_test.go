@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -175,6 +177,71 @@ func TestBackupVerifyArtifactRejectsPathOutsideLocalDir(t *testing.T) {
 	}
 	if repo.items[1].Status != BackupStatusFailed {
 		t.Fatalf("expected outside artifact path to mark failed, got %q", repo.items[1].Status)
+	}
+}
+
+func TestBackupVerifyArtifactRejectsManifestMismatch(t *testing.T) {
+	repo := newFakeBackupRepo()
+	localDir := t.TempDir()
+	service := NewBackupServiceWithOptions(repo, BackupServiceOptions{LocalDir: localDir})
+	result, err := service.CreateMetadata(context.Background(), dto.CreateBackupMetadataRequest{
+		ResourceType: BackupResourceAppMetadata,
+		ResourceID:   "primary",
+		StorageType:  BackupStorageLocal,
+	}, nil)
+	if err != nil {
+		t.Fatalf("CreateMetadata returned error: %v", err)
+	}
+	artifact, err := service.CreateArtifact(context.Background(), result.ID)
+	if err != nil {
+		t.Fatalf("CreateArtifact returned error: %v", err)
+	}
+
+	content, err := os.ReadFile(artifact.FilePath)
+	if err != nil {
+		t.Fatalf("failed to read artifact: %v", err)
+	}
+	var manifest backupArtifactManifest
+	if err := json.Unmarshal(content, &manifest); err != nil {
+		t.Fatalf("failed to parse artifact: %v", err)
+	}
+	manifest.ResourceID = "different-resource"
+	content, err = json.Marshal(manifest)
+	if err != nil {
+		t.Fatalf("failed to marshal tampered artifact: %v", err)
+	}
+	content = append(content, '\n')
+	if err := os.WriteFile(artifact.FilePath, content, 0600); err != nil {
+		t.Fatalf("failed to tamper artifact: %v", err)
+	}
+
+	repo.items[result.ID] = model.Backup{
+		ID:           result.ID,
+		ResourceType: BackupResourceAppMetadata,
+		ResourceID:   "primary",
+		StorageType:  BackupStorageLocal,
+		FilePath:     artifact.FilePath,
+		SizeBytes:    int64(len(content)),
+		Checksum:     "",
+		Status:       BackupStatusSuccess,
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
+	}
+	sum := sha256.Sum256(content)
+	item := repo.items[result.ID]
+	item.Checksum = "sha256:" + hex.EncodeToString(sum[:])
+	repo.items[result.ID] = item
+
+	_, err = service.VerifyArtifact(context.Background(), result.ID)
+	if err == nil {
+		t.Fatalf("expected manifest mismatch to fail")
+	}
+	appErr, ok := apperror.As(err)
+	if !ok || appErr.Code != apperror.ErrBadRequest.Code {
+		t.Fatalf("expected bad request, got %v", err)
+	}
+	if repo.items[result.ID].Status != BackupStatusFailed {
+		t.Fatalf("expected manifest mismatch to mark failed, got %q", repo.items[result.ID].Status)
 	}
 }
 

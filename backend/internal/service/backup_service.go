@@ -291,6 +291,10 @@ func (s *backupService) VerifyArtifact(ctx context.Context, id int64) (dto.Backu
 		_ = s.repo.UpdateStatus(ctx, id, BackupStatusFailed)
 		return dto.BackupSummary{}, badBackupRequest(errors.New("backup size mismatch"))
 	}
+	if err := validateBackupArtifactManifest(*backup); err != nil {
+		_ = s.repo.UpdateStatus(ctx, id, BackupStatusFailed)
+		return dto.BackupSummary{}, badBackupRequest(err)
+	}
 
 	if err := s.repo.UpdateVerification(ctx, id, BackupStatusSuccess, sizeBytes, checksum, backup.FilePath); err != nil {
 		return dto.BackupSummary{}, wrapBackupInternal(err)
@@ -562,6 +566,36 @@ func backupArtifactNote(resourceType string) string {
 		return "This P3 artifact is a controlled manifest. Full pg_dump generation remains a follow-up."
 	}
 	return ""
+}
+
+func validateBackupArtifactManifest(backup model.Backup) error {
+	if strings.ToLower(filepath.Ext(backup.FilePath)) != ".json" {
+		return nil
+	}
+	content, err := os.ReadFile(backup.FilePath)
+	if err != nil {
+		return err
+	}
+	var manifest backupArtifactManifest
+	if err := json.Unmarshal(content, &manifest); err != nil {
+		return errors.New("backup artifact manifest is invalid")
+	}
+	if manifest.Kind != "snowpanel.backup.artifact" {
+		return errors.New("backup artifact manifest kind mismatch")
+	}
+	if manifest.BackupID != backup.ID {
+		return errors.New("backup artifact manifest backup_id mismatch")
+	}
+	if manifest.ResourceType != backup.ResourceType {
+		return errors.New("backup artifact manifest resource_type mismatch")
+	}
+	if manifest.ResourceID != backup.ResourceID {
+		return errors.New("backup artifact manifest resource_id mismatch")
+	}
+	if manifest.StorageType != backup.StorageType {
+		return errors.New("backup artifact manifest storage_type mismatch")
+	}
+	return nil
 }
 
 func safeBackupArtifactPath(localDir string, backup model.Backup, now time.Time) (string, error) {

@@ -168,6 +168,7 @@ Local P3-7 backup foundation work has started:
 - `BACKUP_LOCAL_DIR` configures the protected local artifact directory; default is `var/backups`.
 - The backup create worker now writes a controlled local JSON manifest artifact, records file path, size, and sha256 checksum, and marks metadata success.
 - The backup verify worker can now recompute size and sha256 from the recorded local artifact when called with an empty verify-task body, while still supporting caller-provided checksum/size verification.
+- Backup verification now validates SnowPanel JSON artifact identity fields (`kind`, `backup_id`, `resource_type`, `resource_id`, and `storage_type`) against metadata.
 - Backup retention cleanup can archive matched metadata rows as JSONL under `BACKUP_LOCAL_DIR` before deleting them when `archive_before_delete=true`.
 - Backend tests now pin restore drill command sanity so the documented restore path keeps the required Postgres, service startup, health check, and backup verification commands.
 - Full Postgres `pg_dump` generation remains a follow-up before claiming full backup automation.

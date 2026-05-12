@@ -168,6 +168,7 @@
 - `BACKUP_LOCAL_DIR` 已用于配置受保护的本地 artifact 目录，默认值为 `var/backups`。
 - backup create worker 现在会生成受控本地 JSON manifest artifact，记录 file path、size 与 sha256 checksum，并将 metadata 标记为 success。
 - backup verify worker 现在支持在 verify-task 请求体为空时，从已记录的本地 artifact 重新计算 size 与 sha256；同时仍支持调用方传入 checksum/size 的验证路径。
+- backup verification 现在会校验 SnowPanel JSON artifact identity fields（`kind`、`backup_id`、`resource_type`、`resource_id`、`storage_type`）必须与 metadata 匹配。
 - backup retention cleanup 支持 `archive_before_delete=true`，会在删除前将匹配的 metadata rows 以 JSONL archive 写入 `BACKUP_LOCAL_DIR`。
 - backend tests 已固定 restore drill command sanity，确保恢复路径文档保留 Postgres、服务启动、健康检查与 backup verification 的关键命令。
 - 真实 Postgres `pg_dump` generation 仍是后续项，完成前不宣称 full backup automation。

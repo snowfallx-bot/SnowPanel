@@ -142,10 +142,11 @@ P3-7 Backup and Restore Foundation
 - backup create task 会创建 metadata，并通过 worker 在 `BACKUP_LOCAL_DIR` 下生成受控 JSON artifact，记录 file_path / size / sha256 checksum
 - 当前 artifact 为 SnowPanel backup manifest；完整 Postgres pg_dump 生成仍是后续项，完成前不宣称 full backup automation
 - backup verify task 会通过 worker 执行 checksum/size verification；请求体为空时会从已记录的本地 artifact 重新计算 size / sha256
+- backup verify task 已校验 SnowPanel JSON artifact manifest identity：kind、backup_id、resource_type、resource_id、storage_type 必须匹配 metadata
 - BACKUP_RETENTION_DAYS 配置已新增，默认 30
 - backup retention cleanup endpoint 已新增：POST /api/v1/backups/retention/cleanup，支持 dry_run，仅清理旧 success/failed backup metadata rows，并记录 audit
 - backup retention cleanup 已支持 `archive_before_delete=true`，删除前会把匹配的 metadata rows 以 JSONL archive 写入 `BACKUP_LOCAL_DIR`
-- service tests 已覆盖 metadata creation、scope deny、local artifact generation、local artifact recompute verification、verify success、checksum mismatch failed、list filter normalization
+- service tests 已覆盖 metadata creation、scope deny、local artifact generation、local artifact recompute verification、manifest identity mismatch、verify success、checksum mismatch failed、list filter normalization
 - service tests 已覆盖 backup retention dry run、archive_before_delete JSONL archive 与 terminal-only delete 行为
 - service tests 已覆盖 restore drill command sanity，防止恢复手册缺失关键命令
 - task service tests 已覆盖 backup create artifact task、backup verify task worker execution、recorded artifact verification、verify mismatch 标记 backup/task failed
