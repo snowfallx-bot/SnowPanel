@@ -139,6 +139,7 @@ P3-7 Backup and Restore Foundation
 - service tests 已覆盖 metadata creation、scope deny、verify success、checksum mismatch failed、list filter normalization
 - handler tests 已覆盖 list filter 传递、create audit、verify failure audit
 - local backend gate 已通过：cd backend && go test ./...
+- local full gate 已通过：make lint、make test
 ```
 
 ### 明确暂不优先
