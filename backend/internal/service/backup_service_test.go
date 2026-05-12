@@ -172,6 +172,60 @@ func TestBackupListNormalizesFilters(t *testing.T) {
 	}
 }
 
+func TestBackupRetentionCleanupDryRunDoesNotDeletePendingOrRunning(t *testing.T) {
+	repo := newFakeBackupRepo()
+	old := time.Now().AddDate(0, 0, -60)
+	repo.items[1] = model.Backup{ID: 1, Status: BackupStatusSuccess, CreatedAt: old, UpdatedAt: old}
+	repo.items[2] = model.Backup{ID: 2, Status: BackupStatusFailed, CreatedAt: old, UpdatedAt: old}
+	repo.items[3] = model.Backup{ID: 3, Status: BackupStatusPending, CreatedAt: old, UpdatedAt: old}
+	repo.items[4] = model.Backup{ID: 4, Status: BackupStatusRunning, CreatedAt: old, UpdatedAt: old}
+	service := NewBackupServiceWithOptions(repo, BackupServiceOptions{RetentionDays: 30})
+
+	result, err := service.CleanupRetention(context.Background(), dto.BackupRetentionCleanupRequest{
+		DryRun: true,
+	})
+	if err != nil {
+		t.Fatalf("CleanupRetention returned error: %v", err)
+	}
+	if !result.DryRun || result.MatchedRows != 2 || result.DeletedRows != 0 {
+		t.Fatalf("unexpected dry run result: %+v", result)
+	}
+	if len(repo.items) != 4 {
+		t.Fatalf("dry run deleted rows unexpectedly")
+	}
+}
+
+func TestBackupRetentionCleanupDeletesTerminalRowsOnly(t *testing.T) {
+	repo := newFakeBackupRepo()
+	old := time.Now().AddDate(0, 0, -60)
+	recent := time.Now().AddDate(0, 0, -5)
+	repo.items[1] = model.Backup{ID: 1, Status: BackupStatusSuccess, CreatedAt: old, UpdatedAt: old}
+	repo.items[2] = model.Backup{ID: 2, Status: BackupStatusFailed, CreatedAt: old, UpdatedAt: old}
+	repo.items[3] = model.Backup{ID: 3, Status: BackupStatusPending, CreatedAt: old, UpdatedAt: old}
+	repo.items[4] = model.Backup{ID: 4, Status: BackupStatusSuccess, CreatedAt: recent, UpdatedAt: recent}
+	service := NewBackupServiceWithOptions(repo, BackupServiceOptions{RetentionDays: 30})
+
+	result, err := service.CleanupRetention(context.Background(), dto.BackupRetentionCleanupRequest{})
+	if err != nil {
+		t.Fatalf("CleanupRetention returned error: %v", err)
+	}
+	if result.DryRun || result.MatchedRows != 2 || result.DeletedRows != 2 {
+		t.Fatalf("unexpected cleanup result: %+v", result)
+	}
+	if _, ok := repo.items[1]; ok {
+		t.Fatalf("expected old success backup to be deleted")
+	}
+	if _, ok := repo.items[2]; ok {
+		t.Fatalf("expected old failed backup to be deleted")
+	}
+	if _, ok := repo.items[3]; !ok {
+		t.Fatalf("pending backup should not be deleted")
+	}
+	if _, ok := repo.items[4]; !ok {
+		t.Fatalf("recent backup should not be deleted")
+	}
+}
+
 type fakeBackupRepo struct {
 	nextID int64
 	items  map[int64]model.Backup
@@ -248,4 +302,32 @@ func (r *fakeBackupRepo) UpdateStatus(_ context.Context, id int64, status string
 	item.UpdatedAt = time.Now()
 	r.items[id] = item
 	return nil
+}
+
+func (r *fakeBackupRepo) CountDeletableBefore(_ context.Context, cutoff time.Time) (int64, error) {
+	var count int64
+	for _, item := range r.items {
+		if backupIsDeletableBefore(item, cutoff) {
+			count++
+		}
+	}
+	return count, nil
+}
+
+func (r *fakeBackupRepo) DeleteDeletableBefore(_ context.Context, cutoff time.Time) (int64, error) {
+	var deleted int64
+	for id, item := range r.items {
+		if backupIsDeletableBefore(item, cutoff) {
+			delete(r.items, id)
+			deleted++
+		}
+	}
+	return deleted, nil
+}
+
+func backupIsDeletableBefore(item model.Backup, cutoff time.Time) bool {
+	if !item.CreatedAt.Before(cutoff) {
+		return false
+	}
+	return item.Status == BackupStatusSuccess || item.Status == BackupStatusFailed
 }

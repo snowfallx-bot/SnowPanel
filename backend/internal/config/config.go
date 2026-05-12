@@ -23,6 +23,7 @@ type Config struct {
 	AgentAuth    AgentAuthConfig
 	TaskWorker   TaskWorkerConfig
 	Audit        AuditConfig
+	Backup       BackupConfig
 	AgentTarget  string
 	AgentTimeout time.Duration
 }
@@ -107,6 +108,10 @@ type AuditConfig struct {
 	ExportMaxRows int
 }
 
+type BackupConfig struct {
+	RetentionDays int
+}
+
 func Load() Config {
 	v := viper.New()
 	v.SetConfigName(".env")
@@ -153,6 +158,7 @@ func Load() Config {
 	v.SetDefault("TASK_WORKER_MAX_ATTEMPTS", 3)
 	v.SetDefault("AUDIT_RETENTION_DAYS", 180)
 	v.SetDefault("AUDIT_EXPORT_MAX_ROWS", 100000)
+	v.SetDefault("BACKUP_RETENTION_DAYS", 30)
 	v.SetDefault("OTEL_TRACING_ENABLED", false)
 	v.SetDefault("OTEL_SERVICE_NAME", "snowpanel-backend")
 	v.SetDefault("OTEL_SERVICE_VERSION", "")
@@ -266,6 +272,9 @@ func Load() Config {
 			RetentionDays: v.GetInt("AUDIT_RETENTION_DAYS"),
 			ExportMaxRows: v.GetInt("AUDIT_EXPORT_MAX_ROWS"),
 		},
+		Backup: BackupConfig{
+			RetentionDays: v.GetInt("BACKUP_RETENTION_DAYS"),
+		},
 	}
 }
 
@@ -316,6 +325,9 @@ func (c Config) Validate() error {
 	}
 	if c.Audit.ExportMaxRows < 1 {
 		return errors.New("AUDIT_EXPORT_MAX_ROWS must be greater than 0")
+	}
+	if c.Backup.RetentionDays < 1 {
+		return errors.New("BACKUP_RETENTION_DAYS must be greater than 0")
 	}
 
 	switch c.AgentAuth.Mode {

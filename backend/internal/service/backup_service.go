@@ -34,14 +34,31 @@ type BackupService interface {
 	Verify(ctx context.Context, id int64, req dto.VerifyBackupRequest) (dto.BackupSummary, error)
 	MarkStatus(ctx context.Context, id int64, status string) (dto.BackupSummary, error)
 	List(ctx context.Context, query dto.ListBackupsQuery) (dto.ListBackupsResult, error)
+	CleanupRetention(ctx context.Context, req dto.BackupRetentionCleanupRequest) (dto.BackupRetentionCleanupResult, error)
 }
 
 type backupService struct {
-	repo repository.BackupRepository
+	repo          repository.BackupRepository
+	retentionDays int
 }
 
 func NewBackupService(repo repository.BackupRepository) BackupService {
-	return &backupService{repo: repo}
+	return NewBackupServiceWithOptions(repo, BackupServiceOptions{})
+}
+
+type BackupServiceOptions struct {
+	RetentionDays int
+}
+
+func NewBackupServiceWithOptions(repo repository.BackupRepository, options BackupServiceOptions) BackupService {
+	retentionDays := options.RetentionDays
+	if retentionDays <= 0 {
+		retentionDays = 30
+	}
+	return &backupService{
+		repo:          repo,
+		retentionDays: retentionDays,
+	}
 }
 
 func (s *backupService) CreateMetadata(
@@ -208,6 +225,43 @@ func (s *backupService) List(
 		Total: total,
 		Items: result,
 	}, nil
+}
+
+func (s *backupService) CleanupRetention(
+	ctx context.Context,
+	req dto.BackupRetentionCleanupRequest,
+) (dto.BackupRetentionCleanupResult, error) {
+	retentionDays := req.RetentionDays
+	if retentionDays <= 0 {
+		retentionDays = s.retentionDays
+	}
+	if retentionDays <= 0 {
+		retentionDays = 30
+	}
+
+	cutoff := time.Now().UTC().AddDate(0, 0, -retentionDays)
+	matchedRows, err := s.repo.CountDeletableBefore(ctx, cutoff)
+	if err != nil {
+		return dto.BackupRetentionCleanupResult{}, wrapBackupInternal(err)
+	}
+
+	result := dto.BackupRetentionCleanupResult{
+		DryRun:              req.DryRun,
+		RetentionDays:       retentionDays,
+		Cutoff:              cutoff.Format(time.RFC3339),
+		MatchedRows:         matchedRows,
+		ArchiveBeforeDelete: req.ArchiveBeforeDelete,
+	}
+	if req.DryRun {
+		return result, nil
+	}
+
+	deletedRows, err := s.repo.DeleteDeletableBefore(ctx, cutoff)
+	if err != nil {
+		return dto.BackupRetentionCleanupResult{}, wrapBackupInternal(err)
+	}
+	result.DeletedRows = deletedRows
+	return result, nil
 }
 
 func normalizeBackupResourceType(raw string) (string, error) {

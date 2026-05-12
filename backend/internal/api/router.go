@@ -151,6 +151,7 @@ func NewRouter(deps RouterDeps) *gin.Engine {
 				backups.GET("", middleware.RequirePermission("backup.read"), backupHandler.ListBackups)
 				backups.POST("", middleware.RequirePermission("backup.manage"), backupHandler.CreateBackup)
 				backups.POST("/tasks/create", middleware.RequirePermission("backup.manage"), backupHandler.CreateBackupTask)
+				backups.POST("/retention/cleanup", middleware.RequirePermission("backup.manage"), backupHandler.CleanupRetention)
 				backups.POST("/:id/verify", middleware.RequirePermission("backup.manage"), backupHandler.VerifyBackup)
 				backups.POST("/:id/verify-task", middleware.RequirePermission("backup.manage"), backupHandler.VerifyBackupTask)
 			}

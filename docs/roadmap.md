@@ -166,6 +166,7 @@ Local P3-7 backup foundation work has started:
 - `backup_create` and `backup_verify` task types are wired into the durable task worker baseline.
 - Backup task APIs are available at `POST /api/v1/backups/tasks/create` and `POST /api/v1/backups/:id/verify-task`.
 - The current worker baseline drives backup metadata status and checksum/size verification; real Postgres dump generation remains a follow-up before claiming full backup automation.
+- `BACKUP_RETENTION_DAYS` configures terminal backup metadata retention, and `POST /api/v1/backups/retention/cleanup` supports dry-run cleanup of old success/failed backup rows.
 
 ## Follow-up Hardening (Post-P3-0)
 

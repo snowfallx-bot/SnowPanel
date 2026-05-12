@@ -37,6 +37,21 @@ type CreateBackupVerifyTaskResult struct {
 	Task CreateTaskResult `json:"task"`
 }
 
+type BackupRetentionCleanupRequest struct {
+	DryRun              bool `json:"dry_run"`
+	RetentionDays       int  `json:"retention_days,omitempty"`
+	ArchiveBeforeDelete bool `json:"archive_before_delete,omitempty"`
+}
+
+type BackupRetentionCleanupResult struct {
+	DryRun              bool   `json:"dry_run"`
+	RetentionDays       int    `json:"retention_days"`
+	Cutoff              string `json:"cutoff"`
+	MatchedRows         int64  `json:"matched_rows"`
+	DeletedRows         int64  `json:"deleted_rows"`
+	ArchiveBeforeDelete bool   `json:"archive_before_delete"`
+}
+
 type ListBackupsQuery struct {
 	Page         int    `form:"page"`
 	Size         int    `form:"size"`

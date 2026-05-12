@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"strings"
+	"time"
 
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/model"
 	"gorm.io/gorm"
@@ -22,6 +23,8 @@ type BackupRepository interface {
 	List(ctx context.Context, filter BackupListFilter) ([]model.Backup, int64, error)
 	UpdateVerification(ctx context.Context, id int64, status string, sizeBytes int64, checksum string, filePath string) error
 	UpdateStatus(ctx context.Context, id int64, status string) error
+	CountDeletableBefore(ctx context.Context, cutoff time.Time) (int64, error)
+	DeleteDeletableBefore(ctx context.Context, cutoff time.Time) (int64, error)
 }
 
 type backupRepository struct {
@@ -112,4 +115,22 @@ func (r *backupRepository) UpdateVerification(
 
 func (r *backupRepository) UpdateStatus(ctx context.Context, id int64, status string) error {
 	return r.db.WithContext(ctx).Model(&model.Backup{}).Where("id = ?", id).Update("status", status).Error
+}
+
+func (r *backupRepository) CountDeletableBefore(ctx context.Context, cutoff time.Time) (int64, error) {
+	var count int64
+	if err := r.db.WithContext(ctx).
+		Model(&model.Backup{}).
+		Where("created_at < ? AND status IN ?", cutoff, []string{"success", "failed"}).
+		Count(&count).Error; err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
+func (r *backupRepository) DeleteDeletableBefore(ctx context.Context, cutoff time.Time) (int64, error) {
+	result := r.db.WithContext(ctx).
+		Where("created_at < ? AND status IN ?", cutoff, []string{"success", "failed"}).
+		Delete(&model.Backup{})
+	return result.RowsAffected, result.Error
 }

@@ -219,6 +219,40 @@ func (h *BackupHandler) VerifyBackupTask(c *gin.Context) {
 	response.OK(c, result)
 }
 
+func (h *BackupHandler) CleanupRetention(c *gin.Context) {
+	var req dto.BackupRetentionCleanupRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Fail(c, http.StatusBadRequest, apperror.ErrBadRequest.Code, "invalid request body")
+		return
+	}
+
+	result, err := h.backupService.CleanupRetention(c.Request.Context(), req)
+	if err != nil {
+		recordAudit(c, h.auditService, dto.RecordAuditInput{
+			Module:         "backups",
+			Action:         "retention_cleanup",
+			TargetType:     "backup",
+			RequestSummary: backupCleanupSummary(req),
+			Success:        false,
+			ResultCode:     "failed",
+			ResultMessage:  err.Error(),
+		})
+		response.FromError(c, err)
+		return
+	}
+
+	recordAudit(c, h.auditService, dto.RecordAuditInput{
+		Module:         "backups",
+		Action:         "retention_cleanup",
+		TargetType:     "backup",
+		RequestSummary: backupCleanupSummary(req),
+		Success:        true,
+		ResultCode:     "ok",
+		ResultMessage:  "backup retention cleanup completed",
+	})
+	response.OK(c, result)
+}
+
 func backupCreateSummary(req dto.CreateBackupMetadataRequest) string {
 	return fmt.Sprintf(
 		`{"resource_type":%q,"resource_id":%q,"storage_type":%q}`,
@@ -250,5 +284,14 @@ func backupVerifyTaskSummary(req dto.CreateBackupVerifyTaskRequest) string {
 		`{"size_bytes":%d,"checksum":%q}`,
 		req.SizeBytes,
 		req.Checksum,
+	)
+}
+
+func backupCleanupSummary(req dto.BackupRetentionCleanupRequest) string {
+	return fmt.Sprintf(
+		`{"dry_run":%t,"retention_days":%d,"archive_before_delete":%t}`,
+		req.DryRun,
+		req.RetentionDays,
+		req.ArchiveBeforeDelete,
 	)
 }

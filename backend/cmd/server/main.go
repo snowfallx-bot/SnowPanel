@@ -91,7 +91,9 @@ func main() {
 	serviceManager := service.NewServiceManagerService(agentClient)
 	dockerService := service.NewDockerService(agentClient)
 	cronService := service.NewCronService(agentClient)
-	backupService := service.NewBackupService(backupRepo)
+	backupService := service.NewBackupServiceWithOptions(backupRepo, service.BackupServiceOptions{
+		RetentionDays: cfg.Backup.RetentionDays,
+	})
 	metricsSet := appmetrics.Default()
 	taskService := service.NewTaskServiceWithOptions(
 		taskRepo,

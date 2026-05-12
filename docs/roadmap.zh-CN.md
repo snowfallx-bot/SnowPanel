@@ -166,6 +166,7 @@
 - `backup_create` 与 `backup_verify` task type 已接入 durable task worker baseline。
 - Backup task API 已提供：`POST /api/v1/backups/tasks/create` 与 `POST /api/v1/backups/:id/verify-task`。
 - 当前 worker baseline 负责驱动 backup metadata status 与 checksum/size verification；真实 Postgres dump generation 仍是后续项，完成前不宣称 full backup automation。
+- `BACKUP_RETENTION_DAYS` 已用于配置 terminal backup metadata retention，`POST /api/v1/backups/retention/cleanup` 支持对旧 success/failed backup rows 执行 dry-run cleanup。
 
 ## 后续加固（Post-P3-0）
 

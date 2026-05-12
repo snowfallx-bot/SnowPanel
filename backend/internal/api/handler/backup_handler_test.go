@@ -29,6 +29,9 @@ type backupHandlerServiceStub struct {
 	verifyReq    dto.VerifyBackupRequest
 	verifyResult dto.BackupSummary
 	verifyErr    error
+	cleanupReq   dto.BackupRetentionCleanupRequest
+	cleanupRes   dto.BackupRetentionCleanupResult
+	cleanupErr   error
 }
 
 func (s *backupHandlerServiceStub) CreateMetadata(
@@ -65,6 +68,14 @@ func (s *backupHandlerServiceStub) List(
 ) (dto.ListBackupsResult, error) {
 	s.listQuery = query
 	return s.listResult, s.listErr
+}
+
+func (s *backupHandlerServiceStub) CleanupRetention(
+	_ context.Context,
+	req dto.BackupRetentionCleanupRequest,
+) (dto.BackupRetentionCleanupResult, error) {
+	s.cleanupReq = req
+	return s.cleanupRes, s.cleanupErr
 }
 
 type backupAuditRecorder struct {
@@ -232,6 +243,45 @@ func TestBackupHandlerVerifyFailureRecordsAudit(t *testing.T) {
 	}
 	record := auditSvc.records[0]
 	if record.Success || record.Module != "backups" || record.Action != "verify" || record.TargetID != "12" {
+		t.Fatalf("unexpected audit record: %+v", record)
+	}
+}
+
+func TestBackupHandlerCleanupRetentionRecordsAudit(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	backupSvc := &backupHandlerServiceStub{
+		cleanupRes: dto.BackupRetentionCleanupResult{
+			DryRun:        true,
+			RetentionDays: 30,
+			MatchedRows:   2,
+		},
+	}
+	auditSvc := &backupAuditRecorder{}
+	handler := NewBackupHandler(backupSvc, nil, auditSvc)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(
+		http.MethodPost,
+		"/api/v1/backups/retention/cleanup",
+		strings.NewReader(`{"dry_run":true,"retention_days":30}`),
+	)
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	handler.CleanupRetention(c)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if !backupSvc.cleanupReq.DryRun || backupSvc.cleanupReq.RetentionDays != 30 {
+		t.Fatalf("unexpected cleanup request: %+v", backupSvc.cleanupReq)
+	}
+	if len(auditSvc.records) != 1 {
+		t.Fatalf("expected one audit record, got %d", len(auditSvc.records))
+	}
+	record := auditSvc.records[0]
+	if record.Module != "backups" || record.Action != "retention_cleanup" || !record.Success {
 		t.Fatalf("unexpected audit record: %+v", record)
 	}
 }
