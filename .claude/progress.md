@@ -1,184 +1,206 @@
-请作为接手 SnowPanel 的 agent，优先按“主链路闭环 > 安全收口 > 权限模型 > 测试补齐”的顺序推进，不要先做 UI 美化，也不要先加新页面。
-
 更新时间：2026-04-27
 
-【当前状态摘要】
+【本次推进（P3-1 继续推进，audit host 维度已补齐）】
 
-- backend ↔ core-agent 的真实 gRPC 主链路已经打通，Dashboard / Files / Services / Docker / Cron 不再依赖占位实现。
-- 推荐生产运行形态已经切到 host-agent：`core-agent` 作为宿主机 systemd service，backend/frontend/postgres/redis 仍走 compose。
-- 默认高危入口已收口：生产环境强制强 `JWT_SECRET`、bootstrap admin 强密码、首次登录强制改密、内部端口默认不对宿主机暴露。
-- cron 不再允许任意 shell 命令，已改成 allowlist 模板并阻止常见 shell metacharacters。
-- RBAC 已落地到 DB 角色/权限模型，session 校验已能感知权限变更和用户禁用。
-- 异步任务已接入真实操作，文件模块已补到下载/上传/重命名/分块读写/二进制提示。
-- `P2-2` 与 `P2-3` 已完成收口；下一次会话可直接进入新需求。
+- 已把 `hosts` 从纯 schema 预留推进到真实 backend 能力：
+  - 新增 `HostRepository` / `HostService` / `HostHandler`
+  - 新增 `GET /api/v1/hosts`、`POST /api/v1/hosts`、`GET /api/v1/hosts/:id`、`POST /api/v1/hosts/:id/check`
+  - 新增 `hosts.read` / `hosts.manage` 权限种子
+- 已把 agent 健康检查扩成可返回 identity：
+  - `proto` 新增 `AgentIdentity`
+  - `HealthCheckResponse` 现在可返回 `hostname` / `version` / `capabilities`
+  - core-agent 已回填这些信息，backend gRPC client 也已支持 `CheckHealthDetails()`
+- 已把 backend 的 agent 调用从“固定单 target”推进到“可按 host_id 选路”：
+  - 新增 `hostctx` 与 `OptionalHostSelection` middleware
+  - 新增 host-aware agent client，请求带 `host_id` 时会自动路由到目标 host
+  - 现有 dashboard / files / services / docker / cron / tasks 链路都可复用该上下文选路机制
+- 已补齐任务系统的 host 维度基础：
+  - 新创建任务会持久化 `host_id`
+  - 后台异步执行与 retry 会保留原 host 目标
+  - tasks 列表已支持按 `host_id` 过滤，task summary / create result 已返回 `host_id`
+- 已补上前端 host 选择闭环：
+  - 新增前端 `hosts` API 与 `host-store`
+  - `AppLayout` 已支持加载 host 列表，并提供全局 target host selector
+  - `http` client 会自动给受保护运维 API 附加 `host_id`
+  - dashboard / files / services / docker / cron / tasks / audit 的 React Query key 已带上 host scope，避免跨主机缓存串台
+  - logout / session 失效时会清理本地 host 选择状态
+- 已补齐 audit logs 的 `host_id` 落库、筛选与展示：
+  - `audit_logs` model / dto / repository / service 已新增 `host_id`
+  - `recordAudit` 现在会自动继承请求上下文里的 `host_id`
+  - `GET /api/v1/audit/logs` 已支持按 `host_id` 过滤
+  - audit 页面已显式展示 `Host` 列，支持按当前 target host 查看对应审计
+  - 已补 migration：老库可执行 `0002_audit_logs_host_id.up.sql`，新库初始化的 `0001` 也已同步包含该字段
+- 已继续收口 host 生命周期与管理页面：
+  - backend 新增 `PUT /api/v1/hosts/:id`、`POST /api/v1/hosts/:id/enable`、`POST /api/v1/hosts/:id/disable`
+  - host create/update 会先探测 agent，并对重复 address+port 做显式校验
+  - host create/update/check/enable/disable 已接入审计记录
+  - frontend 新增 `/hosts` 管理页，可新增、编辑、检查、启用、禁用 host
+  - 异步任务状态更新现在会持久化 `started_at`、`finished_at` 与结构化 `result`
 
-【完成情况】
+【当前判断】
 
-~~P0-1：把 backend 的 gRPC 客户端从占位实现改成真实实现~~
-- 已完成：
-  - backend 使用 proto 生成的 gRPC client 调 core-agent。
-  - core-agent 已提供真实 gRPC server 实现。
-  - backend 侧已有统一 agent error -> HTTP/app error 映射。
-  - 已有 backend + fake agent 的 happy path 集成测试，覆盖 Dashboard / Files / Services / Docker / Cron。
-- 当前判断：可视为完成。
+- 这次完成的是 `P3-1` 的“后端控制面底座”而不是整项收口。
+- 现阶段已经具备：
+  - 注册一个可达的 agent host
+  - 探测 host 健康并拿到 agent 版本/能力
+  - 在 API 请求层用 `host_id` 切到指定 agent
+  - 让异步任务不丢目标 host
+  - 在前端切换 target host 并驱动主要页面按 host 维度重新取数
+  - 在审计日志中按 host 粒度回看关键操作
+- 现阶段还没完成：
+  - host 心跳自动回写 / 周期巡检
+  - mTLS / enrollment / 吊销与轮换（属于 `P3-2`）
 
-~~P0-2：重新定义 core-agent 的运行方式，不要继续“普通容器里控制宿主机”~~
-- 已完成：
-  - 已提供 `docker-compose.host-agent.yml`。
-  - 已提供 host systemd 部署模板与文档。
-  - Ubuntu 25.10 一键安装脚本默认按 host-agent 模式部署。
-  - `50051` 在默认 compose 下仅 internal expose，不默认暴露到宿主机公网。
-  - dev / prod 两套运行方式文档已明确区分。
-- 当前判断：可视为完成。
+【验证结果】
 
-~~P0-3：先把开发态默认凭据和端口暴露收口~~
-- 已完成：
-  - 登录页不再预填危险默认密码。
-  - `.env.example` 不再提供生产可直接运行的弱 `JWT_SECRET`。
-  - 生产环境下弱/空 `JWT_SECRET` 会 fail fast。
-  - 生产环境下 `BOOTSTRAP_ADMIN=true` 时必须提供强密码。
-  - development 下可自动生成一次性 bootstrap 密码。
-  - bootstrap admin 首次登录会被要求强制改密。
-  - Postgres / Redis / core-agent 默认只 `expose`，不映射宿主机端口。
-- 当前判断：可视为完成。
+- backend：`go test ./...` 已通过。
+- backend：host lifecycle / task lifecycle 持久化后执行 `go test ./...`，已通过。
+- core-agent：`cargo fmt --all` 已通过。
+- core-agent：`cargo test` 在当前机器上未能完成，阻塞原因为缺少 MSVC `link.exe`（本地 Rust toolchain 缺编译链接环境，不是本次业务代码已确认的断言失败）。
+- frontend：`npm run build` 已通过。
+- frontend：host 管理页补齐后执行 `npm run build`，已通过。
+- frontend：`npm run test` 仍被仓库 preflight 阻塞，原因是当前 Node 版本为 `20.18.0`，低于仓库要求的 `20.19.0`。
+- frontend：补装原生可选依赖后，`npx vitest` 仍被当前 Node + 上游依赖 ESM/engine 兼容性问题阻塞；当前看到的是测试运行时环境问题，不是已定位到的页面断言失败。
 
-~~P0-4：重做 cron 权限模型，禁止“任意命令调度”~~
-- 已完成：
-  - core-agent 侧 `validate_command()` 已切到 allowlist 校验。
-  - 已阻止常见 shell metacharacters、管道、重定向、子命令注入。
-  - 文档与 API 说明已改成 command template key，而不是任意 shell 文本。
-  - cron handler 已记录审计摘要。
-  - 安全回归测试已覆盖危险命令输入。
-- 当前判断：可视为完成。
+【长期路线图（建议作为后续多个迭代的主线）】
 
-~~P1-1：把权限模型从“按用户名硬编码”升级成真实 RBAC~~
-- 已完成：
-  - migrations 中已有 `roles` / `permissions` / `role_permissions` / `user_roles`。
-  - token claims 已从 DB RBAC 生成。
-  - permission middleware 走权限名校验，不再依赖 `username == "admin"`。
-  - `ValidateSession()` 已校验用户状态、session issued time、RBAC checksum。
-  - 用户禁用、角色权限变化后，旧 session 会失效。
-- 当前判断：可视为完成。
+建议从现在开始，把后续目标按“多主机接入与控制面成型 > 凭据与配置治理 > 备份恢复闭环 > 高层模块落地 > 扩展与发布治理”这条线持续推进，不要同时铺太多面。
 
-~~P1-2：让前端权限感知和 session 管理真正成立~~
-- 已完成：
-  - `ProtectedRoute` 启动时会调用 `getMe()` 做 session 校验。
-  - `ProtectedRoute` 会在 `getMe()` 成功前阻止受保护内容渲染，并对非鉴权失败展示可重试的 session 错误态。
-  - `AppLayout` 已按权限动态展示菜单入口。
-  - `AppLayout` 已对首次登录强制改密场景提供前端门禁，并在改密成功后刷新本地 session。
-  - `401` 时前端会统一清理凭据、写入提示并跳转登录页。
-  - refresh token 已接入，后端也支持 refresh rotation / session 校验。
-  - 非 admin 用户不会看到无权限模块入口。
-  - 已补前端回归测试，覆盖 `ProtectedRoute` 的 session 校验/失效/重试分支，以及 `AppLayout` 的权限导航/强制改密/退出登录分支。
-  - token 存储策略已形成明确决议并写入 `docs/security.md` / `docs/security.zh-CN.md`：当前阶段继续使用前端持久化 bearer token，不把 httpOnly cookie 迁移作为发布前阻塞项。
-- 当前判断：可视为完成；若未来推进 cookie 方案，归入后续认证加固迭代，而不是继续挂在本项名下。
+### P3：从“单机面板”走向“可管理多节点的控制面”
 
-~~P1-3：把“异步任务”从 demo 变成真正的后台作业框架~~
-- 已完成：
-  - 已移除 demo task 方向，当前任务系统已接入真实操作。
-  - backend task service 支持真实的 docker restart / service restart。
-  - 已支持取消、失败重试、进度、日志记录与详情查看。
-  - 前端 `TasksPage` 已对接真实任务列表与详情。
-- 当前判断：按原验收标准可视为完成。
+#### P3-1：把 host/agent 模型从预留表结构做成真实能力
+- 目标：
+  - 让 `hosts` 表真正参与业务，而不是只停留在 schema 预留。
+  - backend 能管理多个 core-agent 节点，而不是默认只连一个固定 agent。
+  - 建立 host 注册、心跳、版本上报、在线状态、能力声明等基础控制面数据。
+  - 前端形成“主机视角”的导航与上下文切换，现有文件/服务/docker/cron/任务/审计都能绑定到具体 host。
+- 建议先做：
+  - backend 抽象 agent connection manager，按 host 路由 gRPC 请求。
+  - core-agent 增加 identity / capabilities / version handshake。
+  - host 的新增、编辑、禁用、健康检查、证书/密钥绑定。
+  - 任务、审计、指标中补齐 `host_id` 维度并前端可筛选。
+- 验收标准：
+  - 至少 2 台 agent 可被同一个 backend 管理。
+  - 主机离线、版本不兼容、权限不足时有清晰错误分型。
+  - 核心页面都能按 host 粒度运行和回放审计。
 
-~~P1-4：把文件模块补到“能用于真实运维”的程度~~
-- 已完成：
-  - 已支持下载、上传、重命名。
-  - 已有明确二进制文件提示。
-  - backend/core-agent 已支持大文件分块下载与上传。
-  - 前端支持 preview limit 调整、下载/上传进度和更细错误提示。
-  - 安全校验包含 safe roots / dangerous path / encoding / size 等错误分型。
-- 当前判断：按原验收标准可视为完成。
+#### P3-2：把 agent 信任链和远程接入安全性补齐
+- 目标：
+  - 不只做到“能连”，还要做到“可信地连”。
+  - 为多主机场景补齐 agent 身份认证、证书轮换、最小权限与接入审批。
+- 建议先做：
+  - gRPC mTLS 或等价双向认证方案。
+  - agent bootstrap token / enrollment token。
+  - host 禁用、吊销、重新签发与轮换流程。
+  - 文档化的证书/密钥轮换与失陷处置 runbook。
+- 验收标准：
+  - 未注册 agent 无法接入。
+  - 已吊销节点无法继续调用。
+  - 轮换流程有脚本、有文档、有 smoke 验证。
 
-~~P2-1：补齐测试矩阵，不要只停留在零散 unit test~~
-- 已完成：
-  - backend unit tests、backend + fake agent integration-style tests、cron/auth/path traversal 安全测试已稳定运行。
-  - proto contract tests 已纳入 CI（`proto-contract` job）。
-  - compose smoke integration 已覆盖 login / 强制改密 / refresh rotation / dashboard / files / logout 主链路。
-  - frontend e2e（登录 / 文件浏览 / 权限隐藏）已纳入 CI 并通过。
-  - 新增 `backend-integration` CI job，补齐 backend + core-agent + postgres 真实链路覆盖，包含 services/docker/cron/tasks/audit 多模块契约与异步任务落库校验。
-  - CI 分层已形成：`compose-smoke`（基础主链路）→ `backend-integration`（后端深链路）+ `frontend-e2e`（前端端到端）。
-- 当前判断：可视为完成。
+### P4：补齐“生产面板”最核心的配置与数据保全能力
 
-~~P2-2：补齐生产化观测能力~~
-- 已完成：
-  - backend `/metrics`（Prometheus）已覆盖 HTTP 与 agent RPC 计数/时延（含 `rpc/outcome/transport` 标签）
-  - backend request id / access log（现已追加 `trace_id` / `span_id`）
-  - health / readiness
-  - core-agent tracing 日志 + 独立 `/metrics` 端点（可输出 gRPC 请求总量/时延/in-flight）
-  - Prometheus 基线部署与抓取配置（`docker-compose.observability.yml` + `deploy/observability/prometheus/prometheus.yml`）
-  - Prometheus 基线告警规则（backend down、agent down、p95 高延迟、agent 错误率与并发 in-flight）
-  - Alertmanager 基线路由与接入点（Prometheus `alerting` + `deploy/observability/alertmanager/alertmanager.yml`）
-  - OTel tracing 基线已接入：
-    - backend HTTP spans + gRPC client spans
-    - core-agent gRPC server spans + remote trace context 提取
-    - `otel-collector -> Jaeger` 基线部署（`deploy/observability/otel-collector/config.yaml`）
-  - audit logs 基础检索
-  - `X-Request-ID` 已打通 backend -> gRPC metadata -> core-agent 日志（可按同一 request_id 联查）
-  - 已新增/更新 `docs/observability.md` / `docs/observability.zh-CN.md`，明确 metrics + tracing 排障路径
-  - `trace-smoke.ps1` 已升级为 request 级强关联校验：强制校验响应 `X-Request-ID`、Jaeger 中 backend/core-agent 的 `snowpanel.request_id` 一致性，以及 core-agent 关键 `grpc.method` span 覆盖
-  - `alertmanager-smoke.ps1` 已支持 receiver 路由校验（含 `/alerts` 与 `/alerts/groups` 回退），并通过 `alertname + instance + severity` 过滤与唯一默认 instance 降低误判
-  - `full-smoke.ps1` 已支持一次性校验 warning/critical 双严重级别；`scripts/ci/observability-smoke.ps1` 已收敛为单入口调用，并支持 `container-agent` / `host-agent` 双模式
-  - `Observability Smoke` workflow 已支持 host-agent 参数化实跑：可在 `agent_mode=host-agent` 下自动构建并启动宿主机 core-agent、执行 smoke、回收进程并上传失败日志
-  - `ci.yml` 已新增自动 observability smoke jobs：`observability-smoke-container`（PR/push）与 `observability-smoke-host-agent`（push main），将两模式观测冒烟纳入主流水线
-  - 已新增 `scripts/observability/generate-alertmanager-config.ps1`，可从真实 webhook 生成生产 Alertmanager 配置，并支持 critical 升级通道。
-  - 已在 `deploy/observability/alertmanager/alertmanager.production.example.yml` 增加 warning/critical cadence 与 critical escalation 路由模板。
-  - 已扩展 SLO burn-rate 规则（5m/30m 双窗口）与 `SnowPanelBackendAvailabilityBurnRateWarning/Critical` 告警，并补齐对应规则回归断言。
-  - 已新增 `docs/observability-validation.md` / `docs/observability-validation.zh-CN.md`，沉淀 `24971113137`（`push main`）的 compose + host-agent 双模式实跑通过证据。
-- 当前判断：可视为完成（仓库侧可交付项已闭环）。
+#### P4-1：建设系统配置与密钥治理中心
+- 目标：
+  - 把 `system_settings` 从基础表升级成正式的配置管理能力。
+  - 对 JWT、agent 凭据、第三方 webhook、备份目标等敏感配置形成统一治理。
+- 建议先做：
+  - 设置项分级：公开配置 / 敏感配置 / 仅启动期配置。
+  - 敏感配置加密存储、脱敏展示、变更审计、变更人追踪。
+  - 配置变更的热加载边界与需要重启的配置清单。
+  - 最低限度的“变更前校验 + 变更后回读验证”。
+- 验收标准：
+  - 管理员可以在 UI/API 中安全维护常见系统配置。
+  - 敏感值不以明文回显，不经授权不可导出。
+  - 所有配置变更都可审计、可回溯、可定位影响范围。
 
-~~P2-3：清理“原型痕迹”和重复逻辑~~
-- 已完成清理：
-  - 已清理 `backend/README.md` 中关于 gRPC transport placeholder 的过时描述。
-  - 已移除 `core-agent` 中 `tail_logs_placeholder` 占位方法。
-  - 已把 root README 的 observability 入口与常用命令补齐。
-  - 已将 `docs/roadmap.md` / `docs/roadmap.zh-CN.md` 从初始化草案改为当前状态路线图。
-  - 已修正文档中 “Redis 仅预留后续使用” 的过时描述，改为反映当前登录限流共享状态用途。
-  - 已更新 `docs/development.md` / `docs/development.zh-CN.md` 的 observability 命令与测试矩阵说明。
-  - 已同步 root README 中 roadmap 导航标签，不再继续标注为“草案”。
-  - 已补齐 README / development 文档中的 observability `down/logs` 命令，统一到 `Makefile` 实际命令集。
-  - 已统一 deployment / observability 文档术语，避免仍以 “Prometheus UI/基线” 指代整套可观测性组件。
-  - 已将 deployment 文档中的 “Compose Prototype / 原型模式” 命名统一为 “Compose Mode / Compose 模式”。
-  - 已补齐 `docs/api-design.md` / `docs/api-design.zh-CN.md` 的系统与运维端点说明（`/api/v1/ping`、`/health`、`/ready`、`/metrics`）。
-  - 已移除前端应用壳中的 `Linux Panel Prototype` 文案，并同步 e2e 登录后页面锚点为 `SnowPanel Operations Console`。
-  - 已将 `proto/README.md` 中的 `Stubs` 表述统一为 `Bindings`，避免延续原型期命名。
-  - 已同步 `docs/roadmap.md` / `docs/roadmap.zh-CN.md` 措辞，替换 `placeholder` 等遗留描述并纳入最新清理进展。
-  - 已为 `docs/observability.md` / `docs/observability.zh-CN.md` 增加 tracing 实测清单，明确 compose / host-agent 两种模式下的最小验证路径。
-  - 已在 `docs/development.md` / `docs/development.zh-CN.md` 与 `frontend/README.md` 明确 Node 最低版本（`>=20.19.0`），并在 `frontend/package.json` 增加 `engines.node` 提前暴露环境不匹配问题。
-  - 已为 frontend 测试脚本增加 Node 版本 preflight（`check:node`），当版本低于 `20.19.0` 时以清晰错误信息提前失败，避免 vitest 启动期依赖报错噪音。
-  - 已同步 root `README.md` / `README.zh-CN.md` 的 Node 版本口径，与 development/frontend 文档保持一致。
-  - 已为 `docs/observability.md` / `docs/observability.zh-CN.md` 增加 Alertmanager 落地清单，补齐从 no-op 接收器切换到真实通知渠道的执行步骤与验证路径。
-  - 已新增 `scripts/observability/trace-smoke.ps1`，支持用 access token 触发 `dashboard/summary` 并自动轮询 Jaeger 校验 backend/core-agent 跨服务 trace；中英文 observability 文档已补充脚本用法。
-  - 已在 `docs/development.md` / `docs/development.zh-CN.md` 的常用命令中补充 tracing 脚本入口，便于开发阶段直接执行链路验证。
-  - 已新增 `scripts/observability/alertmanager-smoke.ps1`，支持注入合成告警并校验 Alertmanager 接收；相关用法已写入 observability/development 中英文文档。
-  - 已新增 `scripts/observability/README.md` 汇总 observability 脚本入口，并在 observability 中英文文档加入跳转链接。
-  - 已新增 `scripts/observability/full-smoke.ps1` 一键串行执行 tracing + alertmanager 校验，并在 scripts/development/observability 文档补充入口及执行策略说明。
-  - 已在 root `README.md` / `README.zh-CN.md` 常用命令中补充 `full-smoke` 脚本入口，提升主入口可发现性。
-  - 已同步 `docs/roadmap.md` / `docs/roadmap.zh-CN.md` 的 `P2-2` 进展，纳入 observability 冒烟脚本能力说明。
-  - 已升级 `full-smoke.ps1` 支持 `LoginUsername/LoginPassword` 自动登录取 token，并同步 scripts/docs/README 中英文用法。
-  - 已新增 `scripts/ci/observability-smoke.ps1`，用于在 Docker 环境中自动拉起 observability 栈并执行 full-smoke 端到端校验；development 中英文文档已补命令入口。
-  - 已新增独立手动 workflow `.github/workflows/observability-smoke.yml`（`workflow_dispatch`）执行 observability 端到端冒烟验证；默认 `ci.yml` 保持 push/PR 主流水线职责。
-  - 已将 `ci.yml` 中残留的 `Proto Stubs` 步骤命名统一为 `Proto Bindings`，与仓库文档术语保持一致。
-  - 已在 root `README.md` / `README.zh-CN.md` 常用命令区域补充 `Observability Smoke` 手动 workflow 入口说明。
-  - 已新增 `scripts/ci/README.md` 汇总 CI 脚本职责，并在 development 中英文文档增加跳转入口。
-  - 已扩展 `deploy/observability/prometheus/alerts/snowpanel-alerts.yml`：新增 backend 可用性与 core-agent 错误率 recording rules，并补齐 warning/critical 分级 SLO 告警（含 latency/error/availability）。
-  - 已更新 `deploy/observability/alertmanager/alertmanager.yml` 基线路由为 warning/critical 双接收器结构（no-op 模板），并同步 observability 中英文文档与 roadmap 的 SLO 进展描述。
-  - 已新增 `deploy/observability/alertmanager/alertmanager.production.example.yml` 作为生产接收器模板，加速真实通知渠道落地。
-  - 已新增 `scripts/observability/validate-config.ps1`（容器内 `promtool`/`amtool` 校验），并接入 `scripts/ci/observability-smoke.ps1` 与 GitHub workflows（`ci.yml` 新增 `observability-config` job，`observability-smoke.yml` 增加前置校验）。
-  - 已同步 `docs/roadmap.md` / `docs/roadmap.zh-CN.md`：纳入 observability 配置校验闸门（脚本 + CI job）进展。
-  - 已新增 `scripts/observability/prometheus-rules-smoke.ps1` 校验运行中 Prometheus 是否加载关键 recording/alert 规则，并接入 `scripts/ci/observability-smoke.ps1`。
-  - 已新增 `deploy/observability/prometheus/tests/snowpanel-alerts.test.yml` 并将 `promtool test rules` 接入 `scripts/observability/validate-config.ps1`，把关键 critical 告警行为回归纳入 observability 配置闸门。
-  - 已扩展 `snowpanel-alerts.test.yml` 覆盖 warning-only 阈值场景，新增“warning 触发且 critical 不触发”断言，降低 SLO 告警分级回归风险。
-  - 已增强 `scripts/observability/validate-config.ps1`：默认使用 Docker，若本机缺少 Docker 且存在本地 `promtool`/`amtool` 时自动回退执行，降低环境依赖阻塞。
-  - 已新增并链接 `docs/observability-validation.md` / `docs/observability-validation.zh-CN.md`，把“观测链路已实测通过”从口头描述升级为可追溯证据文档。
-  - 已同步更新 `docs/roadmap.md` / `docs/roadmap.zh-CN.md`，将 `P2-2` / `P2-3` 状态切换为完成态，避免文档之间状态漂移。
-- 当前判断：可视为完成。
+#### P4-2：补齐备份与恢复闭环，先做“能恢复”再做“好看”
+- 目标：
+  - 把 `backups` 表对应的能力真正落地。
+  - 优先实现数据库与关键配置的备份恢复，再扩展到站点/文件资源。
+- 建议先做：
+  - backup job 模型统一接入现有 tasks/audit。
+  - 支持本地磁盘与至少一种对象存储目标。
+  - 校验和、保留策略、手动恢复、恢复前确认与风险提示。
+  - 恢复演练脚本和最小可行灾备文档。
+- 验收标准：
+  - 能从面板触发备份、查看结果、下载或推送到远端存储。
+  - 能完成一次“从备份恢复到可登录、可读配置、可继续操作”的演练。
+  - 失败恢复过程有完整任务日志和审计记录。
 
-【后续建议（非阻塞）】
+### P5：把已预留的数据域做成真正可交付的运维模块
+
+#### P5-1：落地网站管理模块，但只做“受控能力”不做全能建站
+- 目标：
+  - 让 `websites` / `website_domains` 进入真实业务。
+  - 聚焦站点元数据、目录绑定、域名映射、运行时模板与基础状态检查。
+- 建议先做：
+  - 网站列表、详情、创建、启停、绑定目录与运行时。
+  - Nginx/Caddy/Apache 三选一，先收敛一个明确实现，不要三套同时铺开。
+  - 域名绑定、配置生成、配置校验、reload。
+  - 站点级权限、审计与最小健康检查。
+- 验收标准：
+  - 能通过面板创建并管理至少一种标准站点类型。
+  - 配置生成和 reload 失败时可回滚或至少可定位。
+  - 站点操作全部纳入权限和审计体系。
+
+#### P5-2：落地数据库实例管理，但先做外部实例纳管，不急着自建数据库平台
+- 目标：
+  - 让 `database_instances` / `databases` 成为正式模块。
+  - 先解决“登记、连通、查看、最小操作”，而不是一步做到 DBaaS。
+- 建议先做：
+  - 支持 PostgreSQL / MySQL 二选一先落一条线。
+  - 实例登记、连通性测试、数据库列表、只读元信息查看。
+  - 谨慎开放创建库/创建用户/改密码等高危操作，并配审计与确认。
+  - 与备份模块打通数据库备份入口。
+- 验收标准：
+  - 至少一个数据库引擎可稳定纳管。
+  - 高危操作都有显式确认、权限控制和审计记录。
+  - 失败场景不会造成“状态显示成功但实际未生效”的假阳性。
+
+### P6：把平台做成“可扩展、可升级、可运维”的长期形态
+
+#### P6-1：设计最小可用插件机制，不要过早开放任意代码执行
+- 目标：
+  - 让 `plugins` 表有明确边界的实际用途。
+  - 先支持声明式扩展、只读集成或受控能力扩展，不要一上来做任意脚本插件。
+- 建议先做：
+  - 插件元数据、启停、版本、来源、兼容性检查。
+  - 明确插件权限模型、生命周期钩子和审计边界。
+  - 先定义一类安全插件接口，例如只读信息采集、外部通知集成、受控任务模板扩展。
+- 验收标准：
+  - 插件安装/升级/禁用/卸载流程清晰。
+  - 插件兼容性和权限边界可检查、可阻断。
+  - 不引入绕过现有审计与 RBAC 的旁路。
+
+#### P6-2：补齐升级、发布与运维治理
+- 目标：
+  - 让项目从“仓库可运行”迈向“版本可升级、变更可发布、线上可治理”。
+  - 这部分优先级不如控制面/备份，但会决定长期可维护性。
+- 建议先做：
+  - 数据库 migration 前向/回滚策略与升级说明。
+  - backend / frontend / core-agent 版本兼容矩阵。
+  - 发布说明模板、破坏性变更清单、升级前检查脚本。
+  - 更明确的 SLO、值班、告警接收人与事故复盘模板。
+- 验收标准：
+  - 至少形成一版可重复执行的升级 runbook。
+  - 新版本上线前能做兼容性预检。
+  - 线上问题出现时，能依靠现有文档和观测链路完成定位与回退。
+
+【近期可直接开工的切入点】
+
+如果下一次会话要继续推进，建议优先从下面三个入口里选一个，而不是分散做：
+
+1. `P3-1` 多主机控制面基础设施：这是后续网站/数据库/备份按 host 扩展的共同底座。
+2. `P4-2` 备份恢复 MVP：这是最容易产生真实生产价值、也最能暴露任务框架和审计体系是否够用的一条线。
+3. `P4-1` 配置与密钥治理：这是把“能跑”往“可长期运维”推进时最容易欠账的一块。
+
+【仍然建议持续推进但不单独拉成长项目的事项】
 
 1. 在真实生产值班组织下接入最终告警目的地（paging/IM/email）并完成审批备案。
-2. 按线上流量持续微调 SLO/SLI 阈值与去重窗口。
-3. 若后续引入浏览器 tracing，再补一轮前后端全链路观测说明与回归脚本。
+2. 按线上流量持续微调 SLO/SLI 阈值、去重窗口、升级节奏与抑制规则。
+3. 若未来引入浏览器 tracing，再补一轮前后端全链路观测说明与回归脚本。
+4. 随每个新模块同步补齐安全测试、集成测试、e2e 与运维文档，不要等功能堆完再补。
 
 【不要先做的事】
 
@@ -189,4 +211,4 @@
 
 【一句话结论】
 
-这个仓库已经从“主链路没打通的原型”推进到了“主链路、安全、RBAC、测试矩阵、观测链路与文档收口全部完成”的阶段；下一次会话可以直接切入新的功能或工程目标。
+这个仓库已经从“主链路没打通的原型”推进到了“主链路、安全、RBAC、测试矩阵、观测链路与文档收口全部完成”的阶段；后续应沿着“多主机控制面 -> 配置与密钥治理 -> 备份恢复 -> 网站/数据库模块 -> 插件与发布治理”的顺序持续推进。
