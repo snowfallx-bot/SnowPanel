@@ -36,6 +36,11 @@
   - host create/update/check/enable/disable 已接入审计记录
   - frontend 新增 `/hosts` 管理页，可新增、编辑、检查、启用、禁用 host
   - 异步任务状态更新现在会持久化 `started_at`、`finished_at` 与结构化 `result`
+- 已继续补齐 host 心跳自动回写的最小闭环：
+  - 新增 `HOST_HEALTH_POLL_ENABLED` / `HOST_HEALTH_POLL_INTERVAL` 配置，默认关闭
+  - backend 启动时可按配置启动轻量 host health poller
+  - poller 会跳过 disabled host，周期调用现有 `HostService.CheckHost()`，复用 status/version/last_seen_at 回写逻辑
+  - poller 不阻塞启动，失败仅记录 warning，避免单个离线 host 影响控制面
 
 【当前判断】
 
@@ -48,13 +53,12 @@
   - 在前端切换 target host 并驱动主要页面按 host 维度重新取数
   - 在审计日志中按 host 粒度回看关键操作
 - 现阶段还没完成：
-  - host 心跳自动回写 / 周期巡检
   - mTLS / enrollment / 吊销与轮换（属于 `P3-2`）
 
 【验证结果】
 
 - backend：`go test ./...` 已通过。
-- backend：host lifecycle / task lifecycle 持久化后执行 `go test ./...`，已通过。
+- backend：host health poller 配置与启动链路补齐后执行 `go test ./...`，已通过。
 - core-agent：`cargo fmt --all` 已通过。
 - core-agent：`cargo test` 在当前机器上未能完成，阻塞原因为缺少 MSVC `link.exe`（本地 Rust toolchain 缺编译链接环境，不是本次业务代码已确认的断言失败）。
 - frontend：`npm run build` 已通过。
