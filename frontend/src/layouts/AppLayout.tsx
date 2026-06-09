@@ -1,10 +1,14 @@
-import { FormEvent, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { NavLink, Outlet } from "react-router-dom";
 import { changePassword, logout } from "@/api/auth";
+import { listHosts } from "@/api/hosts";
 import { useAuthStore } from "@/store/auth-store";
+import { hostScopeKey, useHostStore } from "@/store/host-store";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { describeApiError } from "@/lib/http";
 
 const navItems: Array<{ to: string; label: string; permission: string }> = [
   { to: "/dashboard", label: "Dashboard", permission: "dashboard.read" },
@@ -12,18 +16,29 @@ const navItems: Array<{ to: string; label: string; permission: string }> = [
   { to: "/services", label: "Services", permission: "services.read" },
   { to: "/docker", label: "Docker", permission: "docker.read" },
   { to: "/cron", label: "Cron", permission: "cron.read" },
+  { to: "/hosts", label: "Hosts", permission: "hosts.read" },
   { to: "/tasks", label: "Tasks", permission: "tasks.read" },
   { to: "/audit", label: "Audit", permission: "audit.read" }
 ];
 
 export function AppLayout() {
+  const queryClient = useQueryClient();
   const token = useAuthStore((state) => state.token);
   const user = useAuthStore((state) => state.user);
   const setAuth = useAuthStore((state) => state.setAuth);
   const clearAuth = useAuthStore((state) => state.clearAuth);
+  const selectedHostId = useHostStore((state) => state.selectedHostId);
+  const setSelectedHostId = useHostStore((state) => state.setSelectedHostId);
+  const clearSelectedHost = useHostStore((state) => state.clearSelectedHost);
   const permissionSet = new Set(user?.permissions ?? []);
   const visibleNavItems = navItems.filter((item) => permissionSet.has(item.permission));
   const mustChangePassword = user?.must_change_password === true;
+  const canReadHosts = permissionSet.has("hosts.read");
+  const hostsQuery = useQuery({
+    queryKey: ["hosts", "registry"],
+    queryFn: listHosts,
+    enabled: canReadHosts && Boolean(token)
+  });
 
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -32,6 +47,24 @@ export function AppLayout() {
   const [loggingOut, setLoggingOut] = useState(false);
   const [passwordError, setPasswordError] = useState("");
   const [passwordSuccess, setPasswordSuccess] = useState("");
+
+  const selectedHost = useMemo(
+    () => hostsQuery.data?.items.find((item) => item.id === selectedHostId) ?? null,
+    [hostsQuery.data?.items, selectedHostId]
+  );
+  const selectedHostScope = hostScopeKey(selectedHostId);
+  const hostsLoadError = hostsQuery.isError
+    ? describeApiError(hostsQuery.error, "Failed to load hosts.")
+    : null;
+
+  useEffect(() => {
+    if (!selectedHostId || hostsQuery.isLoading || hostsQuery.isError) {
+      return;
+    }
+    if (!selectedHost) {
+      setSelectedHostId(null);
+    }
+  }, [hostsQuery.isError, hostsQuery.isLoading, selectedHost, selectedHostId, setSelectedHostId]);
 
   async function handlePasswordChange(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -79,8 +112,21 @@ export function AppLayout() {
       // Even if backend logout fails, clear local credentials for user safety.
     } finally {
       clearAuth();
+      clearSelectedHost();
+      queryClient.clear();
       setLoggingOut(false);
     }
+  }
+
+  function handleHostChange(event: ChangeEvent<HTMLSelectElement>) {
+    const nextValue = event.target.value.trim();
+    const nextHostId = nextValue ? Number(nextValue) : null;
+    setSelectedHostId(Number.isFinite(nextHostId) ? nextHostId : null);
+    queryClient.removeQueries({
+      predicate(query) {
+        return query.queryKey[0] !== "hosts";
+      }
+    });
   }
 
   return (
@@ -109,13 +155,45 @@ export function AppLayout() {
           <div>
             <p className="text-sm text-slate-500">SnowPanel Operations Console</p>
             <p className="text-base font-medium">{user?.username ?? "unknown"}</p>
+            <p className="text-xs text-slate-500">
+              Target:{" "}
+              {selectedHost
+                ? `${selectedHost.name} (${selectedHost.address}:${selectedHost.port})`
+                : "Primary agent"}
+            </p>
           </div>
-          <Button variant="ghost" onClick={handleLogout} disabled={loggingOut}>
-            {loggingOut ? "Logging out..." : "Logout"}
-          </Button>
+          <div className="flex items-center gap-3">
+            {canReadHosts && (
+              <div className="min-w-[260px]">
+                <label className="block text-xs font-medium uppercase tracking-wide text-slate-500" htmlFor="target-host">
+                  Target Host
+                </label>
+                <select
+                  id="target-host"
+                  className="mt-1 h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700"
+                  value={selectedHostId ?? ""}
+                  onChange={handleHostChange}
+                >
+                  <option value="">Primary agent (default)</option>
+                  {(hostsQuery.data?.items || []).map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name} [{item.status}] - {item.address}:{item.port}
+                    </option>
+                  ))}
+                </select>
+                {hostsQuery.isLoading && <p className="mt-1 text-xs text-slate-500">Loading hosts...</p>}
+                {hostsLoadError && <p className="mt-1 text-xs text-rose-600">{hostsLoadError.message}</p>}
+              </div>
+            )}
+            <Button variant="ghost" onClick={handleLogout} disabled={loggingOut}>
+              {loggingOut ? "Logging out..." : "Logout"}
+            </Button>
+          </div>
         </header>
         <section className="p-6">
-          <Outlet />
+          <div key={selectedHostScope}>
+            <Outlet />
+          </div>
         </section>
       </main>
       {mustChangePassword && (

@@ -5,11 +5,13 @@ type ListAuditLogsQuery struct {
 	Size   int    `form:"size"`
 	Module string `form:"module"`
 	Action string `form:"action"`
+	HostID *int64 `form:"host_id"`
 }
 
 type AuditLog struct {
 	ID             int64  `json:"id"`
 	UserID         *int64 `json:"user_id"`
+	HostID         *int64 `json:"host_id"`
 	Username       string `json:"username"`
 	IP             string `json:"ip"`
 	Module         string `json:"module"`
@@ -32,6 +34,7 @@ type ListAuditLogsResult struct {
 
 type RecordAuditInput struct {
 	UserID         *int64
+	HostID         *int64
 	Username       string
 	IP             string
 	Module         string

@@ -13,11 +13,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { QueryErrorCard } from "@/components/ui/query-error-card";
 import { describeApiError } from "@/lib/http";
+import { hostScopeKey, useHostStore } from "@/store/host-store";
 import { CronTask } from "@/types/cron";
 
 export function CronPage() {
   const queryClient = useQueryClient();
-  const cronTasksQueryKey = ["cron", "tasks"] as const;
+  const selectedHostId = useHostStore((state) => state.selectedHostId);
+  const hostScope = hostScopeKey(selectedHostId);
+  const cronTasksQueryKey = ["cron", hostScope, "tasks"] as const;
   const [expression, setExpression] = useState("*/5 * * * *");
   const [command, setCommand] = useState("backup");
   const [enabled, setEnabled] = useState(true);

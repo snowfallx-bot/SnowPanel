@@ -3,6 +3,7 @@ package handler
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/dto"
+	"github.com/snowfallx-bot/SnowPanel/backend/internal/hostctx"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/middleware"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/service"
 )
@@ -24,6 +25,11 @@ func recordAudit(c *gin.Context, auditService service.AuditService, input dto.Re
 	}
 	if input.IP == "" {
 		input.IP = c.ClientIP()
+	}
+	if input.HostID == nil {
+		if hostID, ok := hostctx.HostID(c.Request.Context()); ok {
+			input.HostID = &hostID
+		}
 	}
 	auditService.Record(c.Request.Context(), input)
 }

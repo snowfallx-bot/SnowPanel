@@ -10,7 +10,6 @@ import (
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/api"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/config"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/database"
-	"github.com/snowfallx-bot/SnowPanel/backend/internal/grpcclient"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/logger"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/observability"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/repository"
@@ -53,6 +52,7 @@ func main() {
 	}
 
 	userRepo := repository.NewUserRepository(db)
+	hostRepo := repository.NewHostRepository(db)
 	auditRepo := repository.NewAuditRepository(db)
 	taskRepo := repository.NewTaskRepository(db)
 	auditService := service.NewAuditService(auditRepo)
@@ -61,12 +61,13 @@ func main() {
 		zapLogger.Fatal("failed to ensure default admin", logger.Err(err))
 	}
 
-	agentClient := grpcclient.New(cfg.AgentTarget, cfg.AgentTimeout)
+	agentClient := service.NewHostAwareAgentClient(cfg.AgentTarget, cfg.AgentTimeout, hostRepo)
 	dashboardService := service.NewDashboardService(agentClient)
 	fileService := service.NewFileService(agentClient)
 	serviceManager := service.NewServiceManagerService(agentClient)
 	dockerService := service.NewDockerService(agentClient)
 	cronService := service.NewCronService(agentClient)
+	hostService := service.NewHostService(hostRepo, cfg.AgentTimeout)
 	taskService := service.NewTaskService(taskRepo, dockerService, serviceManager)
 	var loginAttempts security.LoginAttemptGuard = security.NewLoginAttemptLimiter(security.LoginAttemptLimiterOptions{
 		MaxFailures:   cfg.Auth.LoginMaxFailures,
@@ -123,6 +124,7 @@ func main() {
 			ServiceManager:   serviceManager,
 			DockerService:    dockerService,
 			CronService:      cronService,
+			HostService:      hostService,
 			AuditService:     auditService,
 			TaskService:      taskService,
 			LoginAttempts:    loginAttempts,

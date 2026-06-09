@@ -21,4 +21,14 @@ describe("describeApiError", () => {
     expect(result.message).toBe("Requested API route was not found.");
     expect(result.hint).toContain("Frontend and backend versions may be mismatched");
   });
+
+  it("maps selected host agent errors to host-specific guidance", () => {
+    const result = describeApiError(
+      new ApiError("host agent unavailable", { code: 3010, status: 503 }),
+      "fallback"
+    );
+
+    expect(result.message).toBe("Selected host agent is unavailable.");
+    expect(result.hint).toContain("switch to another host");
+  });
 });

@@ -30,6 +30,7 @@ type RouterDeps struct {
 	ServiceManager   service.ServiceManagerService
 	DockerService    service.DockerService
 	CronService      service.CronService
+	HostService      service.HostService
 	AuditService     service.AuditService
 	TaskService      service.TaskService
 	LoginAttempts    security.LoginAttemptGuard
@@ -68,6 +69,7 @@ func NewRouter(deps RouterDeps) *gin.Engine {
 	serviceHandler := handler.NewServiceHandler(deps.ServiceManager, deps.AuditService)
 	dockerHandler := handler.NewDockerHandler(deps.DockerService, deps.AuditService)
 	cronHandler := handler.NewCronHandler(deps.CronService, deps.AuditService)
+	hostHandler := handler.NewHostHandler(deps.HostService, deps.AuditService)
 	auditHandler := handler.NewAuditHandler(deps.AuditService)
 	taskHandler := handler.NewTaskHandler(deps.TaskService, deps.AuditService)
 
@@ -83,11 +85,22 @@ func NewRouter(deps RouterDeps) *gin.Engine {
 
 		protected := v1.Group("")
 		protected.Use(middleware.JWTAuth(deps.AuthService))
+		protected.Use(middleware.OptionalHostSelection())
 		{
 			protected.GET("/auth/me", authHandler.Me)
 			protected.POST("/auth/logout", authHandler.Logout)
 			protected.POST("/auth/change-password", authHandler.ChangePassword)
 			protected.GET("/dashboard/summary", dashboardHandler.Summary)
+			hosts := protected.Group("/hosts")
+			{
+				hosts.GET("", middleware.RequirePermission("hosts.read"), hostHandler.ListHosts)
+				hosts.POST("", middleware.RequirePermission("hosts.manage"), hostHandler.CreateHost)
+				hosts.GET("/:id", middleware.RequirePermission("hosts.read"), hostHandler.GetHost)
+				hosts.PUT("/:id", middleware.RequirePermission("hosts.manage"), hostHandler.UpdateHost)
+				hosts.POST("/:id/check", middleware.RequirePermission("hosts.manage"), hostHandler.CheckHost)
+				hosts.POST("/:id/enable", middleware.RequirePermission("hosts.manage"), hostHandler.EnableHost)
+				hosts.POST("/:id/disable", middleware.RequirePermission("hosts.manage"), hostHandler.DisableHost)
+			}
 			files := protected.Group("/files")
 			{
 				files.GET("/list", middleware.RequirePermission("files.read"), fileHandler.ListFiles)

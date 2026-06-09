@@ -13,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { QueryErrorCard } from "@/components/ui/query-error-card";
 import { describeApiError } from "@/lib/http";
+import { hostScopeKey, useHostStore } from "@/store/host-store";
 import { DockerContainerInfo } from "@/types/docker";
 
 type DockerAction = "start" | "stop" | "restart";
@@ -32,6 +33,8 @@ function formatSize(size: number) {
 
 export function DockerPage() {
   const queryClient = useQueryClient();
+  const selectedHostId = useHostStore((state) => state.selectedHostId);
+  const hostScope = hostScopeKey(selectedHostId);
   const [searchParams, setSearchParams] = useSearchParams();
   const [feedback, setFeedback] = useState("");
   const [filter, setFilter] = useState(() => searchParams.get("container") || "");
@@ -40,8 +43,8 @@ export function DockerPage() {
   );
   const [imageFilter, setImageFilter] = useState(() => searchParams.get("image") || "");
   const [activeActionKey, setActiveActionKey] = useState("");
-  const dockerContainersQueryKey = ["docker", "containers"] as const;
-  const dockerImagesQueryKey = ["docker", "images"] as const;
+  const dockerContainersQueryKey = ["docker", hostScope, "containers"] as const;
+  const dockerImagesQueryKey = ["docker", hostScope, "images"] as const;
 
   const containersQuery = useQuery({
     queryKey: dockerContainersQueryKey,

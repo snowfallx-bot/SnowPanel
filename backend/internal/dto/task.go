@@ -4,6 +4,7 @@ type CreateTaskResult struct {
 	ID     int64  `json:"id"`
 	Type   string `json:"type"`
 	Status string `json:"status"`
+	HostID *int64 `json:"host_id,omitempty"`
 }
 
 type CreateDockerRestartTaskRequest struct {
@@ -19,6 +20,7 @@ type ListTasksQuery struct {
 	Size   int    `form:"size"`
 	Status string `form:"status"`
 	Type   string `form:"type"`
+	HostID *int64 `form:"host_id"`
 }
 
 type TaskLog struct {
@@ -36,6 +38,7 @@ type TaskSummary struct {
 	Progress    int    `json:"progress"`
 	Error       string `json:"error_message"`
 	TriggeredBy *int64 `json:"triggered_by"`
+	HostID      *int64 `json:"host_id,omitempty"`
 	CreatedAt   string `json:"created_at"`
 	UpdatedAt   string `json:"updated_at"`
 }

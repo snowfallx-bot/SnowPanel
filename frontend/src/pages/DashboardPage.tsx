@@ -3,6 +3,7 @@ import { getDashboardSummary } from "@/api/dashboard";
 import { QueryErrorCard } from "@/components/ui/query-error-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { describeApiError } from "@/lib/http";
+import { hostScopeKey, useHostStore } from "@/store/host-store";
 
 function MetricCard({ title, value, percent }: { title: string; value: string; percent?: number }) {
   return (
@@ -28,8 +29,10 @@ function MetricCard({ title, value, percent }: { title: string; value: string; p
 }
 
 export function DashboardPage() {
+  const selectedHostId = useHostStore((state) => state.selectedHostId);
+  const hostScope = hostScopeKey(selectedHostId);
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ["dashboard", "summary"],
+    queryKey: ["dashboard", hostScope, "summary"],
     queryFn: getDashboardSummary
   });
 

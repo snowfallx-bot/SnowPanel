@@ -1,6 +1,7 @@
 export interface AuditLog {
   id: number;
   user_id: number | null;
+  host_id: number | null;
   username: string;
   ip: string;
   module: string;

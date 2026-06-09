@@ -6,8 +6,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { QueryErrorCard } from "@/components/ui/query-error-card";
 import { describeApiError } from "@/lib/http";
+import { hostScopeKey, useHostStore } from "@/store/host-store";
 
 export function AuditLogsPage() {
+  const selectedHostId = useHostStore((state) => state.selectedHostId);
+  const hostScope = hostScopeKey(selectedHostId);
   const [page, setPage] = useState(1);
   const [size] = useState(20);
   const [moduleFilterInput, setModuleFilterInput] = useState("");
@@ -16,7 +19,7 @@ export function AuditLogsPage() {
   const [actionFilter, setActionFilter] = useState("");
 
   const logsQuery = useQuery({
-    queryKey: ["audit", "logs", page, size, moduleFilter, actionFilter],
+    queryKey: ["audit", hostScope, "logs", page, size, moduleFilter, actionFilter],
     queryFn: () =>
       listAuditLogs({
         page,
@@ -86,6 +89,7 @@ export function AuditLogsPage() {
                   <thead className="bg-slate-50 text-slate-600">
                     <tr>
                       <th className="px-4 py-3">Time</th>
+                      <th className="px-4 py-3">Host</th>
                       <th className="px-4 py-3">User</th>
                       <th className="px-4 py-3">IP</th>
                       <th className="px-4 py-3">Module</th>
@@ -98,6 +102,7 @@ export function AuditLogsPage() {
                     {(logsQuery.data?.items || []).map((item) => (
                       <tr className="border-t border-slate-200" key={item.id}>
                         <td className="px-4 py-3">{new Date(item.created_at).toLocaleString()}</td>
+                        <td className="px-4 py-3">{item.host_id ? `#${item.host_id}` : "default"}</td>
                         <td className="px-4 py-3">{item.username || "-"}</td>
                         <td className="px-4 py-3">{item.ip || "-"}</td>
                         <td className="px-4 py-3">{item.module}</td>
@@ -108,7 +113,7 @@ export function AuditLogsPage() {
                     ))}
                     {(logsQuery.data?.items || []).length === 0 && (
                       <tr>
-                        <td className="px-4 py-8 text-center text-slate-500" colSpan={7}>
+                        <td className="px-4 py-8 text-center text-slate-500" colSpan={8}>
                           No audit logs found.
                         </td>
                       </tr>

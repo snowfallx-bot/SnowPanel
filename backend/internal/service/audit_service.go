@@ -28,6 +28,7 @@ func NewAuditService(repo repository.AuditRepository) AuditService {
 func (s *auditService) Record(ctx context.Context, input dto.RecordAuditInput) {
 	item := &model.AuditLog{
 		UserID:         input.UserID,
+		HostID:         input.HostID,
 		Username:       input.Username,
 		IP:             input.IP,
 		Module:         input.Module,
@@ -63,6 +64,7 @@ func (s *auditService) List(
 		Size:   size,
 		Module: query.Module,
 		Action: query.Action,
+		HostID: query.HostID,
 	})
 	if err != nil {
 		return dto.ListAuditLogsResult{}, apperror.Wrap(
@@ -78,6 +80,7 @@ func (s *auditService) List(
 		result = append(result, dto.AuditLog{
 			ID:             item.ID,
 			UserID:         item.UserID,
+			HostID:         item.HostID,
 			Username:       item.Username,
 			IP:             item.IP,
 			Module:         item.Module,

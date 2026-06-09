@@ -30,6 +30,28 @@ func TestClientCheckHealthViaProtoContract(t *testing.T) {
 	}
 }
 
+func TestClientCheckHealthDetailsViaProtoContract(t *testing.T) {
+	target := startProtoContractServer(t, protoContractOptions{})
+	client := New(target, 2*time.Second)
+
+	result, err := client.CheckHealthDetails(context.Background())
+	if err != nil {
+		t.Fatalf("CheckHealthDetails() error = %v", err)
+	}
+	if result.Status != "SERVING" {
+		t.Fatalf("unexpected health status: %s", result.Status)
+	}
+	if result.Identity.Hostname != "contract-node" {
+		t.Fatalf("unexpected hostname: %s", result.Identity.Hostname)
+	}
+	if result.Identity.Version != "0.1.0-test" {
+		t.Fatalf("unexpected version: %s", result.Identity.Version)
+	}
+	if len(result.Identity.Capabilities) == 0 {
+		t.Fatal("expected capabilities to be returned")
+	}
+}
+
 func TestClientCheckHealthPropagatesRequestID(t *testing.T) {
 	requestIDCh := make(chan string, 1)
 	target := startProtoContractServer(t, protoContractOptions{
@@ -196,6 +218,13 @@ func TestGeneratedGoProtoDescriptorsExposeCriticalServices(t *testing.T) {
 	if descriptor.Fields().ByName(protoreflect.Name("allowed_roots")) == nil {
 		t.Fatal("expected allowed_roots field to exist")
 	}
+	healthDescriptor := files.Messages().ByName(protoreflect.Name("HealthCheckResponse"))
+	if healthDescriptor == nil {
+		t.Fatal("expected HealthCheckResponse descriptor to exist")
+	}
+	if healthDescriptor.Fields().ByName(protoreflect.Name("identity")) == nil {
+		t.Fatal("expected identity field to exist on HealthCheckResponse")
+	}
 
 	for _, serviceName := range []string{"HealthService", "SystemService", "FileService"} {
 		if files.Services().ByName(protoreflect.Name(serviceName)) == nil {
@@ -251,7 +280,15 @@ func (s *protoContractHealthService) Check(ctx context.Context, _ *agentv1.Healt
 	if s.opts.healthTransportCode != codes.OK {
 		return nil, status.Error(s.opts.healthTransportCode, "health check not implemented by fake contract server")
 	}
-	return &agentv1.HealthCheckResponse{Error: okProtoError(), Status: "SERVING"}, nil
+	return &agentv1.HealthCheckResponse{
+		Error:  okProtoError(),
+		Status: "SERVING",
+		Identity: &agentv1.AgentIdentity{
+			Hostname:     "contract-node",
+			Version:      "0.1.0-test",
+			Capabilities: []string{"system.overview", "files.read"},
+		},
+	}, nil
 }
 
 type protoContractSystemService struct {

@@ -35,6 +35,17 @@ type AgentError struct {
 	Cause    error
 }
 
+type AgentIdentity struct {
+	Hostname     string
+	Version      string
+	Capabilities []string
+}
+
+type HealthCheckResult struct {
+	Status   string
+	Identity AgentIdentity
+}
+
 func (e *AgentError) Error() string {
 	if e == nil {
 		return "agent error"
@@ -291,6 +302,7 @@ type SetCronTaskEnabledResult struct {
 
 type AgentClient interface {
 	CheckHealth(ctx context.Context) (string, error)
+	CheckHealthDetails(ctx context.Context) (HealthCheckResult, error)
 	GetSystemOverview(ctx context.Context) (SystemOverview, error)
 	GetRealtimeResource(ctx context.Context) (RealtimeResource, error)
 	ListFiles(ctx context.Context, req ListFilesRequest) (ListFilesResult, error)
@@ -338,7 +350,15 @@ func (c *Client) Timeout() time.Duration {
 }
 
 func (c *Client) CheckHealth(ctx context.Context) (string, error) {
-	result := ""
+	result, err := c.CheckHealthDetails(ctx)
+	if err != nil {
+		return "", err
+	}
+	return result.Status, nil
+}
+
+func (c *Client) CheckHealthDetails(ctx context.Context) (HealthCheckResult, error) {
+	result := HealthCheckResult{}
 	err := c.invoke(ctx, "health.check", func(callCtx context.Context, conn *grpc.ClientConn) error {
 		client := agentv1.NewHealthServiceClient(conn)
 		resp, err := client.Check(callCtx, &agentv1.HealthCheckRequest{})
@@ -348,10 +368,20 @@ func (c *Client) CheckHealth(ctx context.Context) (string, error) {
 		if err := responseError(resp.GetError()); err != nil {
 			return err
 		}
-		result = strings.TrimSpace(resp.GetStatus())
-		if result == "" {
-			result = "UNKNOWN"
+		result.Status = strings.TrimSpace(resp.GetStatus())
+		if result.Status == "" {
+			result.Status = "UNKNOWN"
 		}
+
+		identity := resp.GetIdentity()
+		if identity != nil {
+			result.Identity = AgentIdentity{
+				Hostname:     strings.TrimSpace(identity.GetHostname()),
+				Version:      strings.TrimSpace(identity.GetVersion()),
+				Capabilities: append([]string(nil), identity.GetCapabilities()...),
+			}
+		}
+
 		return nil
 	})
 	return result, err

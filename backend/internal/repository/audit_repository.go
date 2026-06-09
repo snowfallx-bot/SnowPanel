@@ -12,6 +12,7 @@ type AuditListFilter struct {
 	Size   int
 	Module string
 	Action string
+	HostID *int64
 }
 
 type AuditRepository interface {
@@ -53,6 +54,9 @@ func (r *auditRepository) List(
 	}
 	if filter.Action != "" {
 		query = query.Where("action = ?", filter.Action)
+	}
+	if filter.HostID != nil && *filter.HostID > 0 {
+		query = query.Where("host_id = ?", *filter.HostID)
 	}
 
 	var total int64

@@ -4,6 +4,7 @@ import { DashboardPage } from "@/pages/DashboardPage";
 import { DockerPage } from "@/pages/DockerPage";
 import { CronPage } from "@/pages/CronPage";
 import { AuditLogsPage } from "@/pages/AuditLogsPage";
+import { HostsPage } from "@/pages/HostsPage";
 import { TasksPage } from "@/pages/TasksPage";
 import { FilesPage } from "@/pages/FilesPage";
 import { LoginPage } from "@/pages/LoginPage";
@@ -46,6 +47,10 @@ export const router = createBrowserRouter([
           {
             path: "/cron",
             element: <CronPage />
+          },
+          {
+            path: "/hosts",
+            element: <HostsPage />
           },
           {
             path: "/tasks",

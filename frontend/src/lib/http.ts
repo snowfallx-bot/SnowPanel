@@ -1,5 +1,6 @@
-import axios, { AxiosRequestConfig } from "axios";
+import axios, { AxiosRequestConfig, InternalAxiosRequestConfig } from "axios";
 import { useAuthStore } from "@/store/auth-store";
+import { useHostStore } from "@/store/host-store";
 import { LoginResult } from "@/types/auth";
 import { ApiEnvelope } from "@/types/api";
 
@@ -46,9 +47,72 @@ function normalizeErrorMessage(message: string | undefined, fallback: string) {
   return trimmed ? trimmed : fallback;
 }
 
+function isScopedAPIRequest(url: string) {
+  return (
+    url.startsWith("/api/v1/") &&
+    !url.startsWith("/api/v1/auth/") &&
+    !url.startsWith("/api/v1/hosts")
+  );
+}
+
+function attachSelectedHostID(config: InternalAxiosRequestConfig) {
+  const requestURL = typeof config.url === "string" ? config.url : "";
+  if (!isScopedAPIRequest(requestURL)) {
+    return config;
+  }
+
+  const selectedHostId = useHostStore.getState().selectedHostId;
+  if (!selectedHostId) {
+    return config;
+  }
+
+  if (config.params instanceof URLSearchParams) {
+    if (!config.params.has("host_id")) {
+      config.params.set("host_id", String(selectedHostId));
+    }
+    return config;
+  }
+
+  const existingParams =
+    config.params && typeof config.params === "object" && !Array.isArray(config.params)
+      ? (config.params as Record<string, unknown>)
+      : {};
+
+  if (existingParams.host_id !== undefined && existingParams.host_id !== null && existingParams.host_id !== "") {
+    return config;
+  }
+
+  config.params = {
+    ...existingParams,
+    host_id: selectedHostId
+  };
+  return config;
+}
+
 export function describeApiError(error: unknown, fallback: string): ApiErrorDisplay {
   if (error instanceof ApiError) {
     const message = normalizeErrorMessage(error.message, fallback);
+
+    if (error.code === 3010) {
+      return {
+        message: "Selected host agent is unavailable.",
+        hint: "Check the target host connectivity and agent service, or switch to another host."
+      };
+    }
+
+    if (error.code === 2014) {
+      return {
+        message: "Selected host is disabled.",
+        hint: "Choose another host or re-enable this host in the control plane."
+      };
+    }
+
+    if (error.code === 2013) {
+      return {
+        message: "Selected host no longer exists.",
+        hint: "Refresh the host list and pick an available host."
+      };
+    }
 
     if (error.code === 3001 || error.status === 503) {
       return {
@@ -127,7 +191,7 @@ http.interceptors.request.use((config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
-  return config;
+  return attachSelectedHostID(config);
 });
 
 http.interceptors.response.use(
@@ -151,6 +215,7 @@ http.interceptors.response.use(
 
     if (status === 401) {
       useAuthStore.getState().clearAuth();
+      useHostStore.getState().clearSelectedHost();
       if (typeof window !== "undefined" && window.location.pathname !== "/login") {
         window.sessionStorage.setItem(
           AUTH_REDIRECT_MESSAGE_KEY,
@@ -192,6 +257,7 @@ async function refreshAccessToken(): Promise<string | null> {
     return result.access_token;
   } catch {
     clearAuth();
+    useHostStore.getState().clearSelectedHost();
     return null;
   }
 }

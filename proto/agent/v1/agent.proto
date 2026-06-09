@@ -12,9 +12,16 @@ message Error {
 
 message HealthCheckRequest {}
 
+message AgentIdentity {
+  string hostname = 1;
+  string version = 2;
+  repeated string capabilities = 3;
+}
+
 message HealthCheckResponse {
   Error error = 1;
   string status = 2;
+  AgentIdentity identity = 3;
 }
 
 message PathSafetyContext {

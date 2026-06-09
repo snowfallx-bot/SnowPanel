@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { QueryErrorCard } from "@/components/ui/query-error-card";
 import { describeApiError } from "@/lib/http";
 import { useAuthStore } from "@/store/auth-store";
+import { hostScopeKey, useHostStore } from "@/store/host-store";
 
 function isActiveTask(status: string) {
   return status === "pending" || status === "running";
@@ -57,6 +58,8 @@ const taskTypeOptions = [
 export function TasksPage() {
   const queryClient = useQueryClient();
   const user = useAuthStore((state) => state.user);
+  const selectedHostId = useHostStore((state) => state.selectedHostId);
+  const hostScope = hostScopeKey(selectedHostId);
   const canManageTasks = (user?.permissions || []).includes("tasks.manage");
   const [page, setPage] = useState(1);
   const [size] = useState(20);
@@ -68,10 +71,10 @@ export function TasksPage() {
   const [serviceName, setServiceName] = useState("");
   const statusParam = statusFilter === "all" ? undefined : statusFilter;
   const typeParam = typeFilter === "all" ? undefined : typeFilter;
-  const tasksRootQueryKey = ["tasks"] as const;
-  const tasksListQueryKey = ["tasks", page, size, statusFilter, typeFilter] as const;
-  const selectedTaskDetailQueryKey = ["tasks", "detail", selectedTaskId] as const;
-  const taskDetailQueryKey = (taskID: number) => ["tasks", "detail", taskID] as const;
+  const tasksRootQueryKey = ["tasks", hostScope] as const;
+  const tasksListQueryKey = ["tasks", hostScope, page, size, statusFilter, typeFilter] as const;
+  const selectedTaskDetailQueryKey = ["tasks", hostScope, "detail", selectedTaskId] as const;
+  const taskDetailQueryKey = (taskID: number) => ["tasks", hostScope, "detail", taskID] as const;
 
   const tasksQuery = useQuery({
     queryKey: tasksListQueryKey,
@@ -306,6 +309,7 @@ export function TasksPage() {
                       <th className="px-4 py-3">Type</th>
                       <th className="px-4 py-3">Status</th>
                       <th className="px-4 py-3">Progress</th>
+                      <th className="px-4 py-3">Host</th>
                       <th className="px-4 py-3">Triggered By</th>
                       <th className="px-4 py-3">Updated</th>
                       <th className="px-4 py-3">Actions</th>
@@ -322,6 +326,7 @@ export function TasksPage() {
                           </span>
                         </td>
                         <td className="px-4 py-3">{item.progress}%</td>
+                        <td className="px-4 py-3">{item.host_id ? `#${item.host_id}` : "default"}</td>
                         <td className="px-4 py-3">{item.triggered_by ?? "-"}</td>
                         <td className="px-4 py-3">{new Date(item.updated_at).toLocaleString()}</td>
                         <td className="px-4 py-3">
@@ -359,7 +364,7 @@ export function TasksPage() {
                     ))}
                     {(tasksQuery.data?.items || []).length === 0 && (
                       <tr>
-                        <td className="px-4 py-8 text-center text-slate-500" colSpan={7}>
+                        <td className="px-4 py-8 text-center text-slate-500" colSpan={8}>
                           No tasks found.
                         </td>
                       </tr>
@@ -427,6 +432,10 @@ export function TasksPage() {
                 </p>
                 <p>
                   <span className="text-slate-500">Progress:</span> {detailQuery.data?.summary.progress}%
+                </p>
+                <p>
+                  <span className="text-slate-500">Host:</span>{" "}
+                  {detailQuery.data?.summary.host_id ? `#${detailQuery.data.summary.host_id}` : "default"}
                 </p>
                 <p>
                   <span className="text-slate-500">Created:</span>{" "}

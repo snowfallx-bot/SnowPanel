@@ -21,19 +21,19 @@ use crate::api::proto::service_manager_service_server::{
 };
 use crate::api::proto::system_service_server::{SystemService, SystemServiceServer};
 use crate::api::proto::{
-    CreateCronTaskRequest, CreateCronTaskResponse, CreateDirectoryRequest, CreateDirectoryResponse,
-    CronTask, DeleteCronTaskRequest, DeleteCronTaskResponse, DeleteFileRequest, DeleteFileResponse,
-    DockerContainerActionRequest, DockerContainerActionResponse, DockerContainerInfo,
-    DockerImageInfo, Error, GetRealtimeResourceRequest, GetRealtimeResourceResponse,
-    GetSystemOverviewRequest, GetSystemOverviewResponse, HealthCheckRequest, HealthCheckResponse,
-    ListCronTasksRequest, ListCronTasksResponse, ListDockerContainersRequest,
-    ListDockerContainersResponse, ListDockerImagesRequest, ListDockerImagesResponse,
-    ListFilesRequest, ListFilesResponse, ListServicesRequest, ListServicesResponse,
-    ReadFileChunkRequest, ReadFileChunkResponse, ReadTextFileRequest, ReadTextFileResponse,
-    RenameFileRequest, RenameFileResponse, ServiceActionRequest, ServiceActionResponse,
-    ServiceInfo, SetCronTaskEnabledRequest, SetCronTaskEnabledResponse, UpdateCronTaskRequest,
-    UpdateCronTaskResponse, WriteFileChunkRequest, WriteFileChunkResponse, WriteTextFileRequest,
-    WriteTextFileResponse,
+    AgentIdentity, CreateCronTaskRequest, CreateCronTaskResponse, CreateDirectoryRequest,
+    CreateDirectoryResponse, CronTask, DeleteCronTaskRequest, DeleteCronTaskResponse,
+    DeleteFileRequest, DeleteFileResponse, DockerContainerActionRequest,
+    DockerContainerActionResponse, DockerContainerInfo, DockerImageInfo, Error,
+    GetRealtimeResourceRequest, GetRealtimeResourceResponse, GetSystemOverviewRequest,
+    GetSystemOverviewResponse, HealthCheckRequest, HealthCheckResponse, ListCronTasksRequest,
+    ListCronTasksResponse, ListDockerContainersRequest, ListDockerContainersResponse,
+    ListDockerImagesRequest, ListDockerImagesResponse, ListFilesRequest, ListFilesResponse,
+    ListServicesRequest, ListServicesResponse, ReadFileChunkRequest, ReadFileChunkResponse,
+    ReadTextFileRequest, ReadTextFileResponse, RenameFileRequest, RenameFileResponse,
+    ServiceActionRequest, ServiceActionResponse, ServiceInfo, SetCronTaskEnabledRequest,
+    SetCronTaskEnabledResponse, UpdateCronTaskRequest, UpdateCronTaskResponse,
+    WriteFileChunkRequest, WriteFileChunkResponse, WriteTextFileRequest, WriteTextFileResponse,
 };
 use crate::cron::service::{CronError, CronService};
 use crate::docker::service::{DockerAction, DockerError, DockerService};
@@ -150,6 +150,23 @@ impl HealthService for HealthServiceImpl {
                 Ok(Response::new(HealthCheckResponse {
                     error: Some(ok_error()),
                     status: "SERVING".to_string(),
+                    identity: Some(AgentIdentity {
+                        hostname: sysinfo::System::host_name()
+                            .unwrap_or_else(|| "unknown".to_string()),
+                        version: env!("CARGO_PKG_VERSION").to_string(),
+                        capabilities: vec![
+                            "system.overview".to_string(),
+                            "system.realtime".to_string(),
+                            "files.read".to_string(),
+                            "files.write".to_string(),
+                            "services.read".to_string(),
+                            "services.manage".to_string(),
+                            "docker.read".to_string(),
+                            "docker.manage".to_string(),
+                            "cron.read".to_string(),
+                            "cron.manage".to_string(),
+                        ],
+                    }),
                 }))
             },
         )

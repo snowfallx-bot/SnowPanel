@@ -6,16 +6,19 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { QueryErrorCard } from "@/components/ui/query-error-card";
 import { describeApiError } from "@/lib/http";
+import { hostScopeKey, useHostStore } from "@/store/host-store";
 import { ServiceInfo } from "@/types/service";
 
 type ActionType = "start" | "stop" | "restart";
 
 export function ServicesPage() {
   const queryClient = useQueryClient();
+  const selectedHostId = useHostStore((state) => state.selectedHostId);
+  const hostScope = hostScopeKey(selectedHostId);
   const [keyword, setKeyword] = useState("");
   const [searchKeyword, setSearchKeyword] = useState("");
   const [feedback, setFeedback] = useState("");
-  const servicesQueryKey = ["services", searchKeyword] as const;
+  const servicesQueryKey = ["services", hostScope, searchKeyword] as const;
 
   const servicesQuery = useQuery({
     queryKey: servicesQueryKey,

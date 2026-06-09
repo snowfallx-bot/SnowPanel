@@ -10,6 +10,7 @@ import (
 
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/apperror"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/dto"
+	"github.com/snowfallx-bot/SnowPanel/backend/internal/hostctx"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/model"
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/repository"
 )
@@ -57,6 +58,7 @@ type taskPayload struct {
 	Operation   string `json:"operation"`
 	ContainerID string `json:"container_id,omitempty"`
 	ServiceName string `json:"service_name,omitempty"`
+	HostID      *int64 `json:"host_id,omitempty"`
 }
 
 func NewTaskService(
@@ -102,6 +104,7 @@ func (s *taskService) CreateDockerRestartTask(
 		taskPayload{
 			Operation:   taskOperationDockerRestart,
 			ContainerID: containerID,
+			HostID:      selectedHostID(ctx),
 		},
 		triggeredBy,
 		username,
@@ -139,6 +142,7 @@ func (s *taskService) CreateServiceRestartTask(
 		taskPayload{
 			Operation:   taskOperationServiceRestart,
 			ServiceName: serviceName,
+			HostID:      selectedHostID(ctx),
 		},
 		triggeredBy,
 		username,
@@ -169,12 +173,15 @@ func (s *taskService) CancelTask(ctx context.Context, id int64, username string)
 		)
 	}
 
-	if err := s.repo.UpdateStatus(
+	if err := s.repo.UpdateLifecycle(
 		ctx,
 		id,
-		TaskStatusCanceled,
-		task.Progress,
-		"canceled by operator",
+		repository.TaskStatusUpdate{
+			Status:       TaskStatusCanceled,
+			Progress:     task.Progress,
+			ErrorMessage: "canceled by operator",
+			FinishedAt:   timePtr(time.Now().UTC()),
+		},
 	); err != nil {
 		return apperror.Wrap(
 			apperror.ErrInternal.Code,
@@ -264,6 +271,7 @@ func (s *taskService) ListTasks(ctx context.Context, query dto.ListTasksQuery) (
 		Size:   size,
 		Status: query.Status,
 		Type:   query.Type,
+		HostID: query.HostID,
 	})
 	if err != nil {
 		return dto.ListTasksResult{}, apperror.Wrap(
@@ -343,6 +351,7 @@ func (s *taskService) createAndRunTask(
 		Result:      `{}`,
 		ErrorMsg:    "",
 		TriggeredBy: triggeredBy,
+		HostID:      payload.HostID,
 	}
 	if err := s.repo.Create(ctx, task); err != nil {
 		return dto.CreateTaskResult{}, apperror.Wrap(
@@ -372,11 +381,15 @@ func (s *taskService) createAndRunTask(
 		ID:     task.ID,
 		Type:   task.Type,
 		Status: task.Status,
+		HostID: task.HostID,
 	}, nil
 }
 
 func (s *taskService) runTask(taskID int64, payload taskPayload) {
 	ctx := context.Background()
+	if payload.HostID != nil && *payload.HostID > 0 {
+		ctx = hostctx.WithHostID(ctx, *payload.HostID)
+	}
 
 	if s.isCanceled(ctx, taskID) {
 		_ = s.repo.AppendLog(ctx, &model.TaskLog{
@@ -521,7 +534,17 @@ func (s *taskService) runTask(taskID int64, payload taskPayload) {
 		return
 	}
 
-	_ = s.repo.UpdateStatus(ctx, taskID, TaskStatusSuccess, 100, "")
+	resultJSON := marshalTaskMetadata(map[string]interface{}{
+		"operation": payload.Operation,
+		"status":    TaskStatusSuccess,
+	})
+	_ = s.repo.UpdateLifecycle(ctx, taskID, repository.TaskStatusUpdate{
+		Status:       TaskStatusSuccess,
+		Progress:     100,
+		ErrorMessage: "",
+		Result:       &resultJSON,
+		FinishedAt:   timePtr(time.Now().UTC()),
+	})
 	_ = s.repo.AppendLog(ctx, &model.TaskLog{
 		TaskID:  taskID,
 		Level:   "info",
@@ -542,9 +565,18 @@ func mapTaskSummary(task model.Task) dto.TaskSummary {
 		Progress:    task.Progress,
 		Error:       task.ErrorMsg,
 		TriggeredBy: task.TriggeredBy,
+		HostID:      task.HostID,
 		CreatedAt:   task.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:   task.UpdatedAt.Format(time.RFC3339),
 	}
+}
+
+func selectedHostID(ctx context.Context) *int64 {
+	hostID, ok := hostctx.HostID(ctx)
+	if !ok {
+		return nil
+	}
+	return &hostID
 }
 
 func marshalTaskMetadata(data map[string]interface{}) string {
@@ -609,14 +641,20 @@ func (s *taskService) markTaskFailed(
 		return
 	}
 
-	_ = s.repo.UpdateStatus(ctx, taskID, TaskStatusFailed, 100, err.Error())
-
 	fields := map[string]interface{}{
 		"error": err.Error(),
 	}
 	for key, value := range metadata {
 		fields[key] = value
 	}
+	resultJSON := marshalTaskMetadata(fields)
+	_ = s.repo.UpdateLifecycle(ctx, taskID, repository.TaskStatusUpdate{
+		Status:       TaskStatusFailed,
+		Progress:     100,
+		ErrorMessage: err.Error(),
+		Result:       &resultJSON,
+		FinishedAt:   timePtr(time.Now().UTC()),
+	})
 
 	_ = s.repo.AppendLog(ctx, &model.TaskLog{
 		TaskID:   taskID,
@@ -630,8 +668,20 @@ func (s *taskService) setRunningProgress(ctx context.Context, taskID int64, prog
 	if s.isCanceled(ctx, taskID) {
 		return false
 	}
-	if err := s.repo.UpdateStatus(ctx, taskID, TaskStatusRunning, progress, ""); err != nil {
+	update := repository.TaskStatusUpdate{
+		Status:       TaskStatusRunning,
+		Progress:     progress,
+		ErrorMessage: "",
+	}
+	if progress <= 5 {
+		update.StartedAt = timePtr(time.Now().UTC())
+	}
+	if err := s.repo.UpdateLifecycle(ctx, taskID, update); err != nil {
 		return false
 	}
 	return true
+}
+
+func timePtr(value time.Time) *time.Time {
+	return &value
 }

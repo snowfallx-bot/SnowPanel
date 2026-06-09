@@ -50,11 +50,23 @@ func (r *fakeTaskRepo) Create(_ context.Context, task *model.Task) error {
 }
 
 func (r *fakeTaskRepo) UpdateStatus(
-	_ context.Context,
+	ctx context.Context,
 	id int64,
 	status string,
 	progress int,
 	errorMessage string,
+) error {
+	return r.UpdateLifecycle(ctx, id, repository.TaskStatusUpdate{
+		Status:       status,
+		Progress:     progress,
+		ErrorMessage: errorMessage,
+	})
+}
+
+func (r *fakeTaskRepo) UpdateLifecycle(
+	_ context.Context,
+	id int64,
+	update repository.TaskStatusUpdate,
 ) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -63,9 +75,18 @@ func (r *fakeTaskRepo) UpdateStatus(
 	if !ok {
 		return errors.New("task not found")
 	}
-	task.Status = status
-	task.Progress = progress
-	task.ErrorMsg = errorMessage
+	task.Status = update.Status
+	task.Progress = update.Progress
+	task.ErrorMsg = update.ErrorMessage
+	if update.Result != nil {
+		task.Result = *update.Result
+	}
+	if update.StartedAt != nil {
+		task.StartedAt = update.StartedAt
+	}
+	if update.FinishedAt != nil {
+		task.FinishedAt = update.FinishedAt
+	}
 	task.UpdatedAt = time.Now()
 	return nil
 }

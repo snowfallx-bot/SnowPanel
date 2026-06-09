@@ -98,7 +98,7 @@ In production, startup fails if bootstrap password or `JWT_SECRET` is weak.
 Schema migrations live in `backend/migrations`.
 Recommended flow:
 
-1. Apply `.up.sql`
+1. Apply `.up.sql` files in order
 2. Start backend
 
 ## Observability Notes

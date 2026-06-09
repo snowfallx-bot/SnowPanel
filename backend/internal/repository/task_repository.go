@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"strings"
+	"time"
 
 	"github.com/snowfallx-bot/SnowPanel/backend/internal/model"
 	"gorm.io/gorm"
@@ -13,11 +14,22 @@ type TaskListFilter struct {
 	Size   int
 	Status string
 	Type   string
+	HostID *int64
+}
+
+type TaskStatusUpdate struct {
+	Status       string
+	Progress     int
+	ErrorMessage string
+	Result       *string
+	StartedAt    *time.Time
+	FinishedAt   *time.Time
 }
 
 type TaskRepository interface {
 	Create(ctx context.Context, task *model.Task) error
 	UpdateStatus(ctx context.Context, id int64, status string, progress int, errorMessage string) error
+	UpdateLifecycle(ctx context.Context, id int64, update TaskStatusUpdate) error
 	GetByID(ctx context.Context, id int64) (*model.Task, error)
 	List(ctx context.Context, filter TaskListFilter) ([]model.Task, int64, error)
 	AppendLog(ctx context.Context, log *model.TaskLog) error
@@ -43,10 +55,27 @@ func (r *taskRepository) UpdateStatus(
 	progress int,
 	errorMessage string,
 ) error {
+	return r.UpdateLifecycle(ctx, id, TaskStatusUpdate{
+		Status:       status,
+		Progress:     progress,
+		ErrorMessage: errorMessage,
+	})
+}
+
+func (r *taskRepository) UpdateLifecycle(ctx context.Context, id int64, update TaskStatusUpdate) error {
 	updates := map[string]interface{}{
-		"status":        status,
-		"progress":      progress,
-		"error_message": errorMessage,
+		"status":        update.Status,
+		"progress":      update.Progress,
+		"error_message": update.ErrorMessage,
+	}
+	if update.Result != nil {
+		updates["result"] = *update.Result
+	}
+	if update.StartedAt != nil {
+		updates["started_at"] = update.StartedAt
+	}
+	if update.FinishedAt != nil {
+		updates["finished_at"] = update.FinishedAt
 	}
 	return r.db.WithContext(ctx).Model(&model.Task{}).Where("id = ?", id).Updates(updates).Error
 }
@@ -84,6 +113,9 @@ func (r *taskRepository) List(
 	}
 	if taskType := strings.TrimSpace(filter.Type); taskType != "" {
 		query = query.Where("type = ?", taskType)
+	}
+	if filter.HostID != nil && *filter.HostID > 0 {
+		query = query.Where("host_id = ?", *filter.HostID)
 	}
 	var total int64
 	if err := query.Count(&total).Error; err != nil {

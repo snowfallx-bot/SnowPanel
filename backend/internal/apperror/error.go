@@ -58,5 +58,8 @@ var (
 	ErrSessionExpired     = New(2010, http.StatusUnauthorized, "session expired")
 	ErrUserDisabled       = New(2011, http.StatusForbidden, "user is disabled")
 	ErrLoginRateLimited   = New(2012, http.StatusTooManyRequests, "too many login attempts, try later")
+	ErrHostNotFound       = New(2013, http.StatusNotFound, "host not found")
+	ErrHostDisabled       = New(2014, http.StatusForbidden, "host is disabled")
 	ErrAgentUnavailable   = New(3001, http.StatusServiceUnavailable, "core agent unavailable")
+	ErrHostUnavailable    = New(3010, http.StatusServiceUnavailable, "host agent unavailable")
 )

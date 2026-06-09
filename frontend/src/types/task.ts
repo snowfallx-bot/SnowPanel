@@ -5,6 +5,7 @@ export interface TaskSummary {
   progress: number;
   error_message: string;
   triggered_by: number | null;
+  host_id?: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -33,6 +34,7 @@ export interface CreateTaskResult {
   id: number;
   type: string;
   status: string;
+  host_id?: number | null;
 }
 
 export interface TaskStatusResult {

@@ -48,38 +48,6 @@ CREATE TABLE IF NOT EXISTS user_roles (
 
 CREATE INDEX IF NOT EXISTS idx_user_roles_role_id ON user_roles (role_id);
 
-CREATE TABLE IF NOT EXISTS audit_logs (
-    id BIGSERIAL PRIMARY KEY,
-    user_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
-    username VARCHAR(64) NOT NULL DEFAULT '',
-    ip INET,
-    module VARCHAR(64) NOT NULL,
-    action VARCHAR(64) NOT NULL,
-    target_type VARCHAR(64) NOT NULL,
-    target_id VARCHAR(128) NOT NULL DEFAULT '',
-    request_summary JSONB NOT NULL DEFAULT '{}'::jsonb,
-    success BOOLEAN NOT NULL DEFAULT FALSE,
-    result_code VARCHAR(32) NOT NULL DEFAULT '',
-    result_message TEXT NOT NULL DEFAULT '',
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON audit_logs (user_id);
-CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs (created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_audit_logs_module_action ON audit_logs (module, action);
-
-CREATE TABLE IF NOT EXISTS system_settings (
-    id BIGSERIAL PRIMARY KEY,
-    key VARCHAR(128) NOT NULL UNIQUE,
-    value TEXT NOT NULL,
-    value_type VARCHAR(32) NOT NULL DEFAULT 'string',
-    is_encrypted BOOLEAN NOT NULL DEFAULT FALSE,
-    description TEXT NOT NULL DEFAULT '',
-    updated_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
 CREATE TABLE IF NOT EXISTS hosts (
     id BIGSERIAL PRIMARY KEY,
     name VARCHAR(128) NOT NULL,
@@ -95,6 +63,40 @@ CREATE TABLE IF NOT EXISTS hosts (
 
 CREATE INDEX IF NOT EXISTS idx_hosts_status ON hosts (status);
 CREATE INDEX IF NOT EXISTS idx_hosts_last_seen_at ON hosts (last_seen_at);
+
+CREATE TABLE IF NOT EXISTS audit_logs (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
+    host_id BIGINT REFERENCES hosts(id) ON DELETE SET NULL,
+    username VARCHAR(64) NOT NULL DEFAULT '',
+    ip INET,
+    module VARCHAR(64) NOT NULL,
+    action VARCHAR(64) NOT NULL,
+    target_type VARCHAR(64) NOT NULL,
+    target_id VARCHAR(128) NOT NULL DEFAULT '',
+    request_summary JSONB NOT NULL DEFAULT '{}'::jsonb,
+    success BOOLEAN NOT NULL DEFAULT FALSE,
+    result_code VARCHAR(32) NOT NULL DEFAULT '',
+    result_message TEXT NOT NULL DEFAULT '',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON audit_logs (user_id);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_host_id ON audit_logs (host_id);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_module_action ON audit_logs (module, action);
+
+CREATE TABLE IF NOT EXISTS system_settings (
+    id BIGSERIAL PRIMARY KEY,
+    key VARCHAR(128) NOT NULL UNIQUE,
+    value TEXT NOT NULL,
+    value_type VARCHAR(32) NOT NULL DEFAULT 'string',
+    is_encrypted BOOLEAN NOT NULL DEFAULT FALSE,
+    description TEXT NOT NULL DEFAULT '',
+    updated_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 
 CREATE TABLE IF NOT EXISTS tasks (
     id BIGSERIAL PRIMARY KEY,

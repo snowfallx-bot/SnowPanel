@@ -66,6 +66,7 @@ func (UserRole) TableName() string {
 type AuditLog struct {
 	ID             int64     `json:"id" gorm:"column:id;primaryKey;autoIncrement"`
 	UserID         *int64    `json:"user_id" gorm:"column:user_id"`
+	HostID         *int64    `json:"host_id" gorm:"column:host_id"`
 	Username       string    `json:"username" gorm:"column:username;size:64;not null"`
 	IP             string    `json:"ip" gorm:"column:ip;size:64"`
 	Module         string    `json:"module" gorm:"column:module;size:64;not null"`

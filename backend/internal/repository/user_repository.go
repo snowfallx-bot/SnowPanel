@@ -107,6 +107,8 @@ func (r *userRepository) EnsureRBACDefaults(ctx context.Context) error {
 			{Name: "docker.manage", Description: "Manage docker resources"},
 			{Name: "cron.read", Description: "Read cron jobs"},
 			{Name: "cron.manage", Description: "Manage cron jobs"},
+			{Name: "hosts.read", Description: "Read host registry"},
+			{Name: "hosts.manage", Description: "Manage host registry"},
 			{Name: "audit.read", Description: "Read audit logs"},
 			{Name: "tasks.read", Description: "Read tasks"},
 			{Name: "tasks.manage", Description: "Manage tasks"},

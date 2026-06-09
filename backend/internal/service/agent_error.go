@@ -10,6 +10,10 @@ import (
 )
 
 func mapAgentError(err error) error {
+	if appErr, ok := apperror.As(err); ok {
+		return appErr
+	}
+
 	var agentErr *grpcclient.AgentError
 	if errors.As(err, &agentErr) {
 		appCode := apperror.ErrAgentUnavailable.Code
