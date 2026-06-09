@@ -18,6 +18,7 @@ type Config struct {
 	Redis        RedisConfig
 	Auth         AuthConfig
 	Tracing      TracingConfig
+	HostHealth   HostHealthConfig
 	AgentTarget  string
 	AgentTimeout time.Duration
 }
@@ -75,6 +76,11 @@ type TracingConfig struct {
 	SampleRatio    float64
 }
 
+type HostHealthConfig struct {
+	Enabled  bool
+	Interval time.Duration
+}
+
 func Load() Config {
 	v := viper.New()
 	v.SetConfigName(".env")
@@ -93,6 +99,8 @@ func Load() Config {
 	v.SetDefault("BACKEND_WRITE_TIMEOUT", "10s")
 	v.SetDefault("AGENT_TARGET", "127.0.0.1:50051")
 	v.SetDefault("AGENT_TIMEOUT", "3s")
+	v.SetDefault("HOST_HEALTH_POLL_ENABLED", false)
+	v.SetDefault("HOST_HEALTH_POLL_INTERVAL", "1m")
 	v.SetDefault("JWT_SECRET", "")
 	v.SetDefault("JWT_ISSUER", "snowpanel-backend")
 	v.SetDefault("JWT_EXPIRE", "24h")
@@ -195,6 +203,10 @@ func Load() Config {
 			OTLPEndpoint:   strings.TrimSpace(v.GetString("OTEL_EXPORTER_OTLP_ENDPOINT")),
 			Insecure:       v.GetBool("OTEL_EXPORTER_OTLP_INSECURE"),
 			SampleRatio:    clampSampleRatio(v.GetFloat64("OTEL_TRACES_SAMPLER_ARG")),
+		},
+		HostHealth: HostHealthConfig{
+			Enabled:  v.GetBool("HOST_HEALTH_POLL_ENABLED"),
+			Interval: mustDuration(v.GetString("HOST_HEALTH_POLL_INTERVAL"), time.Minute),
 		},
 	}
 }

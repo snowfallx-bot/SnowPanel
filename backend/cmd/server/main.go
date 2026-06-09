@@ -110,6 +110,13 @@ func main() {
 		}
 	}()
 
+	serverCtx, stopPollers := context.WithCancel(context.Background())
+	defer stopPollers()
+	if cfg.HostHealth.Enabled {
+		service.NewHostHealthPoller(hostService, cfg.HostHealth.Interval, zapLogger).Start(serverCtx)
+		zapLogger.Info("host health poller enabled")
+	}
+
 	server := &http.Server{
 		Addr: cfg.Server.Address(),
 		Handler: api.NewRouter(api.RouterDeps{
