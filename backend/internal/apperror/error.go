@@ -65,4 +65,8 @@ var (
 	ErrSettingNotFound    = New(2015, http.StatusNotFound, "setting not found")
 	ErrSettingKeyExists   = New(2016, http.StatusBadRequest, "setting key already exists")
 	ErrSettingKeyInvalid  = New(2017, http.StatusBadRequest, "invalid setting key")
+	ErrWebsiteNotFound    = New(2018, http.StatusNotFound, "website not found")
+	ErrWebsiteNameExists  = New(2019, http.StatusBadRequest, "website name already exists")
+	ErrInvalidRuntime     = New(2020, http.StatusBadRequest, "invalid runtime type")
+	ErrInvalidDomain      = New(2021, http.StatusBadRequest, "invalid domain")
 )

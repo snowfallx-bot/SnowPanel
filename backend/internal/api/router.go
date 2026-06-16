@@ -34,6 +34,7 @@ type RouterDeps struct {
 	AuditService     service.AuditService
 	TaskService      service.TaskService
 	SettingsService  service.SettingsService
+	WebsiteService   service.WebsiteService
 	LoginAttempts    security.LoginAttemptGuard
 }
 
@@ -74,6 +75,7 @@ func NewRouter(deps RouterDeps) *gin.Engine {
 	auditHandler := handler.NewAuditHandler(deps.AuditService)
 	taskHandler := handler.NewTaskHandler(deps.TaskService, deps.AuditService)
 	settingsHandler := handler.NewSettingsHandler(deps.SettingsService, deps.AuditService)
+	websiteHandler := handler.NewWebsiteHandler(deps.WebsiteService, deps.AuditService)
 
 	router.GET("/health", healthHandler.Health)
 	router.GET("/ready", healthHandler.Readiness)
@@ -168,6 +170,17 @@ func NewRouter(deps RouterDeps) *gin.Engine {
 				settings.POST("", middleware.RequirePermission("settings.manage"), settingsHandler.CreateSetting)
 				settings.PUT("/:key", middleware.RequirePermission("settings.manage"), settingsHandler.UpdateSetting)
 				settings.DELETE("/:key", middleware.RequirePermission("settings.manage"), settingsHandler.DeleteSetting)
+			}
+
+			websites := protected.Group("/websites")
+			{
+				websites.GET("", middleware.RequirePermission("websites.read"), websiteHandler.ListWebsites)
+				websites.GET("/:id", middleware.RequirePermission("websites.read"), websiteHandler.GetWebsite)
+				websites.POST("", middleware.RequirePermission("websites.manage"), websiteHandler.CreateWebsite)
+				websites.PUT("/:id", middleware.RequirePermission("websites.manage"), websiteHandler.UpdateWebsite)
+				websites.DELETE("/:id", middleware.RequirePermission("websites.manage"), websiteHandler.DeleteWebsite)
+				websites.POST("/:id/enable", middleware.RequirePermission("websites.manage"), websiteHandler.EnableWebsite)
+				websites.POST("/:id/disable", middleware.RequirePermission("websites.manage"), websiteHandler.DisableWebsite)
 			}
 		}
 	}

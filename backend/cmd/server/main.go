@@ -56,9 +56,10 @@ func main() {
 	auditRepo := repository.NewAuditRepository(db)
 	taskRepo := repository.NewTaskRepository(db)
 	settingsRepo := repository.NewSettingsRepository(db)
+	websiteRepo := repository.NewWebsiteRepository(db)
+	websiteDomainRepo := repository.NewWebsiteDomainRepository(db)
 	auditService := service.NewAuditService(auditRepo)
 	authService := service.NewAuthService(userRepo, cfg.Auth)
-	settingsService := service.NewSettingsService(settingsRepo)
 	if err := authService.EnsureDefaultAdmin(context.Background()); err != nil {
 		zapLogger.Fatal("failed to ensure default admin", logger.Err(err))
 	}
@@ -71,6 +72,8 @@ func main() {
 	cronService := service.NewCronService(agentClient)
 	hostService := service.NewHostService(hostRepo, cfg.AgentTimeout)
 	taskService := service.NewTaskService(taskRepo, dockerService, serviceManager)
+	settingsService := service.NewSettingsService(settingsRepo)
+	websiteService := service.NewWebsiteService(websiteRepo, websiteDomainRepo, auditService, agentClient)
 	var loginAttempts security.LoginAttemptGuard = security.NewLoginAttemptLimiter(security.LoginAttemptLimiterOptions{
 		MaxFailures:   cfg.Auth.LoginMaxFailures,
 		FailureWindow: cfg.Auth.LoginFailureWindow,
@@ -137,6 +140,7 @@ func main() {
 			AuditService:     auditService,
 			TaskService:      taskService,
 			SettingsService:  settingsService,
+			WebsiteService:   websiteService,
 			LoginAttempts:    loginAttempts,
 		}),
 		ReadTimeout:  cfg.Server.ReadTimeout,
