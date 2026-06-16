@@ -100,6 +100,10 @@ func NewRouter(deps RouterDeps) *gin.Engine {
 				hosts.POST("/:id/check", middleware.RequirePermission("hosts.manage"), hostHandler.CheckHost)
 				hosts.POST("/:id/enable", middleware.RequirePermission("hosts.manage"), hostHandler.EnableHost)
 				hosts.POST("/:id/disable", middleware.RequirePermission("hosts.manage"), hostHandler.DisableHost)
+				hosts.POST("/:id/enroll", middleware.RequirePermission("hosts.manage"), hostHandler.EnrollHost)
+				hosts.POST("/:id/revoke", middleware.RequirePermission("hosts.manage"), hostHandler.RevokeHost)
+				hosts.POST("/:id/rotate-certificate", middleware.RequirePermission("hosts.manage"), hostHandler.RotateHostCertificate)
+				hosts.POST("/:id/validate-certificate", middleware.RequirePermission("hosts.manage"), hostHandler.ValidateHostCertificate)
 			}
 			files := protected.Group("/files")
 			{

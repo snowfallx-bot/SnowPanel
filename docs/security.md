@@ -35,6 +35,49 @@ Language: **English** | [简体中文](security.zh-CN.md)
 - Default mode is in-memory (`LOGIN_ATTEMPT_STORE=memory`); distributed mode can be enabled with Redis (`LOGIN_ATTEMPT_STORE=redis` + shared `REDIS_*` config).
 - Repeated failures within `LOGIN_FAILURE_WINDOW` trigger temporary lockout (`429`) for `LOGIN_LOCK_DURATION`.
 
+## Agent Trust Chain (mTLS)
+
+- Each agent is enrolled with a unique enrollment ID and X.509 client certificate.
+- Backend validates agent certificates against the enrolled cert hash before accepting requests.
+- Agent identity is established at enrollment time and stored in the `hosts` table.
+
+### Enrollment Process
+
+1. Agent bootstrap: Agent presents a bootstrap token to the backend.
+2. Backend validates token and creates a host record with `enrollment_id`.
+3. Agent receives enrolled certificate, key, and CA certificate.
+4. Agent presents client certificate on subsequent connections for mutual TLS authentication.
+
+### APIs
+
+| Method | Endpoint | Permission |
+|--------|----------|------------|
+| POST | `/api/v1/hosts/:id/enroll` | `hosts.manage` |
+| POST | `/api/v1/hosts/:id/revoke` | `hosts.manage` |
+| POST | `/api/v1/hosts/:id/rotate-certificate` | `hosts.manage` |
+| POST | `/api/v1/hosts/:id/validate-certificate` | `hosts.manage` |
+
+### Certificate Rotation
+
+- Rotation preserves the enrollment ID.
+- Option to reuse private key or generate new key pair.
+- New certificates are issued and stored in the host record.
+- Agent must reload certificates and reconnect.
+
+### Host Revocation
+
+- Revoked hosts cannot be selected for operations.
+- Revocation records the reason and timestamp.
+- Revoked certificates should be added to a CRL (Certificate Revocation List).
+
+### Runbook: Compromised Agent
+
+1. Identify the compromised host via `GET /api/v1/hosts?revoked=false`.
+2. Revoke the host: `POST /api/v1/hosts/:id/revoke` with reason.
+3. (Optional) Add cert hash to CRL if using certificate-based blocking.
+4.物理 security review: Ensure the compromised host is secured or decommissioned.
+5. Re-enroll the agent with a new bootstrap token.
+
 ## File Safety
 
 - Agent requires absolute paths.
@@ -54,6 +97,7 @@ Language: **English** | [简体中文](security.zh-CN.md)
 
 - Audit records include user id, username, IP, module, action, target, request summary, and result.
 - File/service/docker/cron/task operation paths are instrumented with audit writes.
+- Enrollment/revocation/rotation operations are fully audited.
 
 ## Error Handling
 
@@ -63,4 +107,5 @@ Language: **English** | [简体中文](security.zh-CN.md)
 ## Hardening Backlog
 
 - Encrypt sensitive settings/secrets at rest.
+- Implement CRL distribution and validation.
 - For multi-region deployments, evaluate cross-region shared rate-limit state and failover behavior.

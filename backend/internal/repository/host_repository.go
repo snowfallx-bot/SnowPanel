@@ -23,6 +23,16 @@ type HostRepository interface {
 		agentVersion string,
 		lastSeenAt *time.Time,
 	) error
+	UpdateEnrollment(
+		ctx context.Context,
+		id int64,
+		enrollmentID string,
+		certHash string,
+		revoked bool,
+		revokedAt *time.Time,
+		revokedReason string,
+	) error
+	GetByEnrollmentID(ctx context.Context, enrollmentID string) (*model.Host, error)
 }
 
 type hostRepository struct {
@@ -108,4 +118,39 @@ func (r *hostRepository) UpdateHealth(
 		Where("id = ?", id).
 		Updates(updates).
 		Error
+}
+
+func (r *hostRepository) UpdateEnrollment(
+	ctx context.Context,
+	id int64,
+	enrollmentID string,
+	certHash string,
+	revoked bool,
+	revokedAt *time.Time,
+	revokedReason string,
+) error {
+	updates := map[string]interface{}{
+		"enrollment_id":  enrollmentID,
+		"agent_cert_hash": certHash,
+		"revoked":        revoked,
+		"revoked_at":     revokedAt,
+		"revoked_reason": revokedReason,
+	}
+	return r.db.WithContext(ctx).
+		Model(&model.Host{}).
+		Where("id = ?", id).
+		Updates(updates).
+		Error
+}
+
+func (r *hostRepository) GetByEnrollmentID(ctx context.Context, enrollmentID string) (*model.Host, error) {
+	var host model.Host
+	err := r.db.WithContext(ctx).First(&host, "enrollment_id = ?", enrollmentID).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &host, nil
 }

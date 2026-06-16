@@ -27,8 +27,9 @@ func NewHostAwareAgentClient(
 	timeout time.Duration,
 	hostRepo repository.HostRepository,
 ) grpcclient.AgentClient {
+	defaultAgentClient := grpcclient.New(defaultTarget, timeout)
 	return &hostAwareAgentClient{
-		defaultClient: grpcclient.New(defaultTarget, timeout),
+		defaultClient: defaultAgentClient,
 		hostRepo:      hostRepo,
 		timeout:       timeout,
 		clients:       map[string]grpcclient.AgentClient{},
@@ -241,6 +242,46 @@ func (c *hostAwareAgentClient) SetCronTaskEnabled(ctx context.Context, req grpcc
 		return grpcclient.SetCronTaskEnabledResult{}, err
 	}
 	return client.SetCronTaskEnabled(ctx, req)
+}
+
+func (c *hostAwareAgentClient) Enroll(ctx context.Context, token, hostname, agentVersion string, capabilities []string) (*grpcclient.EnrollmentResult, error) {
+	client, err := c.clientForContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return client.Enrollment().Enroll(ctx, token, hostname, agentVersion, capabilities)
+}
+
+func (c *hostAwareAgentClient) Revoke(ctx context.Context, enrollmentID, reason string) error {
+	client, err := c.clientForContext(ctx)
+	if err != nil {
+		return err
+	}
+	return client.Enrollment().Revoke(ctx, enrollmentID, reason)
+}
+
+func (c *hostAwareAgentClient) RotateCertificates(ctx context.Context, enrollmentID string, reuseKey bool) (*grpcclient.CertificateRotationResult, error) {
+	client, err := c.clientForContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return client.Enrollment().RotateCertificates(ctx, enrollmentID, reuseKey)
+}
+
+func (c *hostAwareAgentClient) ValidateCertificate(ctx context.Context, clientCert string) (*grpcclient.CertificateValidationResult, error) {
+	client, err := c.clientForContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return client.Enrollment().ValidateCertificate(ctx, clientCert)
+}
+
+func (c *hostAwareAgentClient) Enrollment() grpcclient.EnrollmentClient {
+	client, err := c.clientForContext(context.Background())
+	if err != nil {
+		return nil
+	}
+	return client.Enrollment()
 }
 
 func (c *hostAwareAgentClient) clientForContext(ctx context.Context) (grpcclient.AgentClient, error) {

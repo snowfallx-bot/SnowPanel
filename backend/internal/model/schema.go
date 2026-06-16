@@ -101,15 +101,20 @@ func (SystemSetting) TableName() string {
 }
 
 type Host struct {
-	ID           int64      `json:"id" gorm:"column:id;primaryKey;autoIncrement"`
-	Name         string     `json:"name" gorm:"column:name;size:128;not null"`
-	Address      string     `json:"address" gorm:"column:address;size:255;not null"`
-	Port         int        `json:"port" gorm:"column:port;not null"`
-	Status       int16      `json:"status" gorm:"column:status;not null;default:1"`
-	AgentVersion string     `json:"agent_version" gorm:"column:agent_version;size:64;not null"`
-	LastSeenAt   *time.Time `json:"last_seen_at" gorm:"column:last_seen_at"`
-	CreatedAt    time.Time  `json:"created_at" gorm:"column:created_at;autoCreateTime"`
-	UpdatedAt    time.Time  `json:"updated_at" gorm:"column:updated_at;autoUpdateTime"`
+	ID              int64      `json:"id" gorm:"column:id;primaryKey;autoIncrement"`
+	Name            string     `json:"name" gorm:"column:name;size:128;not null"`
+	Address         string     `json:"address" gorm:"column:address;size:255;not null"`
+	Port            int        `json:"port" gorm:"column:port;not null"`
+	Status          int16      `json:"status" gorm:"column:status;not null;default:1"`
+	AgentVersion    string     `json:"agent_version" gorm:"column:agent_version;size:64;not null"`
+	LastSeenAt      *time.Time `json:"last_seen_at" gorm:"column:last_seen_at"`
+	EnrollmentID    string     `json:"enrollment_id" gorm:"column:enrollment_id;size:128;uniqueIndex"`
+	AgentCertHash   string     `json:"agent_cert_hash" gorm:"column:agent_cert_hash;size:64"`
+	Revoked         bool       `json:"revoked" gorm:"column:revoked;not null;default:false"`
+	RevokedAt       *time.Time `json:"revoked_at" gorm:"column:revoked_at"`
+	RevokedReason   string     `json:"revoked_reason" gorm:"column:revoked_reason;size:255"`
+	CreatedAt       time.Time  `json:"created_at" gorm:"column:created_at;autoCreateTime"`
+	UpdatedAt       time.Time  `json:"updated_at" gorm:"column:updated_at;autoUpdateTime"`
 }
 
 func (Host) TableName() string {

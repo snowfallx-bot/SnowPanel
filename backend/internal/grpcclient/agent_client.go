@@ -327,18 +327,28 @@ type AgentClient interface {
 	UpdateCronTask(ctx context.Context, req UpdateCronTaskRequest) (UpdateCronTaskResult, error)
 	DeleteCronTask(ctx context.Context, req DeleteCronTaskRequest) (DeleteCronTaskResult, error)
 	SetCronTaskEnabled(ctx context.Context, req SetCronTaskEnabledRequest) (SetCronTaskEnabledResult, error)
+
+	// P3-2: Enrollment & Identity
+	Enrollment() EnrollmentClient
+	Enroll(ctx context.Context, token, hostname, agentVersion string, capabilities []string) (*EnrollmentResult, error)
+	Revoke(ctx context.Context, enrollmentID, reason string) error
+	RotateCertificates(ctx context.Context, enrollmentID string, reuseKey bool) (*CertificateRotationResult, error)
+	ValidateCertificate(ctx context.Context, clientCert string) (*CertificateValidationResult, error)
 }
 
 type Client struct {
-	target  string
-	timeout time.Duration
+	target       string
+	timeout      time.Duration
+	enrollment   EnrollmentClient
 }
 
 func New(target string, timeout time.Duration) *Client {
-	return &Client{
+	client := &Client{
 		target:  target,
 		timeout: timeout,
 	}
+	client.enrollment = NewEnrollmentClient(client)
+	return client
 }
 
 func (c *Client) Target() string {
@@ -349,12 +359,36 @@ func (c *Client) Timeout() time.Duration {
 	return c.timeout
 }
 
+// Enrollment returns the enrollment client for mTLS operations.
+func (c *Client) Enrollment() EnrollmentClient {
+	return c.enrollment
+}
+
+// ==================== Enrollment & Identity (P3-2 mTLS) ====================
+
+// CheckHealth returns just the status string.
 func (c *Client) CheckHealth(ctx context.Context) (string, error) {
 	result, err := c.CheckHealthDetails(ctx)
 	if err != nil {
 		return "", err
 	}
 	return result.Status, nil
+}
+
+func (c *Client) Enroll(ctx context.Context, token, hostname, agentVersion string, capabilities []string) (*EnrollmentResult, error) {
+	return c.enrollment.Enroll(ctx, token, hostname, agentVersion, capabilities)
+}
+
+func (c *Client) Revoke(ctx context.Context, enrollmentID, reason string) error {
+	return c.enrollment.Revoke(ctx, enrollmentID, reason)
+}
+
+func (c *Client) RotateCertificates(ctx context.Context, enrollmentID string, reuseKey bool) (*CertificateRotationResult, error) {
+	return c.enrollment.RotateCertificates(ctx, enrollmentID, reuseKey)
+}
+
+func (c *Client) ValidateCertificate(ctx context.Context, clientCert string) (*CertificateValidationResult, error) {
+	return c.enrollment.ValidateCertificate(ctx, clientCert)
 }
 
 func (c *Client) CheckHealthDetails(ctx context.Context) (HealthCheckResult, error) {
@@ -1143,4 +1177,144 @@ func cronTaskFromProto(task *agentv1.CronTask) (CronTask, error) {
 		Command:    task.GetCommand(),
 		Enabled:    task.GetEnabled(),
 	}, nil
+}
+
+// ==================== Enrollment & Identity (P3-2 mTLS) ====================
+
+type EnrollmentResult struct {
+	EnrollmentID string
+	ClientCert   string
+	ClientKey    string
+	CACert       string
+}
+
+type CertificateRotationResult struct {
+	ClientCert string
+	ClientKey  string
+}
+
+type CertificateValidationResult struct {
+	Valid      bool
+	EnrollmentID string
+	Hostname   string
+	Revoked    bool
+	Capabilities []string
+}
+
+type EnrollmentClient interface {
+	Enroll(ctx context.Context, token, hostname, agentVersion string, capabilities []string) (*EnrollmentResult, error)
+	Revoke(ctx context.Context, enrollmentID, reason string) error
+	RotateCertificates(ctx context.Context, enrollmentID string, reuseKey bool) (*CertificateRotationResult, error)
+	ValidateCertificate(ctx context.Context, clientCert string) (*CertificateValidationResult, error)
+}
+
+type enrollmentClient struct {
+	client *Client
+}
+
+func NewEnrollmentClient(client *Client) EnrollmentClient {
+	return &enrollmentClient{client: client}
+}
+
+func (c *enrollmentClient) invokeEnrollment(
+	ctx context.Context,
+	methodName string,
+	req *agentv1.EnrollAgentRequest,
+	enrollReq func(client agentv1.EnrollmentServiceClient, ctx context.Context, req *agentv1.EnrollAgentRequest) (*agentv1.EnrollAgentResponse, error),
+) (*EnrollmentResult, error) {
+	result := &EnrollmentResult{}
+	err := c.client.invoke(ctx, methodName, func(callCtx context.Context, conn *grpc.ClientConn) error {
+		client := agentv1.NewEnrollmentServiceClient(conn)
+		resp, err := enrollReq(client, callCtx, req)
+		if err != nil {
+			return err
+		}
+		if err := responseError(resp.GetError()); err != nil {
+			return err
+		}
+		result.EnrollmentID = resp.GetEnrollmentId()
+		result.ClientCert = resp.GetClientCert()
+		result.ClientKey = resp.GetClientKey()
+		result.CACert = resp.GetCaCert()
+		return nil
+	})
+	return result, err
+}
+
+func (c *enrollmentClient) Enroll(ctx context.Context, token, hostname, agentVersion string, capabilities []string) (*EnrollmentResult, error) {
+	req := &agentv1.EnrollAgentRequest{
+		Token:        token,
+		Hostname:     hostname,
+		AgentVersion: agentVersion,
+		Capabilities: capabilities,
+	}
+	return c.invokeEnrollment(ctx, "enrollment.enroll", req, func(
+		client agentv1.EnrollmentServiceClient,
+		ctx context.Context,
+		req *agentv1.EnrollAgentRequest,
+	) (*agentv1.EnrollAgentResponse, error) {
+		return client.Enroll(ctx, req)
+	})
+}
+
+func (c *enrollmentClient) Revoke(ctx context.Context, enrollmentID, reason string) error {
+	req := &agentv1.RevokeAgentRequest{
+		EnrollmentId: enrollmentID,
+		Reason:       reason,
+	}
+	err := c.client.invoke(ctx, "enrollment.revoke", func(callCtx context.Context, conn *grpc.ClientConn) error {
+		client := agentv1.NewEnrollmentServiceClient(conn)
+		resp, err := client.Revoke(callCtx, req)
+		if err != nil {
+			return err
+		}
+		return responseError(resp.GetError())
+	})
+	return err
+}
+
+func (c *enrollmentClient) RotateCertificates(ctx context.Context, enrollmentID string, reuseKey bool) (*CertificateRotationResult, error) {
+	result := &CertificateRotationResult{}
+	req := &agentv1.RotateCertificatesRequest{
+		EnrollmentId: enrollmentID,
+		ReuseKey:     reuseKey,
+	}
+	err := c.client.invoke(ctx, "enrollment.rotate", func(callCtx context.Context, conn *grpc.ClientConn) error {
+		client := agentv1.NewEnrollmentServiceClient(conn)
+		resp, err := client.RotateCertificates(callCtx, req)
+		if err != nil {
+			return err
+		}
+		if err := responseError(resp.GetError()); err != nil {
+			return err
+		}
+		result.ClientCert = resp.GetClientCert()
+		result.ClientKey = resp.GetClientKey()
+		return nil
+	})
+	return result, err
+}
+
+func (c *enrollmentClient) ValidateCertificate(ctx context.Context, clientCert string) (*CertificateValidationResult, error) {
+	result := &CertificateValidationResult{}
+	req := &agentv1.ValidateCertificateRequest{
+		ClientCert: clientCert,
+	}
+	err := c.client.invoke(ctx, "enrollment.validate", func(callCtx context.Context, conn *grpc.ClientConn) error {
+		client := agentv1.NewEnrollmentServiceClient(conn)
+		resp, err := client.ValidateCertificate(callCtx, req)
+		if err != nil {
+			return err
+		}
+		if err := responseError(resp.GetError()); err != nil {
+			return err
+		}
+		result.Valid = resp.GetValid()
+		result.EnrollmentID = resp.GetEnrollmentId()
+		result.Hostname = resp.GetHostname()
+		result.Revoked = resp.GetRevoked()
+		result.Capabilities = append([]string(nil), resp.GetCapabilities()...)
+		return nil
+	})
+	return result, err
 }

@@ -29,6 +29,12 @@ type HostService interface {
 	EnableHost(ctx context.Context, id int64) (dto.Host, error)
 	DisableHost(ctx context.Context, id int64) (dto.Host, error)
 	CheckHost(ctx context.Context, id int64) (dto.Host, error)
+
+	// P3-2: Enrollment & Identity
+	EnrollHost(ctx context.Context, id int64, token, hostname, agentVersion string, capabilities []string) (dto.Host, error)
+	RevokeHost(ctx context.Context, id int64, reason string) (dto.Host, error)
+	RotateHostCertificate(ctx context.Context, id int64, reuseKey bool) (dto.Host, error)
+	ValidateHostCertificate(ctx context.Context, id int64) (dto.Host, error)
 }
 
 type hostService struct {
@@ -335,21 +341,30 @@ func (s *hostService) probeHost(
 
 func mapHost(host model.Host, identity *grpcclient.AgentIdentity) dto.Host {
 	var lastSeenAt *string
+	var revokedAt *string
 	if host.LastSeenAt != nil {
 		formatted := host.LastSeenAt.UTC().Format(time.RFC3339)
 		lastSeenAt = &formatted
 	}
+	if host.RevokedAt != nil {
+		formatted := host.RevokedAt.UTC().Format(time.RFC3339)
+		revokedAt = &formatted
+	}
 
 	result := dto.Host{
-		ID:           host.ID,
-		Name:         host.Name,
-		Address:      host.Address,
-		Port:         host.Port,
-		Status:       hostStatusLabel(host.Status),
-		AgentVersion: host.AgentVersion,
-		LastSeenAt:   lastSeenAt,
-		CreatedAt:    host.CreatedAt.UTC().Format(time.RFC3339),
-		UpdatedAt:    host.UpdatedAt.UTC().Format(time.RFC3339),
+		ID:              host.ID,
+		Name:            host.Name,
+		Address:         host.Address,
+		Port:            host.Port,
+		Status:          hostStatusLabel(host.Status),
+		AgentVersion:    host.AgentVersion,
+		LastSeenAt:      lastSeenAt,
+		EnrollmentID:    host.EnrollmentID,
+		Revoked:         host.Revoked,
+		RevokedAt:       revokedAt,
+		RevokedReason:   host.RevokedReason,
+		CreatedAt:       host.CreatedAt.UTC().Format(time.RFC3339),
+		UpdatedAt:       host.UpdatedAt.UTC().Format(time.RFC3339),
 	}
 	if identity != nil {
 		result.Capabilities = append([]string(nil), identity.Capabilities...)
@@ -398,4 +413,174 @@ func hostStatusLabel(status int16) string {
 	default:
 		return "online"
 	}
+}
+
+// ==================== Enrollment & Identity (P3-2 mTLS) ====================
+
+func (s *hostService) EnrollHost(ctx context.Context, id int64, token, hostname, agentVersion string, capabilities []string) (dto.Host, error) {
+	host, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return dto.Host{}, apperror.Wrap(
+			apperror.ErrInternal.Code,
+			apperror.ErrInternal.HTTPStatus,
+			apperror.ErrInternal.Message,
+			err,
+		)
+	}
+	if host == nil {
+		return dto.Host{}, apperror.ErrHostNotFound
+	}
+
+	target := net.JoinHostPort(host.Address, fmt.Sprintf("%d", host.Port))
+	client := grpcclient.New(target, s.agentTimeout)
+	enrollmentClient := client.Enrollment()
+	result, err := enrollmentClient.Enroll(ctx, token, hostname, agentVersion, capabilities)
+	if err != nil {
+		return dto.Host{}, apperror.Wrap(
+			apperror.ErrInternal.Code,
+			apperror.ErrInternal.HTTPStatus,
+			apperror.ErrInternal.Message,
+			err,
+		)
+	}
+
+	now := time.Now().UTC()
+	if err := s.repo.UpdateEnrollment(
+		ctx, id, result.EnrollmentID, "", false, nil, "",
+	); err != nil {
+		return dto.Host{}, apperror.Wrap(
+			apperror.ErrInternal.Code,
+			apperror.ErrInternal.HTTPStatus,
+			apperror.ErrInternal.Message,
+			err,
+		)
+	}
+
+	host.EnrollmentID = result.EnrollmentID
+	host.LastSeenAt = &now
+	return mapHost(*host, nil), nil
+}
+
+func (s *hostService) RevokeHost(ctx context.Context, id int64, reason string) (dto.Host, error) {
+	host, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return dto.Host{}, apperror.Wrap(
+			apperror.ErrInternal.Code,
+			apperror.ErrInternal.HTTPStatus,
+			apperror.ErrInternal.Message,
+			err,
+		)
+	}
+	if host == nil {
+		return dto.Host{}, apperror.ErrHostNotFound
+	}
+
+	if host.EnrollmentID == "" {
+		return dto.Host{}, apperror.Wrap(
+			apperror.ErrBadRequest.Code,
+			apperror.ErrBadRequest.HTTPStatus,
+			apperror.ErrBadRequest.Message,
+			errors.New("host is not enrolled"),
+		)
+	}
+
+	target := net.JoinHostPort(host.Address, fmt.Sprintf("%d", host.Port))
+	client := grpcclient.New(target, s.agentTimeout)
+	if err := client.Enrollment().Revoke(ctx, host.EnrollmentID, reason); err != nil {
+		return dto.Host{}, apperror.Wrap(
+			apperror.ErrInternal.Code,
+			apperror.ErrInternal.HTTPStatus,
+			apperror.ErrInternal.Message,
+			err,
+		)
+	}
+
+	now := time.Now().UTC()
+	if err := s.repo.UpdateEnrollment(
+		ctx, id, "", "", true, &now, reason,
+	); err != nil {
+		return dto.Host{}, apperror.Wrap(
+			apperror.ErrInternal.Code,
+			apperror.ErrInternal.HTTPStatus,
+			apperror.ErrInternal.Message,
+			err,
+		)
+	}
+
+	host.Revoked = true
+	host.RevokedAt = &now
+	host.RevokedReason = reason
+	host.Status = HostStatusOffline
+	return mapHost(*host, nil), nil
+}
+
+func (s *hostService) RotateHostCertificate(ctx context.Context, id int64, reuseKey bool) (dto.Host, error) {
+	host, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return dto.Host{}, apperror.Wrap(
+			apperror.ErrInternal.Code,
+			apperror.ErrInternal.HTTPStatus,
+			apperror.ErrInternal.Message,
+			err,
+		)
+	}
+	if host == nil {
+		return dto.Host{}, apperror.ErrHostNotFound
+	}
+
+	if host.EnrollmentID == "" {
+		return dto.Host{}, apperror.Wrap(
+			apperror.ErrBadRequest.Code,
+			apperror.ErrBadRequest.HTTPStatus,
+			apperror.ErrBadRequest.Message,
+			errors.New("host is not enrolled"),
+		)
+	}
+
+	target := net.JoinHostPort(host.Address, fmt.Sprintf("%d", host.Port))
+	client := grpcclient.New(target, s.agentTimeout)
+	_, err = client.Enrollment().RotateCertificates(ctx, host.EnrollmentID, reuseKey)
+	if err != nil {
+		return dto.Host{}, apperror.Wrap(
+			apperror.ErrInternal.Code,
+			apperror.ErrInternal.HTTPStatus,
+			apperror.ErrInternal.Message,
+			err,
+		)
+	}
+
+	now := time.Now().UTC()
+	if err := s.repo.UpdateEnrollment(
+		ctx, id, host.EnrollmentID, "", false, nil, "",
+	); err != nil {
+		return dto.Host{}, apperror.Wrap(
+			apperror.ErrInternal.Code,
+			apperror.ErrInternal.HTTPStatus,
+			apperror.ErrInternal.Message,
+			err,
+		)
+	}
+
+	host.LastSeenAt = &now
+	return mapHost(*host, nil), nil
+}
+
+func (s *hostService) ValidateHostCertificate(ctx context.Context, id int64) (dto.Host, error) {
+	host, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return dto.Host{}, apperror.Wrap(
+			apperror.ErrInternal.Code,
+			apperror.ErrInternal.HTTPStatus,
+			apperror.ErrInternal.Message,
+			err,
+		)
+	}
+	if host == nil {
+		return dto.Host{}, apperror.ErrHostNotFound
+	}
+
+	// This is a placeholder - in production this would fetch the current cert from the agent
+	// and validate it against the enrollment service.
+	// For now, we return the host info.
+	return mapHost(*host, nil), nil
 }

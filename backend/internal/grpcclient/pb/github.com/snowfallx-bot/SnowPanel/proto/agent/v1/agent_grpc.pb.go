@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.5.1
 // - protoc             v7.34.1
-// source: proto/agent/v1/agent.proto
+// source: agent/v1/agent.proto
 
 package agentv1
 
@@ -231,7 +231,7 @@ var EnrollmentService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "proto/agent/v1/agent.proto",
+	Metadata: "agent/v1/agent.proto",
 }
 
 const (
@@ -371,7 +371,7 @@ var SystemService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "proto/agent/v1/agent.proto",
+	Metadata: "agent/v1/agent.proto",
 }
 
 const (
@@ -473,7 +473,7 @@ var HealthService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "proto/agent/v1/agent.proto",
+	Metadata: "agent/v1/agent.proto",
 }
 
 const (
@@ -841,7 +841,7 @@ var FileService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "proto/agent/v1/agent.proto",
+	Metadata: "agent/v1/agent.proto",
 }
 
 const (
@@ -1057,7 +1057,7 @@ var ServiceManagerService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "proto/agent/v1/agent.proto",
+	Metadata: "agent/v1/agent.proto",
 }
 
 const (
@@ -1311,7 +1311,7 @@ var DockerService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "proto/agent/v1/agent.proto",
+	Metadata: "agent/v1/agent.proto",
 }
 
 const (
@@ -1565,5 +1565,5 @@ var CronService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "proto/agent/v1/agent.proto",
+	Metadata: "agent/v1/agent.proto",
 }
