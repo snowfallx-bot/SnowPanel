@@ -62,4 +62,7 @@ var (
 	ErrHostDisabled       = New(2014, http.StatusForbidden, "host is disabled")
 	ErrAgentUnavailable   = New(3001, http.StatusServiceUnavailable, "core agent unavailable")
 	ErrHostUnavailable    = New(3010, http.StatusServiceUnavailable, "host agent unavailable")
+	ErrSettingNotFound    = New(2015, http.StatusNotFound, "setting not found")
+	ErrSettingKeyExists   = New(2016, http.StatusBadRequest, "setting key already exists")
+	ErrSettingKeyInvalid  = New(2017, http.StatusBadRequest, "invalid setting key")
 )

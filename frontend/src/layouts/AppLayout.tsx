@@ -18,7 +18,8 @@ const navItems: Array<{ to: string; label: string; permission: string }> = [
   { to: "/cron", label: "Cron", permission: "cron.read" },
   { to: "/hosts", label: "Hosts", permission: "hosts.read" },
   { to: "/tasks", label: "Tasks", permission: "tasks.read" },
-  { to: "/audit", label: "Audit", permission: "audit.read" }
+  { to: "/audit", label: "Audit", permission: "audit.read" },
+  { to: "/settings", label: "Settings", permission: "settings.read" }
 ];
 
 export function AppLayout() {

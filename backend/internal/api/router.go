@@ -33,6 +33,7 @@ type RouterDeps struct {
 	HostService      service.HostService
 	AuditService     service.AuditService
 	TaskService      service.TaskService
+	SettingsService  service.SettingsService
 	LoginAttempts    security.LoginAttemptGuard
 }
 
@@ -72,6 +73,7 @@ func NewRouter(deps RouterDeps) *gin.Engine {
 	hostHandler := handler.NewHostHandler(deps.HostService, deps.AuditService)
 	auditHandler := handler.NewAuditHandler(deps.AuditService)
 	taskHandler := handler.NewTaskHandler(deps.TaskService, deps.AuditService)
+	settingsHandler := handler.NewSettingsHandler(deps.SettingsService, deps.AuditService)
 
 	router.GET("/health", healthHandler.Health)
 	router.GET("/ready", healthHandler.Readiness)
@@ -157,6 +159,15 @@ func NewRouter(deps RouterDeps) *gin.Engine {
 				tasks.POST("/services/restart", middleware.RequirePermission("tasks.manage"), taskHandler.CreateServiceRestartTask)
 				tasks.POST("/:id/cancel", middleware.RequirePermission("tasks.manage"), taskHandler.CancelTask)
 				tasks.POST("/:id/retry", middleware.RequirePermission("tasks.manage"), taskHandler.RetryTask)
+			}
+
+			settings := protected.Group("/settings")
+			{
+				settings.GET("", middleware.RequirePermission("settings.read"), settingsHandler.ListSettings)
+				settings.GET("/:key", middleware.RequirePermission("settings.read"), settingsHandler.GetSetting)
+				settings.POST("", middleware.RequirePermission("settings.manage"), settingsHandler.CreateSetting)
+				settings.PUT("/:key", middleware.RequirePermission("settings.manage"), settingsHandler.UpdateSetting)
+				settings.DELETE("/:key", middleware.RequirePermission("settings.manage"), settingsHandler.DeleteSetting)
 			}
 		}
 	}
