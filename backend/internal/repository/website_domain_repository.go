@@ -9,6 +9,7 @@ import (
 
 type WebsiteDomainRepository interface {
 	ListByWebsiteID(ctx context.Context, websiteID int64) ([]model.WebsiteDomain, error)
+	GetByID(ctx context.Context, id int64) (*model.WebsiteDomain, error)
 	GetByDomain(ctx context.Context, domain string) (*model.WebsiteDomain, error)
 	Create(ctx context.Context, domain *model.WebsiteDomain) error
 	Update(ctx context.Context, domain *model.WebsiteDomain) error
@@ -36,6 +37,15 @@ func (r *websiteDomainRepository) ListByWebsiteID(ctx context.Context, websiteID
 func (r *websiteDomainRepository) GetByDomain(ctx context.Context, domain string) (*model.WebsiteDomain, error) {
 	var domainModel model.WebsiteDomain
 	err := r.db.WithContext(ctx).Where("domain = ?", domain).First(&domainModel).Error
+	if err != nil {
+		return nil, err
+	}
+	return &domainModel, nil
+}
+
+func (r *websiteDomainRepository) GetByID(ctx context.Context, id int64) (*model.WebsiteDomain, error) {
+	var domainModel model.WebsiteDomain
+	err := r.db.WithContext(ctx).First(&domainModel, id).Error
 	if err != nil {
 		return nil, err
 	}

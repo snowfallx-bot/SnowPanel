@@ -76,6 +76,7 @@ func main() {
 	taskService := service.NewTaskService(taskRepo, dockerService, serviceManager)
 	settingsService := service.NewSettingsService(settingsRepo)
 	websiteService := service.NewWebsiteService(websiteRepo, websiteDomainRepo, auditService, agentClient)
+	websiteDomainService := service.NewWebsiteDomainService(websiteDomainRepo, websiteRepo, auditService)
 	databaseService := service.NewDatabaseService(databaseInstanceRepo, databaseRepo, auditService)
 	var loginAttempts security.LoginAttemptGuard = security.NewLoginAttemptLimiter(security.LoginAttemptLimiterOptions{
 		MaxFailures:   cfg.Auth.LoginMaxFailures,
@@ -145,6 +146,7 @@ func main() {
 			SettingsService:  settingsService,
 			WebsiteService:   websiteService,
 			DatabaseService:  databaseService,
+			WebsiteDomainService: websiteDomainService,
 			LoginAttempts:    loginAttempts,
 		}),
 		ReadTimeout:  cfg.Server.ReadTimeout,

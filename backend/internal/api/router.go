@@ -19,24 +19,25 @@ import (
 )
 
 type RouterDeps struct {
-	Logger           *zap.Logger
-	DB               *gorm.DB
-	TracingEnabled   bool
-	TracingSvcName   string
-	AgentClient      grpcclient.AgentClient
-	AuthService      service.AuthService
-	DashboardService service.DashboardService
-	FileService      service.FileService
-	ServiceManager   service.ServiceManagerService
-	DockerService    service.DockerService
-	CronService      service.CronService
-	HostService      service.HostService
-	AuditService     service.AuditService
-	TaskService      service.TaskService
-	SettingsService  service.SettingsService
-	WebsiteService   service.WebsiteService
-	DatabaseService  service.DatabaseService
-	LoginAttempts    security.LoginAttemptGuard
+	Logger                *zap.Logger
+	DB                    *gorm.DB
+	TracingEnabled        bool
+	TracingSvcName        string
+	AgentClient           grpcclient.AgentClient
+	AuthService           service.AuthService
+	DashboardService      service.DashboardService
+	FileService           service.FileService
+	ServiceManager        service.ServiceManagerService
+	DockerService         service.DockerService
+	CronService           service.CronService
+	HostService           service.HostService
+	AuditService          service.AuditService
+	TaskService           service.TaskService
+	SettingsService       service.SettingsService
+	WebsiteService        service.WebsiteService
+	WebsiteDomainService  service.WebsiteDomainService
+	DatabaseService       service.DatabaseService
+	LoginAttempts         security.LoginAttemptGuard
 }
 
 func NewRouter(deps RouterDeps) *gin.Engine {
@@ -77,6 +78,10 @@ func NewRouter(deps RouterDeps) *gin.Engine {
 	taskHandler := handler.NewTaskHandler(deps.TaskService, deps.AuditService)
 	settingsHandler := handler.NewSettingsHandler(deps.SettingsService, deps.AuditService)
 	websiteHandler := handler.NewWebsiteHandler(deps.WebsiteService, deps.AuditService)
+	var websiteDomainHandler *handler.WebsiteDomainHandler
+	if deps.WebsiteDomainService != nil {
+		websiteDomainHandler = handler.NewWebsiteDomainHandler(deps.WebsiteDomainService, deps.AuditService)
+	}
 	databaseHandler := handler.NewDatabaseHandler(deps.DatabaseService, deps.AuditService)
 
 	router.GET("/health", healthHandler.Health)
@@ -183,6 +188,16 @@ func NewRouter(deps RouterDeps) *gin.Engine {
 				websites.DELETE("/:id", middleware.RequirePermission("websites.manage"), websiteHandler.DeleteWebsite)
 				websites.POST("/:id/enable", middleware.RequirePermission("websites.manage"), websiteHandler.EnableWebsite)
 				websites.POST("/:id/disable", middleware.RequirePermission("websites.manage"), websiteHandler.DisableWebsite)
+			}
+
+			if websiteDomainHandler != nil {
+				websiteDomains := protected.Group("/websites/:website_id/domains")
+				{
+					websiteDomains.GET("", middleware.RequirePermission("websites.read"), websiteDomainHandler.ListDomains)
+					websiteDomains.POST("", middleware.RequirePermission("websites.manage"), websiteDomainHandler.CreateDomain)
+					websiteDomains.PUT("/:domain_id", middleware.RequirePermission("websites.manage"), websiteDomainHandler.UpdateDomain)
+					websiteDomains.DELETE("/:domain_id", middleware.RequirePermission("websites.manage"), websiteDomainHandler.DeleteDomain)
+				}
 			}
 
 			databases := protected.Group("/database")

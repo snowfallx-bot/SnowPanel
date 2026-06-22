@@ -48,10 +48,30 @@ type UpdateWebsiteRequest struct {
 }
 
 type WebsiteDomain struct {
-	ID        int64  `json:"id"`
-	WebsiteID int64  `json:"website_id"`
-	Domain    string `json:"domain"`
+	ID        int64     `json:"id"`
+	WebsiteID int64     `json:"website_id"`
+	Domain    string    `json:"domain"`
+	IsPrimary bool      `json:"is_primary"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type ListWebsiteDomainsResponse struct {
+	Items []WebsiteDomain `json:"items"`
+}
+
+type CreateWebsiteDomainRequest struct {
+	WebsiteID int64  `json:"website_id" binding:"required"`
+	Domain    string `json:"domain" binding:"required"`
 	IsPrimary bool   `json:"is_primary"`
+}
+
+type UpdateWebsiteDomainRequest struct {
+	Domain    *string `json:"domain,omitempty"`
+	IsPrimary *bool   `json:"is_primary,omitempty"`
+}
+
+type DeleteWebsiteDomainRequest struct {
+	DomainID int64 `json:"domain_id" binding:"required"`
 }
 
 type EnableWebsiteResponse struct {

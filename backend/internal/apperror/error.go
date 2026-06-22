@@ -69,6 +69,7 @@ var (
 	ErrWebsiteNameExists    = New(2019, http.StatusBadRequest, "website name already exists")
 	ErrInvalidRuntime       = New(2020, http.StatusBadRequest, "invalid runtime type")
 	ErrInvalidDomain        = New(2021, http.StatusBadRequest, "invalid domain")
+	ErrWebsiteDomainNotFound  = New(2027, http.StatusNotFound, "website domain not found")
 	ErrDatabaseInstanceNotFound  = New(2022, http.StatusNotFound, "database instance not found")
 	ErrDatabaseInstanceNameExists = New(2023, http.StatusBadRequest, "database instance name already exists")
 	ErrInvalidEngine        = New(2024, http.StatusBadRequest, "invalid database engine")
