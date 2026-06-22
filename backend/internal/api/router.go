@@ -35,6 +35,7 @@ type RouterDeps struct {
 	TaskService      service.TaskService
 	SettingsService  service.SettingsService
 	WebsiteService   service.WebsiteService
+	DatabaseService  service.DatabaseService
 	LoginAttempts    security.LoginAttemptGuard
 }
 
@@ -76,6 +77,7 @@ func NewRouter(deps RouterDeps) *gin.Engine {
 	taskHandler := handler.NewTaskHandler(deps.TaskService, deps.AuditService)
 	settingsHandler := handler.NewSettingsHandler(deps.SettingsService, deps.AuditService)
 	websiteHandler := handler.NewWebsiteHandler(deps.WebsiteService, deps.AuditService)
+	databaseHandler := handler.NewDatabaseHandler(deps.DatabaseService, deps.AuditService)
 
 	router.GET("/health", healthHandler.Health)
 	router.GET("/ready", healthHandler.Readiness)
@@ -181,6 +183,19 @@ func NewRouter(deps RouterDeps) *gin.Engine {
 				websites.DELETE("/:id", middleware.RequirePermission("websites.manage"), websiteHandler.DeleteWebsite)
 				websites.POST("/:id/enable", middleware.RequirePermission("websites.manage"), websiteHandler.EnableWebsite)
 				websites.POST("/:id/disable", middleware.RequirePermission("websites.manage"), websiteHandler.DisableWebsite)
+			}
+
+			databases := protected.Group("/database")
+			{
+				databases.GET("/instances", middleware.RequirePermission("databases.read"), databaseHandler.ListDatabaseInstances)
+				databases.GET("/instances/:id", middleware.RequirePermission("databases.read"), databaseHandler.GetDatabaseInstance)
+				databases.POST("/instances", middleware.RequirePermission("databases.manage"), databaseHandler.CreateDatabaseInstance)
+				databases.PUT("/instances/:id", middleware.RequirePermission("databases.manage"), databaseHandler.UpdateDatabaseInstance)
+				databases.DELETE("/instances/:id", middleware.RequirePermission("databases.manage"), databaseHandler.DeleteDatabaseInstance)
+				databases.POST("/instances/test", middleware.RequirePermission("databases.manage"), databaseHandler.TestConnection)
+				databases.GET("/instances/:id/databases", middleware.RequirePermission("databases.read"), databaseHandler.ListDatabases)
+				databases.POST("/instances/:id/databases", middleware.RequirePermission("databases.manage"), databaseHandler.CreateDatabase)
+				databases.DELETE("/instances/:id/databases", middleware.RequirePermission("databases.manage"), databaseHandler.DeleteDatabase)
 			}
 		}
 	}

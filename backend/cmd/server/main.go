@@ -58,6 +58,8 @@ func main() {
 	settingsRepo := repository.NewSettingsRepository(db)
 	websiteRepo := repository.NewWebsiteRepository(db)
 	websiteDomainRepo := repository.NewWebsiteDomainRepository(db)
+	databaseInstanceRepo := repository.NewDatabaseInstanceRepository(db)
+	databaseRepo := repository.NewDatabaseRepository(db)
 	auditService := service.NewAuditService(auditRepo)
 	authService := service.NewAuthService(userRepo, cfg.Auth)
 	if err := authService.EnsureDefaultAdmin(context.Background()); err != nil {
@@ -74,6 +76,7 @@ func main() {
 	taskService := service.NewTaskService(taskRepo, dockerService, serviceManager)
 	settingsService := service.NewSettingsService(settingsRepo)
 	websiteService := service.NewWebsiteService(websiteRepo, websiteDomainRepo, auditService, agentClient)
+	databaseService := service.NewDatabaseService(databaseInstanceRepo, databaseRepo, auditService)
 	var loginAttempts security.LoginAttemptGuard = security.NewLoginAttemptLimiter(security.LoginAttemptLimiterOptions{
 		MaxFailures:   cfg.Auth.LoginMaxFailures,
 		FailureWindow: cfg.Auth.LoginFailureWindow,
@@ -141,6 +144,7 @@ func main() {
 			TaskService:      taskService,
 			SettingsService:  settingsService,
 			WebsiteService:   websiteService,
+			DatabaseService:  databaseService,
 			LoginAttempts:    loginAttempts,
 		}),
 		ReadTimeout:  cfg.Server.ReadTimeout,

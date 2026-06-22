@@ -11,6 +11,7 @@ import { LoginPage } from "@/pages/LoginPage";
 import { ServicesPage } from "@/pages/ServicesPage";
 import { SettingsPage } from "@/pages/SettingsPage";
 import { WebsitesPage } from "@/pages/WebsitesPage";
+import { DatabasesPage } from "@/pages/DatabasesPage";
 import { ProtectedRoute } from "@/routes/ProtectedRoute";
 
 export const router = createBrowserRouter([
@@ -65,6 +66,10 @@ export const router = createBrowserRouter([
           {
             path: "/websites",
             element: <WebsitesPage />
+          },
+          {
+            path: "/databases",
+            element: <DatabasesPage />
           },
           {
             path: "/settings",

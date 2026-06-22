@@ -20,6 +20,7 @@ const navItems: Array<{ to: string; label: string; permission: string }> = [
   { to: "/tasks", label: "Tasks", permission: "tasks.read" },
   { to: "/audit", label: "Audit", permission: "audit.read" },
   { to: "/websites", label: "Websites", permission: "websites.read" },
+  { to: "/databases", label: "Databases", permission: "databases.read" },
   { to: "/settings", label: "Settings", permission: "settings.read" }
 ];
 
